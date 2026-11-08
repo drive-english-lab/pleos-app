@@ -10,6 +10,10 @@ plugins {
 }
 
 subprojects {
+    dependencyLocking {
+        // Kotlin's metadata-only common module can be omitted by JVM variant selection.
+        ignoredDependencies.add("org.jetbrains.kotlin:kotlin-stdlib-common")
+    }
     configurations.configureEach {
         if (name.endsWith("Classpath")) {
             resolutionStrategy.activateDependencyLocking()

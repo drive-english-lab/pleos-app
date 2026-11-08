@@ -11,6 +11,12 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
+        providers.gradleProperty("kotlinCompilerRepository").orNull?.let { repositoryUrl ->
+            exclusiveContent {
+                forRepository { maven { url = uri(repositoryUrl) } }
+                filter { includeModule("org.jetbrains.kotlin", "kotlin-compiler-embeddable") }
+            }
+        }
         exclusiveContent {
             forRepository {
                 maven { url = uri("https://nexus-playground.pleos.ai/repository/maven-releases/") }
