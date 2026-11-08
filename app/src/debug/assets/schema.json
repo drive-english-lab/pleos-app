@@ -1,0 +1,21 @@
+{
+  "packageName": "io.github.driveenglishlab.pleos",
+  "appDescription": "A developer build for checking the Pleos application environment.",
+  "invokeWord": "드라이브 잉글리시",
+  "version": "0.1.0",
+  "actionCalls": [
+    {
+      "type": "function",
+      "function": {
+        "name": "DRIVE_ENGLISH_CHECK_SETUP",
+        "description": "Checks whether the developer build can receive a Gleo action.",
+        "parameters": {
+          "type": "object",
+          "properties": {},
+          "required": []
+        },
+        "component": "service"
+      }
+    }
+  ]
+}

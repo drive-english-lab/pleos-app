@@ -11,11 +11,14 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
-        maven {
-            url = uri("https://nexus-playground.pleos.ai/repository/maven-releases/")
+        exclusiveContent {
+            forRepository {
+                maven { url = uri("https://nexus-playground.pleos.ai/repository/maven-releases/") }
+            }
+            filter { includeGroup("ai.pleos.playground") }
         }
     }
 }
 
 rootProject.name = "PleosChallengeApp"
-include(":app")
+include(":app", ":core:domain", ":core:data", ":core:pleos")
