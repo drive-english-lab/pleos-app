@@ -9,7 +9,7 @@ permissions:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
@@ -19,5 +19,6 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
-      - run: sdkmanager "platforms;android-36"
+      - name: Verify Android SDK Platform 36
+        run: test -f "$ANDROID_HOME/platforms/android-36/android.jar"
       - run: ./gradlew --console=plain :app:assembleDebug :app:assembleRelease :app:lintDebug
