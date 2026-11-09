@@ -1,26 +1,50 @@
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+
 plugins {
-    id("com.android.application")
-    id("org.jetbrains.kotlin.android")
+    alias(libs.plugins.android.application)
+    alias(libs.plugins.kotlin.android)
+    alias(libs.plugins.kotlin.compose)
+    alias(libs.plugins.kotlin.serialization)
+    alias(libs.plugins.ksp)
+    alias(libs.plugins.hilt)
 }
 
 android {
-    namespace = "com.example.pleosapp"
-    compileSdk = 35
+    namespace = "io.github.driveenglishlab.pleos"
+    compileSdk = 36
 
     defaultConfig {
-        applicationId = "com.example.pleosapp"
+        applicationId = "io.github.driveenglishlab.pleos"
         minSdk = 28
         targetSdk = 35
         versionCode = 1
         versionName = "0.1.0"
     }
 
+    buildFeatures { compose = true }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
+}
 
-    kotlinOptions {
-        jvmTarget = "17"
-    }
+kotlin {
+    compilerOptions { jvmTarget.set(JvmTarget.JVM_17) }
+}
+
+dependencies {
+    implementation(project(":core:domain"))
+    implementation(project(":core:data"))
+    implementation(project(":core:pleos"))
+
+    implementation(platform(libs.compose.bom))
+    implementation(libs.compose.material3)
+    implementation(libs.activity.compose)
+    implementation(libs.lifecycle.compose)
+    implementation(libs.lifecycle.viewmodel)
+    implementation(libs.navigation.compose)
+    implementation(libs.hilt.compose)
+    implementation(libs.hilt.android)
+    ksp(libs.hilt.compiler)
 }
