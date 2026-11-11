@@ -35,4 +35,4 @@ jobs:
       - run: |
           "$RUNNER_TEMP/gradle-8.13/bin/gradle" --console=plain \
             -PkotlinCompilerRepository=https://maven-central.storage-download.googleapis.com/maven2 \
-            :app:assembleDebug :app:assembleRelease :app:lintDebug
+            :core:domain:test :app:assembleDebug :app:assembleRelease :app:lintDebug
