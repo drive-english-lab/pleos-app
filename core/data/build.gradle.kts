@@ -37,6 +37,7 @@ android {
     compileSdk = 36
     defaultConfig {
         minSdk = 28
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("String", "SUPABASE_URL", "\"$supabaseUrl\"")
         buildConfigField("String", "SUPABASE_PUBLISHABLE_KEY", "\"$supabaseKey\"")
     }
@@ -54,9 +55,15 @@ kotlin {
 
 dependencies {
     implementation(project(":core:domain"))
+    implementation(libs.room.runtime)
+    ksp(libs.room.compiler)
+    androidTestImplementation("androidx.test:runner:1.7.0")
+    androidTestImplementation("androidx.test.ext:junit:1.3.0")
     implementation(libs.datastore.preferences)
     implementation(libs.supabase.postgrest)
     implementation(libs.ktor.okhttp)
     implementation(libs.hilt.android)
     ksp(libs.hilt.compiler)
 }
+
+ksp { arg("room.schemaLocation", "$projectDir/schemas") }

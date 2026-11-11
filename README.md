@@ -1,6 +1,6 @@
 # Pleos Android app
 
-Pleos Connect용 Android 앱의 초기 개발환경이다. 실행하면 개발 환경 화면에서 연결 점검으로 이동할 수 있다.
+Pleos Connect용 Android 앱이다. 현재 실행 화면은 개발 환경·연결 점검이다. 뉴스 학습의 순수 정책과 Room 기반을 추가했으며 제품 화면·미디어/음성·서버 연결은 아직 미완료다.
 
 ## 환경과 실행
 
@@ -23,9 +23,9 @@ scripts/start-pleos-emulator.sh
 | 모듈 | 역할 |
 | --- | --- |
 | `:app` | Compose, Navigation, ViewModel, Hilt 앱 진입점 |
-| `:core:domain` | 연결 진단 상태와 저장소 계약 |
-| `:core:data` | Supabase Kotlin PostgREST 클라이언트, Ktor/OkHttp, Preferences DataStore |
-| `:core:pleos` | Pleos Vehicle·NaviHelper·FusedLocation SDK와 진단 |
+| `:core:domain` | 연결 진단, 고정 콘텐츠/설정, 듣기·질문·도움·대기·입력 lease/직렬 상태 정책 |
+| `:core:data` | Supabase 진단/Preferences와 owner·epoch별 Room record/outbox·전환 journal |
+| `:core:pleos` | 기존 SDK 진단과 API34 public car 읽기 후보. Media3는 의존성만 추가, service는 미연결 |
 
 ## Supabase
 
@@ -51,3 +51,19 @@ adb logcat -d -s GleoProbe:I
 ADB 확인과 Gleo 음성 호출 검증은 별도다. 실제 Gleo 통합에는 Pleos의 App Schema 검토가 필요하다. FusedLocation 권한과 지원 여부는 Playground 프로젝트와 대상 기기에서 각각 확인한다. 앱 ID나 버전을 바꿀 때는 디버그 스키마의 `packageName`과 `version`도 맞춘다.
 
 [기여 규칙](CONTRIBUTING.md)
+
+## S2 기반 구현과 검증 범위
+
+- JVM21건: 8개 후속 조합·대기/입력 경합·owner·제목/복귀·도움·빈 인식/저장 실패를 검증했다.
+- Pleos API34 AVD Room3건: DB 재열기·불변 제출·owner/epoch 거절·로그아웃 전환 journal/격리를 확인했다. SDK/서버 logout 성공은 아니다.
+- public car monitor1건: 권한 없을 때 UNKNOWN/닫힘, 테스트 APK(target28)의 허용된 CAR_SPEED 권한 뒤 P/UXR/component policy 읽기를 확인했다. 제품 target35 입력·주행·실차·Suspend 검증은 아니다. `CarAccessMonitor`는 API34 이상에서만 생성한다.
+- debug/release/lint는 통과했다. 외부 권한·실제 Gleo/직접 STT/TTS·Media3 service·12개 제품 화면·Auth/API·다중 기기 동기화는 미완료다.
+
+```sh
+source scripts/dev-env.sh
+./gradlew :core:domain:test :core:data:connectedDebugAndroidTest :core:pleos:connectedDebugAndroidTest
+```
+
+Room의 새 provisional owner·기기 저장을 서버 로그인/저장 완료로 표시하지 않는다. 직접 입력은 현재 gate와 lease/final 문장을 모두 확인한 뒤 원자 로컬 저장을 거쳐야 한다. permission callback·P 복귀·재구성은 자동 녹음을 시작하지 않는다. 학습 DB backup은 기존 앱 `allowBackup=false` 정책을 따른다. 세션 비밀값을 이 DB에 넣지 않는다.
+
+이 변경은 화면·문구·화면 전환을 바꾸지 않아 기존 Sites 배포 대상에서 제외했다. 현재 구현은 전체 뉴스 학습 기능 완료가 아니다. 전체 기능 이슈는 열어 두며 PR은 독립 기반에 한정한다.
