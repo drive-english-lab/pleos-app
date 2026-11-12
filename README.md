@@ -54,7 +54,7 @@ ADB 확인과 Gleo 음성 호출 검증은 별도다. 실제 Gleo 통합에는 P
 
 ## schema5 기반과 검증 범위
 
-- JVM47건: 8개 후속 조합·실제 종료가 필요한 대기·입력/owner 경합·제목/복귀·영어 증거·준비/제공 도움·처리 예산을 검증했다.
+- JVM48건: 8개 후속 조합·실제 종료가 필요한 대기·입력/owner 경합·제목/복귀·영어 증거·준비/제공 도움·처리 예산을 검증했다.
 - Pleos API34 AVD data29건: Room1→2 보존 이행·DB 재열기·불변 제출·owner/epoch·로그아웃 journal, 계약 정상80/반례102 vector, scoped API·청취/QA/연습 저장·복귀·늦은 결과·명시 GET/재시도를 확인했다. synthetic HTTP이며 실제 Auth/업무 서버 성공은 아니다.
 - Gleo port3건: callback을 가로채 객체 배열/승인 route를 검증했고, 미확인 schema/발화 문장이 미디어 command가 되지 않음을 확인했다. 실제 Gleo로 전송하거나 실제 출력/원언어를 검증한 테스트가 아니다.
 - public car monitor1건: 권한 없을 때 UNKNOWN/닫힘, 테스트 APK(target28)의 허용된 CAR_SPEED 권한 뒤 P/UXR/component policy 읽기를 확인했다. 제품 target35 입력·주행·실차·Suspend 검증은 아니다. `CarAccessMonitor`는 API34 이상에서만 생성한다.

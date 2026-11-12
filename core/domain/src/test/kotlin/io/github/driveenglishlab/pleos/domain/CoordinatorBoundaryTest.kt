@@ -3,6 +3,7 @@ package io.github.driveenglishlab.pleos.domain
 import java.time.Instant
 import java.util.UUID
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.CancellationException
 import org.junit.Assert.*
 import org.junit.Test
 
@@ -92,5 +93,23 @@ class CoordinatorBoundaryTest {
         c.activate(owner.copy(profileId = UUID.randomUUID(), revision = 2), task, UUID.randomUUID(), DialogueProgress.newLesson())
         assertFalse(c.outputCompleted(hint.outputId, owner, 0, "old-owner-end") { _, _ -> fail() })
         assertFalse(c.snapshot().dialogueProgress!!.hintMethodAnnounced)
+    }
+
+    @Test fun cancellationAfterDurableHintCommitReusesTheSameEventOnRedelivery() = runBlocking {
+        val c = ready(); val hint = output(WaitKind.HINT_METHOD); c.expectOutput(hint)
+        var stored: DialogueProgressEvent? = null
+        try {
+            c.outputCompleted(hint.outputId,owner,1_000,"same-actual-end") { _, event ->
+                stored = event
+                // Fault injection: the durable write completed, but its completion is lost.
+                throw CancellationException("after durable commit")
+            }
+            fail("The persistence callback completion was cancelled.")
+        } catch (_: CancellationException) { }
+        assertNotNull(stored)
+        assertFalse(c.snapshot().dialogueProgress!!.hintMethodAnnounced)
+        assertTrue(c.outputCompleted(hint.outputId,owner,1_000,"same-actual-end") { _, event -> assertEquals(stored,event) })
+        assertTrue(c.snapshot().dialogueProgress!!.hintMethodAnnounced)
+        assertEquals(WaitAction.SAVE_AND_PAUSE,c.tick(11_000))
     }
 }

@@ -157,7 +157,10 @@ class SessionCoordinator {
         if (issued.route == OutputRoute.GLEO && gleoCapabilities.outputCompletion !is Capability.Verified) return@withLock false
         if (issued.kind == WaitKind.HINT_METHOD) {
             val lesson = issued.lessonId ?: return@withLock false
-            val fact = DialogueProgressEvent(UUID.randomUUID(), DialogueProgressObservation(lesson, true, outputId, evidenceRef))
+            // A durable write's completion can be lost before this reducer resumes.
+            // Redelivery of the same witnessed output must reuse its immutable journal event.
+            val eventId = UUID.nameUUIDFromBytes(("hint-method:" + outputId).toByteArray(Charsets.UTF_8))
+            val fact = DialogueProgressEvent(eventId, DialogueProgressObservation(lesson, true, outputId, evidenceRef))
             withContext(NonCancellable) { persistHint(originalContext, fact) }
             if (view.lessonId == lesson && view.task == issued.task) {
                 view = view.copy(dialogueProgress = DialogueProgress(true))
