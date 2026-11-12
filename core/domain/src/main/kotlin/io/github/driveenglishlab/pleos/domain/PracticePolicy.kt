@@ -1,28 +1,15 @@
 package io.github.driveenglishlab.pleos.domain
 
+import java.security.MessageDigest
+
 enum class HelpRequest { FACT, HINT, EXAMPLE, QUESTION_MEANING, SIMPLE_ENGLISH }
 enum class SupportAction { FACT_EXPLANATION, SENTENCE_STARTER, COMPLETE_EXAMPLE, QUESTION_MEANING, SIMPLE_ENGLISH }
 
-data class SupportPack(
-    val ref: String,
-    val coreKo: List<String>,
-    val coreEn: List<String>,
-    val starterEn: String,
-    val exampleEn: String,
-    val questionMeaningKo: String,
-) {
-    init {
-        require(ref.codePointCount(0, ref.length) in 1..120)
-        require(coreKo.size in 1..2 && coreEn.size in 1..2)
-        fun sentences(text: String) = text.split(Regex("[.!?。！？]+(?:\\s+|$)")).count { it.isNotBlank() }
-        require(coreKo.sumOf(::sentences) <= 2 && coreEn.sumOf(::sentences) <= 2)
-        require((coreKo + coreEn + listOf(starterEn, exampleEn, questionMeaningKo)).all {
-            it.isNotBlank() && it.codePointCount(0, it.length) <= 500
-        })
-    }
+data class PreparedSupport(val task: PracticeContentRef, val artifact: SupportArtifact)
+sealed interface SupportPreparation {
+    data class Ready(val prepared: PreparedSupport) : SupportPreparation
+    data class Unavailable(val reason: String) : SupportPreparation
 }
-
-data class ProvidedSupport(val text: String, val language: String, val help: HelpSnapshot)
 
 object PracticePolicy {
     fun help(request: HelpRequest, already: HelpSnapshot): SupportAction = when (request) {
@@ -41,29 +28,43 @@ object PracticePolicy {
     fun mayCorrectForm(fidelity: CaptureFidelity, uncertainSpans: List<String>, verifiedRoute: Boolean): Boolean =
         verifiedRoute && fidelity != CaptureFidelity.UNKNOWN && uncertainSpans.isEmpty()
 
-    /** Pack sentences/facts must already be reviewed against the frozen listening script. */
-    fun provide(request: HelpRequest, pack: SupportPack, received: HelpSnapshot): ProvidedSupport {
-        val action = help(request, received)
-        val kind = when (action) {
-            SupportAction.FACT_EXPLANATION, SupportAction.SIMPLE_ENGLISH -> HelpKind.FACT_EXPLANATION
-            SupportAction.SENTENCE_STARTER -> HelpKind.SENTENCE_STARTER
-            SupportAction.COMPLETE_EXAMPLE -> HelpKind.COMPLETE_EXAMPLE
-            SupportAction.QUESTION_MEANING -> null
+    /** Exact reviewed artifact selection only. Preparation never changes help or attempts. */
+    fun provide(request: HelpRequest, manifest: PracticeSupportManifest, task: PracticeContentRef,
+        received: HelpSnapshot, requestedLanguage: SupportLanguage? = null): SupportPreparation {
+        require(manifest.taskId == task.taskId && manifest.questionRef == task.questionRef)
+        val role = when (help(request, received)) {
+            SupportAction.FACT_EXPLANATION -> SupportRole.CORE_EXPLANATION
+            SupportAction.SENTENCE_STARTER -> SupportRole.SENTENCE_STARTER
+            SupportAction.COMPLETE_EXAMPLE -> SupportRole.COMPLETE_EXAMPLE
+            SupportAction.QUESTION_MEANING -> SupportRole.QUESTION_MEANING
+            SupportAction.SIMPLE_ENGLISH -> SupportRole.SIMPLE_EXPLANATION
         }
-        val text = when (action) {
-            SupportAction.FACT_EXPLANATION -> pack.coreKo.joinToString(" ")
-            SupportAction.SIMPLE_ENGLISH -> pack.coreEn.joinToString(" ")
-            SupportAction.SENTENCE_STARTER -> pack.starterEn
-            SupportAction.COMPLETE_EXAMPLE -> pack.exampleEn
-            SupportAction.QUESTION_MEANING -> pack.questionMeaningKo
+        val language = requestedLanguage ?: when (role) {
+            SupportRole.QUESTION_MEANING, SupportRole.CORE_EXPLANATION -> SupportLanguage.KO
+            else -> SupportLanguage.EN
         }
-        val language = if (action in setOf(SupportAction.FACT_EXPLANATION, SupportAction.QUESTION_MEANING)) "ko" else "en"
-        val snapshot = received.union(HelpSnapshot(setOfNotNull(kind), setOf("${pack.ref}:${action.name.lowercase()}")))
-        return ProvidedSupport(text, language, snapshot)
+        val artifact = manifest.find(role, language) ?: return SupportPreparation.Unavailable("requested_language_variant_not_prepared")
+        require(artifact.origin == SupportOrigin.PUBLISHED_TASK && artifact.feedbackAttemptId == null)
+        val hash = MessageDigest.getInstance("SHA-256").digest(artifact.text.toByteArray(Charsets.UTF_8)).joinToString("") { "%02x".format(it) }
+        require(hash == artifact.textHash)
+        if (role in setOf(SupportRole.QUESTION_MEANING, SupportRole.CORE_EXPLANATION, SupportRole.SIMPLE_EXPLANATION))
+            require(sentenceCount(artifact.text) in 1..2)
+        return SupportPreparation.Ready(PreparedSupport(task, artifact))
     }
 
-    fun partialListeningSupport(pack: SupportPack, received: HelpSnapshot): ProvidedSupport =
-        provide(HelpRequest.SIMPLE_ENGLISH, pack, received)
+    /** Caller must journal/verify the real adapter observation before projecting this fact. */
+    fun delivered(prepared: PreparedSupport, ticket: PracticePresentationTicket,
+        observation: PracticePresentationObservation, received: HelpSnapshot): HelpSnapshot {
+        require(ticket.presentation.contentRef == prepared.task && prepared.artifact in ticket.presentation.artifacts)
+        require(ticket.clientContext == observation.clientContext && ticket.profileContext == observation.profileContext)
+        if (observation.outcome != ObservationOutcome.COMPLETED) return received
+        return received.union(HelpSnapshot(setOfNotNull(prepared.artifact.kind), setOf(prepared.artifact.supportRef)))
+    }
+
+    fun partialListeningSupport(manifest: PracticeSupportManifest, task: PracticeContentRef, received: HelpSnapshot): SupportPreparation =
+        provide(HelpRequest.SIMPLE_ENGLISH, manifest, task, received)
 
     fun mayOfferExampleAfterRetry(validRetryUsed: Boolean, stillStuck: Boolean): Boolean = validRetryUsed && stillStuck
+
+    private fun sentenceCount(text: String) = text.split(Regex("[.!?。！？]+(?:\\s+|$)")).count { it.isNotBlank() }
 }

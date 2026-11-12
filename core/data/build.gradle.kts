@@ -5,6 +5,7 @@ import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 plugins {
     alias(libs.plugins.android.library)
     alias(libs.plugins.kotlin.android)
+    alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.ksp)
     alias(libs.plugins.hilt)
 }
@@ -42,6 +43,7 @@ android {
         buildConfigField("String", "SUPABASE_PUBLISHABLE_KEY", "\"$supabaseKey\"")
     }
     buildFeatures { buildConfig = true }
+    sourceSets.getByName("androidTest").assets.srcDir("schemas")
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
@@ -62,6 +64,7 @@ dependencies {
     implementation(libs.datastore.preferences)
     implementation(libs.supabase.postgrest)
     implementation(libs.ktor.okhttp)
+    implementation(libs.serialization.json)
     implementation(libs.hilt.android)
     ksp(libs.hilt.compiler)
 }

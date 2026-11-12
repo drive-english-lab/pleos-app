@@ -1,6 +1,15 @@
 package io.github.driveenglishlab.pleos.domain
 
 object ListeningPolicy {
+    fun articleAnnouncement(title: String, mode: ListeningMode, followup: Followup, mainDurationMs: Long, followupDurationMs: Long?): String {
+        require(title.isNotBlank() && title.codePointCount(0,title.length) in 1..500 && mainDurationMs >= 1)
+        val role = followupRole(mode,followup)
+        require((role == null) == (followupDurationMs == null))
+        if (followupDurationMs != null) require(followupDurationMs >= 1)
+        val minutes = kotlin.math.ceil((mainDurationMs.toDouble() + (followupDurationMs ?: 0)) / 60_000).toLong().coerceAtLeast(1)
+        return "‘" + title + "’ 기사를 들려드릴게요. 예상 청취 시간은 약 " + minutes + "분이에요."
+    }
+
     /** A null followup means onboarding has not been completed, not NONE. */
     fun followupRole(mode: ListeningMode, followup: Followup?): String? {
         requireNotNull(followup) { "Choose a followup before playback." }

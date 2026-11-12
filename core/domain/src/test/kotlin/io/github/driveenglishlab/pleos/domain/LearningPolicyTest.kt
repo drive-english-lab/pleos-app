@@ -7,7 +7,7 @@ import org.junit.Test
 
 class LearningPolicyTest {
     private fun owner() = OwnerContext(UUID.randomUUID(), 0, 1, UUID.randomUUID())
-    private fun task() = PracticeRef(ContentRef(UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), ListeningMode.ORIGINAL_FULL), UUID.randomUUID())
+    private fun task() = PracticeRef(ContentRef(UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), ListeningMode.ORIGINAL_FULL), UUID.randomUUID(), UUID.randomUUID())
     private fun allowed() = AccessState(
         SafetyState(VehiclePosition.PARKED, true, true, true, false, 3),
         WindowState(true, true, 4), PowerAvailability.ALLOWED,
@@ -40,16 +40,16 @@ class LearningPolicyTest {
         val input = InputLease(); val owner = owner(); val task = task(); val access = allowed()
         val lease = input.start(owner, task, UUID.randomUUID(), access)!!
         assertNull(input.start(owner, task, lease.lessonId, access))
-        assertNull(input.finalText(lease.captureId, "A city opened a library.", access, owner, task))
+        assertNull(input.finalText(lease.captureId, "A city opened a library.", access, owner, task, Capture.unverified(CapturePath.PARKED_STT)))
         assertTrue(input.finish(lease.captureId)); assertFalse(input.finish(lease.captureId))
-        assertEquals("A city opened a library.", input.finalText(lease.captureId, "A city opened a library.", access, owner, task)?.text)
-        assertNull(input.finalText(lease.captureId, "Duplicate", access, owner, task))
+        assertEquals("A city opened a library.", input.finalText(lease.captureId, "A city opened a library.", access, owner, task, Capture.unverified(CapturePath.PARKED_STT))?.text)
+        assertNull(input.finalText(lease.captureId, "Duplicate", access, owner, task, Capture.unverified(CapturePath.PARKED_STT)))
     }
     @Test fun restrictionBeforeFinalDiscardsAndParkReturnDoesNotRestart() {
         val input = InputLease(); val owner = owner(); val task = task(); val access = allowed()
         val lease = input.start(owner, task, UUID.randomUUID(), access)!!; input.finish(lease.captureId)
         input.recheck(access.copy(window = WindowState(false, false, 5)), owner, task)
-        assertNull(input.finalText(lease.captureId, "Late answer", access, owner, task))
+        assertNull(input.finalText(lease.captureId, "Late answer", access, owner, task, Capture.unverified(CapturePath.PARKED_STT)))
         assertFalse(input.finish(lease.captureId))
     }
     @Test fun latePermissionGrantCreatesNoCapture() {
@@ -66,11 +66,11 @@ class LearningPolicyTest {
         )) {
             val input = InputLease(); val o = owner(); val t = task(); val a = allowed()
             val lease = input.start(o, t, UUID.randomUUID(), a)!!; input.finish(lease.captureId)
-            assertNull(input.finalText(lease.captureId, "A real answer", change(a), o, t))
+            assertNull(input.finalText(lease.captureId, "A real answer", change(a), o, t, Capture.unverified(CapturePath.PARKED_STT)))
         }
         val input = InputLease(); val o = owner(); val t = task(); val lease = input.start(o, t, UUID.randomUUID(), allowed())!!
         input.finish(lease.captureId)
-        assertNull(input.finalText(lease.captureId, "Old owner", allowed(), owner(), t))
+        assertNull(input.finalText(lease.captureId, "Old owner", allowed(), owner(), t, Capture.unverified(CapturePath.PARKED_STT)))
     }
     @Test fun noTimerStartsAtScreenEntryOrSentCallback() {
         val clock = DialogueClock(); val o = owner(); val token = UUID.randomUUID()
@@ -145,22 +145,17 @@ class LearningPolicyTest {
         assertEquals(ConversationReturn.SameQuestion(lesson, ref), ConversationPolicy.returnTo(QuestionOrigin.Practice(lesson, ref)))
         assertEquals(ConversationReturn.ReannounceOffer(ref.content), ConversationPolicy.returnTo(QuestionOrigin.ArticleOffer(ref.content)))
     }
-    @Test fun providedHelpCarriesSupportButDoesNotContainAnAttempt() {
-        val pack = SupportPack("task-1", listOf("공공 도서관이 문을 열었어요."), listOf("A public library opened."), "The city opened", "The city opened a public library.", "도시가 무엇을 열었나요?")
-        val first = PracticePolicy.provide(HelpRequest.HINT, pack, HelpSnapshot())
-        assertEquals("ko", first.language); assertEquals(setOf(HelpKind.FACT_EXPLANATION), first.help.kinds)
-        val second = PracticePolicy.provide(HelpRequest.HINT, pack, first.help)
-        assertEquals("en", second.language); assertTrue(HelpKind.SENTENCE_STARTER in second.help.kinds)
-        assertFalse(HelpKind.COMPLETE_EXAMPLE in second.help.kinds)
-        val meaning = PracticePolicy.provide(HelpRequest.QUESTION_MEANING, pack, second.help)
-        assertEquals("ko", meaning.language)
+    @Test fun hintProgressionUsesDeliveredFactsAndDoesNotAutomaticallyOfferAnExample() {
+        assertEquals(SupportAction.FACT_EXPLANATION, PracticePolicy.help(HelpRequest.HINT, HelpSnapshot()))
+        assertEquals(SupportAction.SENTENCE_STARTER, PracticePolicy.help(HelpRequest.HINT, HelpSnapshot(setOf(HelpKind.FACT_EXPLANATION))))
+        assertEquals(SupportAction.FACT_EXPLANATION, PracticePolicy.help(HelpRequest.HINT, HelpSnapshot(refs = setOf("question-meaning-only"))))
         assertFalse(PracticePolicy.mayOfferExampleAfterRetry(false, true))
         assertTrue(PracticePolicy.mayOfferExampleAfterRetry(true, true))
     }
     @Test fun emptyFinalReturnsToQuestionWithoutSubmittingOrGettingStuck() = runBlocking {
         val coordinator = SessionCoordinator(); coordinator.activate(owner(), task(), UUID.randomUUID())
         coordinator.updateAccess(allowed()); val lease = coordinator.startAnswer()!!; coordinator.finishAnswer(lease.captureId)
-        assertNull(coordinator.acceptFinal(lease.captureId, "   ") { fail("Blank text must not be persisted.") })
+        assertNull(coordinator.acceptFinal(lease.captureId, "   ", Capture.unverified(CapturePath.PARKED_STT)) { fail("Blank text must not be persisted.") })
         assertEquals(InputPhase.IDLE, coordinator.snapshot().inputPhase)
         assertEquals(SessionScreen.QUESTION, coordinator.snapshot().screen)
         assertNotNull(coordinator.startAnswer())
@@ -170,7 +165,7 @@ class LearningPolicyTest {
         coordinator.activate(o, t, UUID.randomUUID()); coordinator.updateAccess(allowed())
         val lease = coordinator.startAnswer()!!; coordinator.finishAnswer(lease.captureId)
         var rejected = false
-        try { coordinator.acceptFinal(lease.captureId, "A city opened a library.") { throw IllegalStateException("disk failure") } }
+        try { coordinator.acceptFinal(lease.captureId, "A city opened a library.", Capture.unverified(CapturePath.PARKED_STT)) { throw IllegalStateException("disk failure") } }
         catch (_: IllegalStateException) { rejected = true }
         assertTrue(rejected); assertNull(coordinator.snapshot().pendingAnswer)
         assertEquals(SessionDataState.FAILED, coordinator.snapshot().dataState)
@@ -182,7 +177,7 @@ class LearningPolicyTest {
         coordinator.activate(o, t, UUID.randomUUID()); coordinator.updateAccess(allowed())
         val lease = coordinator.startAnswer()!!; coordinator.finishAnswer(lease.captureId)
         var persisted = false
-        val answer = coordinator.acceptFinal(lease.captureId, "The city opened a library.") { persisted = true }
+        val answer = coordinator.acceptFinal(lease.captureId, "The city opened a library.", Capture.unverified(CapturePath.PARKED_STT)) { persisted = true }
         assertTrue(persisted); assertNotNull(answer)
         assertNull(coordinator.startAnswer()) // A pending accepted turn cannot open a second capture.
         coordinator.updateAccess(AccessState())

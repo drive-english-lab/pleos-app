@@ -14,6 +14,9 @@ class DialogueClock {
     private var hintMethodAnnounced = false
 
     fun newQuestion() { cancel(); hintMethodAnnounced = false }
+    fun restore(progress: DialogueProgress) { cancel(); hintMethodAnnounced = progress.hintMethodAnnounced }
+    fun businessProgress() = DialogueProgress(hintMethodAnnounced)
+    fun recordBusinessProgress(progress: DialogueProgress) { hintMethodAnnounced = hintMethodAnnounced || progress.hintMethodAnnounced }
 
     fun expectOutput(kind: WaitKind, token: UUID, context: OwnerContext) {
         wait = null

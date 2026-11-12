@@ -12,7 +12,7 @@ data class CaptureLease(
     val windowGeneration: Long,
 )
 
-data class AcceptedAnswer(val lease: CaptureLease, val text: String)
+data class AcceptedAnswer(val lease: CaptureLease, val text: String, val capture: Capture, val helpReceived: HelpSnapshot)
 enum class InputPhase { IDLE, CAPTURING, FINALIZING, ACCEPTED }
 
 /** Confined to the coordinator's serialized event lane, never owned by Compose. */
@@ -44,14 +44,14 @@ class InputLease {
 
     /** The returned submission must be durably accepted before any request is sent. */
     fun finalText(captureId: UUID, text: String, access: AccessState,
-                  owner: OwnerContext?, task: PracticeRef?): AcceptedAnswer? {
+                  owner: OwnerContext?, task: PracticeRef?, capture: Capture, helpReceived: HelpSnapshot = HelpSnapshot()): AcceptedAnswer? {
         val lease = current ?: return null
         if (captureId != lease.captureId || !finalizing) return null
-        if (!valid(lease, access, owner, task)) { invalidate(); return null }
+        if (!valid(lease, access, owner, task) || capture.path != CapturePath.PARKED_STT) { invalidate(); return null }
         val answer = text.trim()
         if (answer.codePointCount(0, answer.length) !in 1..1200) { invalidate(); return null }
         invalidate()
-        return AcceptedAnswer(lease, answer)
+        return AcceptedAnswer(lease, answer, capture, helpReceived)
     }
 
     private fun valid(lease: CaptureLease, access: AccessState, owner: OwnerContext?, task: PracticeRef?) =

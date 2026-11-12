@@ -16,7 +16,96 @@ data class ContentRef(
     val listeningMode: ListeningMode,
 )
 
-data class PracticeRef(val content: ContentRef, val taskId: UUID)
+data class BasicQuestionRef(val articleId: UUID, val basicQuestionVersionId: UUID)
+
+data class PracticeContentRef(val content: ContentRef, val taskId: UUID, val basicQuestionVersionId: UUID) {
+    val questionRef: BasicQuestionRef get() = BasicQuestionRef(content.articleId, basicQuestionVersionId)
+}
+
+typealias PracticeRef = PracticeContentRef
+
+enum class CapturePath { GLEO, PARKED_STT }
+enum class SpokenLanguage { EN, KO, MIXED, UNKNOWN }
+enum class EnglishEvidence { VERIFIED_PATH, SPECIFIC_CONFIRMATION, VERIFIED_NON_ENGLISH, UNVERIFIED }
+/** Read-only server result. Never serialize this into a client submission. */
+enum class EnglishAttemptStatus { VERIFIED_ENGLISH, NOT_ENGLISH, UNVERIFIED }
+
+/** Claims retain the original speech language separately from normalized text and form. */
+data class Capture(
+    val path: CapturePath,
+    val formFidelity: CaptureFidelity,
+    val uncertainSpans: List<String>,
+    val spokenLanguage: SpokenLanguage,
+    val englishEvidence: EnglishEvidence,
+    val languageEvidenceRef: String?,
+) {
+    init {
+        require(uncertainSpans.size <= 8 && uncertainSpans.distinct().size == uncertainSpans.size)
+        require(uncertainSpans.all { it.codePointCount(0, it.length) in 1..240 })
+        when (englishEvidence) {
+            EnglishEvidence.VERIFIED_PATH, EnglishEvidence.SPECIFIC_CONFIRMATION -> {
+                require(spokenLanguage in setOf(SpokenLanguage.EN, SpokenLanguage.MIXED))
+                requireReference(languageEvidenceRef)
+            }
+            EnglishEvidence.VERIFIED_NON_ENGLISH -> {
+                require(spokenLanguage in setOf(SpokenLanguage.KO, SpokenLanguage.MIXED))
+                requireReference(languageEvidenceRef)
+            }
+            EnglishEvidence.UNVERIFIED -> require(languageEvidenceRef == null)
+        }
+        if (spokenLanguage == SpokenLanguage.UNKNOWN) require(englishEvidence == EnglishEvidence.UNVERIFIED)
+    }
+
+    companion object {
+        fun unverified(path: CapturePath) = Capture(path, CaptureFidelity.UNKNOWN, emptyList(),
+            SpokenLanguage.UNKNOWN, EnglishEvidence.UNVERIFIED, null)
+    }
+}
+
+internal fun requireReference(value: String?) {
+    require(value != null && value.codePointCount(0, value.length) in 1..160)
+}
+
+data class ProfileContext(val profileId: UUID, val privacyEpoch: Long) {
+    init { require(privacyEpoch >= 0) }
+}
+
+data class DialogueProgress(val hintMethodAnnounced: Boolean) {
+    fun merge(other: DialogueProgress) = DialogueProgress(hintMethodAnnounced || other.hintMethodAnnounced)
+    companion object { fun newLesson() = DialogueProgress(false) }
+}
+
+/** A witnessed completion fact, not a stale lesson-phase update or a live output grant. */
+data class DialogueProgressObservation(
+    val lessonId: UUID,
+    val hintMethodAnnounced: Boolean,
+    val outputInstanceId: UUID,
+    val adapterEvidenceRef: String,
+) {
+    init { require(hintMethodAnnounced); requireReference(adapterEvidenceRef) }
+}
+
+data class DialogueProgressEvent(val eventId: UUID, val observation: DialogueProgressObservation)
+
+enum class LessonInputPhase { QUESTION_WAIT, FEEDBACK_PENDING, RETRY_OFFER, SUSPENDED }
+data class LessonInput(
+    val lessonId: UUID, val contentRef: PracticeContentRef, val phase: LessonInputPhase,
+    val helpReceived: HelpSnapshot, val returnCheckpointId: UUID?, val dialogueProgress: DialogueProgress,
+)
+
+sealed interface Capability {
+    data class Verified(val evidenceRef: String) : Capability { init { requireReference(evidenceRef) } }
+    data class Unavailable(val reason: String) : Capability
+}
+data class VoiceCapabilities(
+    val outputCompletion: Capability = Capability.Unavailable("not_verified"),
+    val exactOutputContent: Capability = Capability.Unavailable("not_verified"),
+    val inputActivity: Capability = Capability.Unavailable("not_verified"),
+    val proactiveSession: Capability = Capability.Unavailable("not_verified"),
+    val originalEnglish: Capability = Capability.Unavailable("not_verified"),
+    val literalForm: Capability = Capability.Unavailable("not_verified"),
+    val microphoneArbitration: Capability = Capability.Unavailable("not_verified"),
+)
 
 data class LearningSettings(
     val topics: Set<String> = emptySet(),
