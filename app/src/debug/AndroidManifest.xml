@@ -1,12 +1,18 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
-    <application>
-        <receiver
-            android:name=".GleoProbeReceiver"
-            android:exported="true">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" xmlns:tools="http://schemas.android.com/tools">
+    <application android:icon="@mipmap/preview_launcher">
+        <activity android:name=".MainActivity" android:exported="true">
+            <intent-filter tools:node="removeAll" />
+        </activity>
+        <activity android:name=".DesignPreviewActivity" android:exported="true" android:screenOrientation="landscape" android:resizeableActivity="true" android:label="Drive English Preview">
+            <meta-data android:name="distractionOptimized" android:value="true" />
             <intent-filter>
-                <action android:name="DRIVE_ENGLISH_CHECK_SETUP" />
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+        </activity>
+        <receiver android:name=".GleoProbeReceiver" android:exported="true">
+            <intent-filter><action android:name="DRIVE_ENGLISH_CHECK_SETUP" /></intent-filter>
         </receiver>
     </application>
 </manifest>
