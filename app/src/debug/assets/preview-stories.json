@@ -66,7 +66,13 @@
         "end": 38.299667,
         "text": "This story was created for an English learning demonstration."
       }
-    ]
+    ],
+    "qa": "책과 조용한 열람 공간은 유지하고 워크숍과 주민 모임을 위한 방을 더할 계획이에요. 개관일은 아직 정해지지 않았어요.",
+    "learner": "The old library become a community space.",
+    "before": "become",
+    "after": "will become",
+    "feedback": "앞으로의 계획을 설명할 때는 will become을 써요.",
+    "summaryKo": "오래된 도서관을 책과 조용한 열람 공간을 유지한 커뮤니티 공간으로 바꿀 계획입니다."
   },
   {
     "id": "cooler-streets",
@@ -100,7 +106,13 @@
         "end": 11.81575,
         "text": "A planning team measures temperatures on both streets to understand where shade could make walking more comfortable."
       }
-    ]
+    ],
+    "qa": "이야기에서는 나무가 적은 거리와 하루 중 대부분 그늘진 거리를 비교해요. 실제 측정 결과의 숫자는 제시하지 않았어요.",
+    "learner": "Street trees makes walking more comfortable.",
+    "before": "makes",
+    "after": "make",
+    "feedback": "trees는 복수형이므로 동사는 make를 써요.",
+    "summaryKo": "나무가 적은 거리와 그늘진 거리를 비교해 그늘이 걷기 편한 환경에 미치는 영향을 살펴보는 이야기입니다."
   },
   {
     "id": "second-life",
@@ -129,6 +141,12 @@
         "end": 12.313958,
         "text": "They store electricity when demand is low and supply it when more drivers need to charge."
       }
-    ]
+    ],
+    "qa": "이야기는 배터리 여러 개를 충전소의 에너지 저장에 활용하는 가능한 설계를 설명해요. 이미 상용화됐다는 내용은 없어요.",
+    "learner": "Old batteries stores electricity for later.",
+    "before": "stores",
+    "after": "store",
+    "feedback": "batteries는 복수형이므로 동사는 store를 써요.",
+    "summaryKo": "차에서 사용하던 배터리가 전력 수요가 낮을 때 전기를 저장하고 충전 수요가 늘 때 공급할 가능성을 살펴봅니다."
   }
 ]
