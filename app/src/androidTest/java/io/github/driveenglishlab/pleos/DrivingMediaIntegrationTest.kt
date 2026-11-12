@@ -122,10 +122,22 @@ class DrivingMediaIntegrationTest {
             val controller = PlatformController(context, legacy.sessionToken)
             main { controller.transportControls.playFromMediaId("city-library", null) }
             await("legacy ID actual play") { controller.metadata?.description?.mediaId == "city-library" && controller.playbackState?.state == 3 }
+            assertEquals(0L, controller.playbackState!!.actions and android.media.session.PlaybackState.ACTION_SKIP_TO_PREVIOUS)
             main { controller.transportControls.pause() }
             await("legacy pause") { controller.playbackState?.state == 2 }
             main { controller.transportControls.playFromSearch("cooler", null) }
             await("legacy search actual play") { controller.metadata?.description?.mediaId == "cooler-streets" && controller.playbackState?.state == 3 }
+            main { controller.transportControls.seekTo(7_000) }
+            await("legacy seek before previous") { controller.playbackState!!.position >= 6_000 }
+            main { controller.transportControls.skipToPrevious() }
+            await("legacy previous selects article rather than restarting current") { controller.metadata?.description?.mediaId == "city-library" && controller.playbackState?.state == 3 }
+            main { controller.transportControls.skipToNext() }
+            await("legacy next retains playing") { controller.metadata?.description?.mediaId == "cooler-streets" && controller.playbackState?.state == 3 }
+            main { controller.transportControls.skipToNext() }
+            await("legacy final article") { controller.metadata?.description?.mediaId == "second-life" }
+            await("last article disables next") { controller.playbackState!!.actions and android.media.session.PlaybackState.ACTION_SKIP_TO_NEXT == 0L }
+            main { controller.transportControls.pause(); controller.transportControls.skipToPrevious() }
+            await("legacy previous retains paused") { controller.metadata?.description?.mediaId == "cooler-streets" && controller.playbackState?.state == 2 }
             main { controller.transportControls.stop() }
             await("legacy STOP") { controller.playbackState?.state == 0 && controller.playbackState?.position?.let { it >= 0 } == true }
         } finally { main { legacy.disconnect() } }

@@ -190,8 +190,11 @@ internal class OutputPolicyPlayer(player: ExoPlayer, private val onExplicitStop:
     }
     override fun getState(): SimpleBasePlayer.State {
         val state = super.getState()
-        return if (outputAllowed) state else state.buildUpon().setAvailableCommands(
-            state.availableCommands.buildUpon().removeAll(Player.COMMAND_PLAY_PAUSE, Player.COMMAND_PREPARE).build()).build()
+        // The legacy bridge prefers generic previous (restart after 3s) over previous-item.
+        // Expose only whole-article navigation, including its actual first/last boundaries.
+        val commands = state.availableCommands.buildUpon().removeAll(Player.COMMAND_SEEK_TO_PREVIOUS, Player.COMMAND_SEEK_TO_NEXT)
+        if (!outputAllowed) commands.removeAll(Player.COMMAND_PLAY_PAUSE, Player.COMMAND_PREPARE)
+        return state.buildUpon().setAvailableCommands(commands.build()).build()
     }
     override fun handleSetPlayWhenReady(playWhenReady: Boolean): ListenableFuture<*> =
         if (outputAllowed || !playWhenReady) super.handleSetPlayWhenReady(playWhenReady)
