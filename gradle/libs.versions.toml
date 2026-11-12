@@ -15,6 +15,7 @@ ktor = "3.4.3"
 vehicle = "2.3.2"
 navi = "3.0.5"
 fused-location = "1.1.3"
+media3 = "1.11.1"
 
 [libraries]
 activity-compose = { module = "androidx.activity:activity-compose", version.ref = "activity" }
@@ -33,6 +34,8 @@ ktor-okhttp = { module = "io.ktor:ktor-client-okhttp", version.ref = "ktor" }
 pleos-vehicle = { module = "ai.pleos.playground:Vehicle", version.ref = "vehicle" }
 pleos-navi = { module = "ai.pleos.playground:NaviHelper", version.ref = "navi" }
 pleos-fused-location = { module = "ai.pleos.playground:FusedLocation", version.ref = "fused-location" }
+media3-exoplayer = { module = "androidx.media3:media3-exoplayer", version.ref = "media3" }
+media3-session = { module = "androidx.media3:media3-session", version.ref = "media3" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

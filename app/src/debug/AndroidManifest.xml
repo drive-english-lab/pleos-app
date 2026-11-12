@@ -5,6 +5,7 @@
             <intent-filter tools:node="removeAll" />
         </activity>
         <activity android:name=".DesignPreviewActivity" android:exported="true" android:screenOrientation="landscape" android:resizeableActivity="true" android:label="Drive English Preview">
+            <meta-data android:name="distractionOptimized" android:value="true" />
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />

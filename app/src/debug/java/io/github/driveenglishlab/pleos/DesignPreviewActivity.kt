@@ -2,16 +2,24 @@ package io.github.driveenglishlab.pleos
 
 import android.content.Context
 import android.content.Intent
-import android.media.AudioAttributes
-import android.media.AudioFocusRequest
-import android.media.AudioManager
-import android.media.MediaPlayer
 import android.os.Bundle
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.collectAsState
+import io.github.driveenglishlab.pleos.platform.vehicle.DrivingAccess
+import io.github.driveenglishlab.pleos.platform.vehicle.DrivingAccessSource
+import kotlinx.coroutines.flow.MutableStateFlow
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -87,7 +95,6 @@ import androidx.lifecycle.repeatOnLifecycle
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import org.json.JSONArray
-import java.io.Closeable
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -138,81 +145,6 @@ private fun loadPreviewStories(context: Context): List<PreviewStory> {
     }
 }
 
-/** Foreground-only sample playback: focus loss and leaving the activity always pause. */
-private class PreviewAudio(private val context: Context) : Closeable {
-    private val manager = context.getSystemService(AudioManager::class.java)
-    private val attributes = AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_MEDIA)
-        .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH).build()
-    private val focus = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)
-        .setAudioAttributes(attributes).setAcceptsDelayedFocusGain(false)
-        .setOnAudioFocusChangeListener { if (it != AudioManager.AUDIOFOCUS_GAIN) pause() }.build()
-    private var media: MediaPlayer? = null
-    private var seeking = false
-    var ready by mutableStateOf(false); private set
-    var playing by mutableStateOf(false); private set
-    var positionMs by mutableIntStateOf(0); private set
-    var durationMs by mutableIntStateOf(1); private set
-    var error by mutableStateOf(""); private set
-
-    fun load(story: PreviewStory, resumeMs: Int) {
-        pause()
-        media?.release()
-        media = null
-        ready = false; seeking = false; error = ""
-        positionMs = resumeMs; durationMs = (story.seconds * 1000).toInt()
-        val candidate = MediaPlayer()
-        media = candidate
-        try {
-            candidate.setAudioAttributes(attributes)
-            context.assets.openFd(story.audio).use { fd -> candidate.setDataSource(fd.fileDescriptor, fd.startOffset, fd.length) }
-            candidate.setOnPreparedListener {
-                if (media === it) {
-                    durationMs = it.duration.coerceAtLeast(1)
-                    ready = true
-                    seek(resumeMs)
-                }
-            }
-            candidate.setOnSeekCompleteListener { if (media === it) { seeking = false; positionMs = it.currentPosition } }
-            candidate.setOnCompletionListener {
-                if (media === it) { playing = false; positionMs = durationMs; manager.abandonAudioFocusRequest(focus) }
-            }
-            candidate.setOnErrorListener { _, _, _ ->
-                if (media === candidate) { pause(); ready = false; error = "샘플 오디오를 불러오지 못했어요." }
-                true
-            }
-            candidate.prepareAsync()
-        } catch (_: Exception) {
-            candidate.release(); media = null; error = "샘플 오디오를 불러오지 못했어요."
-        }
-    }
-
-    fun toggle() {
-        val current = media ?: return
-        if (!ready) return
-        if (playing) { pause(); return }
-        if (manager.requestAudioFocus(focus) != AudioManager.AUDIOFOCUS_REQUEST_GRANTED) {
-            error = "다른 오디오가 끝난 뒤 다시 재생해 주세요."
-            return
-        }
-        if (positionMs >= durationMs - 100) seek(0)
-        current.start(); playing = true; error = ""
-    }
-
-    fun seek(position: Int) {
-        if (!ready) return
-        positionMs = position.coerceIn(0, durationMs)
-        seeking = true
-        media?.seekTo(positionMs.toLong(), MediaPlayer.SEEK_CLOSEST)
-    }
-
-    fun refresh() { if (ready && !seeking) positionMs = media?.currentPosition ?: positionMs }
-    fun pause() {
-        if (playing) { media?.pause(); playing = false }
-        manager.abandonAudioFocusRequest(focus)
-    }
-    override fun close() { pause(); media?.release(); media = null; ready = false }
-}
-
 private val LocalPreviewDark = staticCompositionLocalOf { false }
 
 @OptIn(ExperimentalTextApi::class)
@@ -258,11 +190,23 @@ private fun NewsDesignPreview(theme: String, onTheme: (String) -> Unit, onDiagno
     val positions = remember { mutableStateMapOf<String, Int>() }
     val practiced = remember { mutableStateMapOf<String, Boolean>() }
     val story = stories[selected]
-    val audio = remember { PreviewAudio(context.applicationContext) }
+    val audio = remember { PreviewPlayback(context.applicationContext, stories, story.id) }
+    val vehicle = remember { if (Build.VERSION.SDK_INT >= 34) DrivingAccessSource(context.applicationContext) else null }
+    val unavailable = remember { MutableStateFlow(DrivingAccess(status = "unsupported")) }
+    val vehicleState = if (Build.VERSION.SDK_INT >= 34) vehicle?.state ?: unavailable else unavailable
+    // Safety routes close even while another vehicle Activity is covering this one.
+    val access by vehicleState.collectAsState()
+    val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { if (Build.VERSION.SDK_INT >= 34) vehicle?.refresh() }
+    var qaStopGeneration by remember { mutableStateOf(0L) }
+    LaunchedEffect(audio.mediaId) {
+        val index = stories.indexOfFirst { it.id == audio.mediaId }
+        if (index >= 0 && selected != index) { selected = index; practiceStage = "question"; attempts = 0 }
+    }
+    LaunchedEffect(access.detailsAllowed) { if (!access.detailsAllowed) { screen = "player"; clearHistory = false } }
+    LaunchedEffect(access.componentAllowed) { if (access.componentAllowed == false) audio.stop() }
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     val list = rememberLazyListState()
     val current = story.cues.indexOfLast { audio.positionMs >= it.startMs }.coerceAtLeast(0)
-    LaunchedEffect(story.id) { audio.load(story, positions[story.id] ?: 0) }
     LaunchedEffect(audio, lifecycle, story.id) {
         lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
             while (isActive) { audio.refresh(); if (audio.ready && audio.positionMs > 0) positions[story.id] = audio.positionMs; delay(200) }
@@ -283,17 +227,18 @@ private fun NewsDesignPreview(theme: String, onTheme: (String) -> Unit, onDiagno
             practiceStage = when (sampleCase) { "unclear" -> "unclear"; "error" -> "error"; else -> "feedback" }
         }
     }
-    DisposableEffect(lifecycle, audio) {
-        val observer = LifecycleEventObserver { _, event -> if (event == Lifecycle.Event.ON_STOP) audio.pause() }
+    DisposableEffect(lifecycle, audio, vehicle) {
+        if (Build.VERSION.SDK_INT >= 34) vehicle?.start()
+        val observer = LifecycleEventObserver { _, event -> if (event == Lifecycle.Event.ON_RESUME && Build.VERSION.SDK_INT >= 34) vehicle?.start() }
         lifecycle.addObserver(observer)
-        onDispose { lifecycle.removeObserver(observer); audio.close() }
+        onDispose { lifecycle.removeObserver(observer); if (Build.VERSION.SDK_INT >= 34) vehicle?.close(); audio.close() }
     }
-    fun navigate(destination: String) { if (destination != "player") audio.pause(); screen = destination }
-    fun choose(index: Int) { audio.pause(); selected = index; screen = "player"; practiceStage = "question"; attempts = 0 }
+    fun navigate(destination: String) { if (!access.detailsAllowed && destination != "player") return; if (destination != "player") audio.pause(); screen = destination }
+    fun choose(index: Int) { audio.load(stories[index], positions[stories[index].id] ?: 0); screen = "player"; practiceStage = "question"; attempts = 0 }
     fun openPractice() { if (practiceStage == "done") { practiceStage = "question"; attempts = 0 }; navigate("practice") }
-    fun openQa() { qaPlaying = audio.playing; qaPosition = audio.positionMs; navigate("qa") }
-    fun closeQa() { screen = "player"; if (qaPlaying) { audio.seek((qaPosition - 5000).coerceAtLeast(0)); audio.toggle() }; qaPlaying = false }
-    BackHandler(enabled = screen != "player") { if (screen == "qa") closeQa() else screen = "player" }
+    fun openQa() { qaPlaying = audio.playing; qaPosition = audio.positionMs; qaStopGeneration = audio.stopGeneration; navigate("qa") }
+    fun closeQa() { screen = "player"; if (qaPlaying && qaStopGeneration == audio.stopGeneration && access.detailsAllowed) { audio.seek((qaPosition - 5000).coerceAtLeast(0)); audio.resume() }; qaPlaying = false }
+    BackHandler(enabled = access.detailsAllowed && screen != "player") { if (screen == "qa") closeQa() else screen = "player" }
     Surface(Modifier.fillMaxSize()) {
         BoxWithConstraints(Modifier.fillMaxSize().safeDrawingPadding().padding(20.dp)) {
             val wide = maxWidth >= 1100.dp
@@ -301,21 +246,25 @@ private fun NewsDesignPreview(theme: String, onTheme: (String) -> Unit, onDiagno
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     Column {
                         Text("Drive English", style = MaterialTheme.typography.titleLarge)
-                        Text("주차용 디자인 시연", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(if (access.detailsAllowed) "창작 기사 시연" else access.label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                     Spacer(Modifier.weight(1f))
+                    if (access.detailsAllowed) {
                     TextButton(onClick = { navigate("news") }, modifier = Modifier.heightIn(min = 48.dp)) { Text("뉴스") }
                     TextButton(onClick = ::openPractice, modifier = Modifier.heightIn(min = 48.dp)) { Text("연습") }
                     TextButton(onClick = { navigate("history") }, modifier = Modifier.heightIn(min = 48.dp)) { Text("기록") }
                     IconButton(onClick = { navigate("settings") }, modifier = Modifier.size(56.dp)) { PreviewIcon(R.drawable.preview_settings, "듣기 설정") }
+                    }
                 }
                 Box(Modifier.weight(1f)) {
-                    when (screen) {
+                    if (!access.detailsAllowed) DrivingPlayer(story, audio, access, onPermission = {
+                        permission.launch(arrayOf("android.car.permission.CAR_SPEED", "android.car.permission.CAR_POWERTRAIN"))
+                    }) else when (screen) {
                         "news" -> NativeNewsList(stories, selected, onChoose = ::choose, onBack = { screen = "player" })
                         "article" -> NativeArticle(story, onBack = { screen = "player" }, onPractice = ::openPractice)
                         "practice" -> NativePractice(story, practiceStage, sampleCase, attempts, onAttempts = { attempts = it }, onCase = { sampleCase = it }, onStage = { practiceStage = it },
                             onDone = { practiced[story.id] = true; practiceStage = "done" }, onBack = { screen = "player" })
-                        "history" -> NativeHistory(stories, positions, practiced, onChoose = ::choose, onNews = { navigate("news") }, onPractice = { index -> selected = index; openPractice() }, onBack = { screen = "player" })
+                        "history" -> NativeHistory(stories, positions, practiced, onChoose = ::choose, onNews = { navigate("news") }, onPractice = { index -> choose(index); openPractice() }, onBack = { screen = "player" })
                         "settings" -> NativeSettings(theme, onApply = { onTheme(it); screen = "player" }, onClear = { clearHistory = true }, onDiagnostics = onDiagnostics, onBack = { screen = "player" })
                         "qa" -> NativeQuestion(story, onBack = ::closeQa)
                         else -> Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -359,7 +308,7 @@ private fun NewsDesignPreview(theme: String, onTheme: (String) -> Unit, onDiagno
             }
         }
     }
-    if (clearHistory) AlertDialog(onDismissRequest = { clearHistory = false }, title = { Text("시연 기록을 지울까요?") },
+    if (clearHistory && access.detailsAllowed) AlertDialog(onDismissRequest = { clearHistory = false }, title = { Text("시연 기록을 지울까요?") },
         text = { Text("현재 실행에서 만든 예시 기록만 지워요. 실제 계정이나 서버 기록은 사용하지 않아요.", style = MaterialTheme.typography.bodyMedium) },
         confirmButton = { TextButton(onClick = { positions.clear(); practiced.clear(); audio.seek(0); clearHistory = false }) { Text("시연 기록 지우기") } },
         dismissButton = { TextButton(onClick = { clearHistory = false }) { Text("취소") } })
@@ -367,7 +316,7 @@ private fun NewsDesignPreview(theme: String, onTheme: (String) -> Unit, onDiagno
 
 @Composable
 private fun NativeReader(story: PreviewStory, translated: Boolean, current: Int, list: androidx.compose.foundation.lazy.LazyListState,
-                         onManualScroll: () -> Unit, audio: PreviewAudio, modifier: Modifier, compactActions: (@Composable () -> Unit)?) {
+                         onManualScroll: () -> Unit, audio: PreviewPlayback, modifier: Modifier, compactActions: (@Composable () -> Unit)?) {
     val groups = remember(story.id) { story.cues.chunked(2) }
     val manualScroll = remember(onManualScroll) { object : NestedScrollConnection {
         override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset { if (source == NestedScrollSource.UserInput && available.y != 0f) onManualScroll(); return Offset.Zero }
@@ -406,7 +355,7 @@ private fun NativeReader(story: PreviewStory, translated: Boolean, current: Int,
 }
 
 @Composable
-private fun NativeDock(audio: PreviewAudio, translated: Boolean, following: Boolean, current: Int, total: Int, onLanguage: (Boolean) -> Unit, onFollow: () -> Unit) {
+private fun NativeDock(audio: PreviewPlayback, translated: Boolean, following: Boolean, current: Int, total: Int, onLanguage: (Boolean) -> Unit, onFollow: () -> Unit) {
     BoxWithConstraints(Modifier.fillMaxWidth()) {
         val compact = maxWidth < 1200.dp || LocalDensity.current.fontScale >= 1.2f
         val twoRows = maxWidth < 900.dp
@@ -422,7 +371,7 @@ private fun NativeDock(audio: PreviewAudio, translated: Boolean, following: Bool
 }
 
 @Composable
-private fun NativeTimeline(audio: PreviewAudio, modifier: Modifier) {
+private fun NativeTimeline(audio: PreviewPlayback, modifier: Modifier) {
     var scrub by remember { mutableStateOf<Float?>(null) }
     Row(modifier, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         Slider(value = scrub ?: audio.positionMs.toFloat(), onValueChange = { scrub = it }, valueRange = 0f..audio.durationMs.toFloat(),
@@ -458,19 +407,19 @@ private fun NativeReadingTools(translated: Boolean, following: Boolean, current:
 }
 
 @Composable
-private fun Transport(audio: PreviewAudio) {
+private fun Transport(audio: PreviewPlayback, driving: Boolean = false) {
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        SeekButton(R.drawable.preview_rotate_ccw, "10초 전으로", audio.ready) { audio.seek(audio.positionMs - 10000) }
-        FilledIconButton(onClick = audio::toggle, enabled = audio.ready, modifier = Modifier.size(72.dp), colors = IconButtonDefaults.filledIconButtonColors(containerColor = if (LocalPreviewDark.current) Color(0xFF79ADFF) else Color(0xFF3182F6), contentColor = MaterialTheme.colorScheme.onPrimary)) {
+        SeekButton(R.drawable.preview_rotate_ccw, "10초 전으로", audio.ready, if (driving) 76 else 56) { audio.seek(audio.positionMs - 10000) }
+        FilledIconButton(onClick = audio::toggle, enabled = audio.ready && audio.canPlay, modifier = Modifier.size(if (driving) 88.dp else 72.dp), colors = IconButtonDefaults.filledIconButtonColors(containerColor = if (LocalPreviewDark.current) Color(0xFF79ADFF) else Color(0xFF3182F6), contentColor = MaterialTheme.colorScheme.onPrimary)) {
             PreviewIcon(if (audio.playing) R.drawable.preview_pause else R.drawable.preview_play, if (audio.playing) "일시 정지" else "재생", Modifier.size(32.dp))
         }
-        SeekButton(R.drawable.preview_rotate_cw, "10초 앞으로", audio.ready) { audio.seek(audio.positionMs + 10000) }
+        SeekButton(R.drawable.preview_rotate_cw, "10초 앞으로", audio.ready, if (driving) 76 else 56) { audio.seek(audio.positionMs + 10000) }
     }
 }
 
 @Composable
-private fun SeekButton(icon: Int, label: String, enabled: Boolean, onClick: () -> Unit) {
-    IconButton(onClick = onClick, enabled = enabled, modifier = Modifier.size(56.dp).semantics { contentDescription = label }) {
+private fun SeekButton(icon: Int, label: String, enabled: Boolean, target: Int = 56, onClick: () -> Unit) {
+    IconButton(onClick = onClick, enabled = enabled, modifier = Modifier.size(target.dp).semantics { contentDescription = label }) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) { PreviewIcon(icon, null, Modifier.size(28.dp)); Text("10", style = MaterialTheme.typography.labelSmall) }
     }
 }
@@ -486,3 +435,36 @@ internal fun NativePracticeButton(onClick: () -> Unit, modifier: Modifier = Modi
 internal fun PreviewIcon(resource: Int, label: String?, modifier: Modifier = Modifier) { Icon(painter = painterResource(resource), contentDescription = label, modifier = modifier.size(28.dp)) }
 
 internal fun timeLabel(millis: Int): String { val seconds = millis.coerceAtLeast(0) / 1000; return "${seconds / 60}:${(seconds % 60).toString().padStart(2, '0')}" }
+
+@Composable
+private fun DrivingPlayer(story: PreviewStory, audio: PreviewPlayback, access: DrivingAccess, onPermission: () -> Unit) {
+    Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.surfaceContainerLowest, shape = RoundedCornerShape(16.dp)) {
+        BoxWithConstraints(Modifier.fillMaxSize().padding(32.dp)) {
+            val compact = maxWidth < 456.dp
+            Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(24.dp)) {
+                Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(24.dp)) {
+                    Text(story.title, style = MaterialTheme.typography.headlineSmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    Text(if (access.uxKnown && access.requiresOptimization == true) "대본과 연습은 주차 후 이용할 수 있어요." else "차량 상태를 확인하면 대본과 연습을 열 수 있어요.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    if (access.mayRequestPermission) Button(onClick = onPermission, modifier = Modifier.heightIn(min = 76.dp)) { Text("차량 상태 접근 허용") }
+                    if (audio.error.isNotEmpty()) {
+                        Text(audio.error, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.error)
+                        Button(onClick = { audio.load(story, audio.positionMs) }, modifier = Modifier.heightIn(min = 76.dp)) { Text("다시 불러오기") }
+                    }
+                    if (access.componentAllowed == false) Text("현재 차량에서 오디오를 사용할 수 없어요.", style = MaterialTheme.typography.bodyMedium)
+                }
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    LinearProgressIndicator(progress = { audio.positionMs.toFloat() / audio.durationMs.coerceAtLeast(1) }, modifier = Modifier.fillMaxWidth().semantics { contentDescription = "청취 진행" })
+                    Text("${timeLabel(audio.positionMs)} / ${timeLabel(audio.durationMs)}", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                val previous: @Composable () -> Unit = { IconButton(onClick = audio::previous, enabled = audio.ready && audio.canPrevious, modifier = Modifier.size(76.dp)) { PreviewIcon(R.drawable.preview_skip_back, "이전 기사") } }
+                val next: @Composable () -> Unit = { IconButton(onClick = audio::next, enabled = audio.ready && audio.canNext, modifier = Modifier.size(76.dp)) { PreviewIcon(R.drawable.preview_skip_forward, "다음 기사") } }
+                if (compact) {
+                    Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { Transport(audio, driving = true) }
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) { previous(); Spacer(Modifier.width(24.dp)); next() }
+                } else Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
+                    previous(); Spacer(Modifier.width(24.dp)); Transport(audio, driving = true); Spacer(Modifier.width(24.dp)); next()
+                }
+            }
+        }
+    }
+}
