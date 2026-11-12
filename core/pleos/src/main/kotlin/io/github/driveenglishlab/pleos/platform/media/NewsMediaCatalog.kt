@@ -9,6 +9,10 @@ data class NewsArticle(val id: String, val title: String, val summary: String, v
 interface NewsMediaCatalog {
     val articles: List<NewsArticle>
     fun find(id: String): NewsArticle? = articles.firstOrNull { it.id == id }
+    fun previous(id: String): NewsArticle? = articles.indexOfFirst { it.id == id }
+        .let { index -> if (index > 0) articles[index - 1] else null }
+    fun next(id: String): NewsArticle? = articles.indexOfFirst { it.id == id }
+        .let { index -> if (index >= 0) articles.getOrNull(index + 1) else null }
     fun search(query: String): List<NewsArticle> {
         val text = query.trim().lowercase(Locale.ROOT)
         return if (text.isEmpty()) emptyList() else articles.filter { it.title.lowercase(Locale.ROOT).contains(text) }

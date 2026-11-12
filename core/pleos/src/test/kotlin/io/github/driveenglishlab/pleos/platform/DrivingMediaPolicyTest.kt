@@ -15,12 +15,19 @@ class DrivingMediaPolicyTest {
     }
     @Test fun catalogResolvesApprovedIdentityAndTitleOnly() {
         val article = NewsArticle("fiction-1", "A City Library", "Fictional example", "2026.11.11", "asset:///sample.mp3", 38000)
-        val catalog = object : NewsMediaCatalog { override val articles = listOf(article) }
+        val last = article.copy(id = "fiction-2", title = "A Battery")
+        val catalog = object : NewsMediaCatalog { override val articles = listOf(article, last) }
         assertEquals(article, catalog.find("fiction-1"))
         assertEquals(listOf(article), catalog.search(" CITY "))
         assertTrue(catalog.search("missing").isEmpty())
         assertTrue(catalog.search("").isEmpty())
         assertNull(catalog.find("https://untrusted.example/audio.mp3"))
+        assertEquals(last, catalog.next(article.id))
+        assertEquals(article, catalog.previous(last.id))
+        assertNull(catalog.previous(article.id))
+        assertNull(catalog.next(last.id))
+        assertNull(catalog.previous("missing"))
+        assertNull(catalog.next("missing"))
         assertTrue(NewsMediaCatalog.Empty.articles.isEmpty())
     }
     @Test fun invalidCatalogContentIsRejected() {
