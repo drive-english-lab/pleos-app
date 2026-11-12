@@ -1,0 +1,134 @@
+[
+  {
+    "id": "city-library",
+    "title": "A second life for the city library",
+    "summary": "오래된 도서관이 새로운 공간으로",
+    "createdAt": "2026.11.11",
+    "prompt": "How will the old library be used?",
+    "promptKo": "이 오래된 도서관은 어떻게 쓰일 예정인가요?",
+    "answer": "The old library will become a community space with reading areas, workshops, and meeting rooms.",
+    "translation": "다음은 창작 시연 기사입니다. 오래된 시립 도서관이 커뮤니티 공간으로 새롭게 바뀔 계획입니다. 시는 책과 조용한 열람 공간을 유지하고, 워크숍과 소규모 모임, 지역 행사를 위한 공간을 추가할 예정입니다. 주민들은 다양한 연령대가 만나 서로 배울 곳을 원한다고 말했습니다. 건물을 새로 짓는 대신 기존 건물의 많은 부분을 재사용할 계획입니다. 설계자들은 익숙한 출입구를 유지하며 실내에 자연광을 더 들이려 합니다. 아직 계획 단계라 최종 개관일은 정해지지 않았습니다. 도서관은 책을 제공하면서도 주민들이 모일 새로운 방법을 만들 수 있다는 것이 핵심입니다. 이 이야기는 영어 학습 시연을 위해 작성했습니다.",
+    "audio": "city-library.323d0ac74f80.mp3",
+    "seconds": 38.3,
+    "cues": [
+      {
+        "start": 0.0,
+        "end": 1.541167,
+        "text": "Here is a fictional news story."
+      },
+      {
+        "start": 1.541167,
+        "end": 4.975125,
+        "text": "An old city library is getting a new life as a community space."
+      },
+      {
+        "start": 4.975125,
+        "end": 7.995417,
+        "text": "The city plans to keep its books and quiet reading areas."
+      },
+      {
+        "start": 7.995417,
+        "end": 12.451125,
+        "text": "It will also add rooms for workshops, small meetings, and neighborhood events."
+      },
+      {
+        "start": 12.451125,
+        "end": 17.102917,
+        "text": "Residents said they wanted a place where people of different ages could meet and learn from one another."
+      },
+      {
+        "start": 17.102917,
+        "end": 20.65725,
+        "text": "The plan will reuse much of the existing building instead of replacing it."
+      },
+      {
+        "start": 20.65725,
+        "end": 25.203583,
+        "text": "Designers hope to bring more daylight inside while keeping the library's familiar entrance."
+      },
+      {
+        "start": 25.203583,
+        "end": 29.651917,
+        "text": "The project is still being planned, so the final opening date has not been decided."
+      },
+      {
+        "start": 29.651917,
+        "end": 30.977167,
+        "text": "The main idea is simple."
+      },
+      {
+        "start": 30.977167,
+        "end": 35.235458,
+        "text": "A library can continue to offer books while giving its community new ways to gather."
+      },
+      {
+        "start": 35.235458,
+        "end": 38.299667,
+        "text": "This story was created for an English learning demonstration."
+      }
+    ]
+  },
+  {
+    "id": "cooler-streets",
+    "title": "The case for cooler streets.",
+    "summary": "그늘이 만드는 시원한 거리",
+    "createdAt": "2026.11.08",
+    "prompt": "How could street trees make a neighborhood easier to walk in?",
+    "promptKo": "거리의 나무는 동네를 걷기 편하게 만드는 데 어떻게 도움이 될까요?",
+    "answer": "Street trees provide shade, which can make walking more comfortable on a hot day.",
+    "translation": "더운 여름 오후의 두 거리를 상상해 보세요. 한 거리에는 넓은 보도가 있지만 나무가 거의 없습니다. 다른 거리는 하루 중 대부분 그늘이 집니다. 한 도시 계획팀이 두 거리의 기온을 측정해 어느 곳에 그늘을 만들면 걷기 더 편해질 수 있는지 알아봅니다.",
+    "audio": "cooler-streets.0626b6665306.mp3",
+    "seconds": 11.816,
+    "cues": [
+      {
+        "start": 0.0,
+        "end": 2.528,
+        "text": "Imagine two streets on a hot summer afternoon."
+      },
+      {
+        "start": 2.528,
+        "end": 4.632333,
+        "text": "One has wide sidewalks and few trees."
+      },
+      {
+        "start": 4.632333,
+        "end": 6.477708,
+        "text": "The other is shaded for most of the day."
+      },
+      {
+        "start": 6.477708,
+        "end": 11.81575,
+        "text": "A planning team measures temperatures on both streets to understand where shade could make walking more comfortable."
+      }
+    ]
+  },
+  {
+    "id": "second-life",
+    "title": "Old batteries, new jobs.",
+    "summary": "차 배터리의 두 번째 쓰임",
+    "createdAt": "2026.11.08",
+    "prompt": "What new job could an old electric car battery do?",
+    "promptKo": "사용을 마친 전기차 배터리는 어떤 새로운 일을 할 수 있을까요?",
+    "answer": "An old battery could store electricity when demand is low and supply it later at a charging station.",
+    "translation": "사용을 마친 전기차 배터리도 여전히 에너지를 저장할 수 있을지 모릅니다. 가능한 설계 중 하나에서는 여러 배터리가 충전소에서 함께 작동합니다. 수요가 낮을 때 전기를 저장하고 더 많은 운전자가 충전하려 할 때 전기를 공급합니다.",
+    "audio": "second-life.378d61a49721.mp3",
+    "seconds": 12.314,
+    "cues": [
+      {
+        "start": 0.0,
+        "end": 3.515292,
+        "text": "A retired electric car battery may still be able to store energy."
+      },
+      {
+        "start": 3.515292,
+        "end": 7.947708,
+        "text": "In one possible design, several batteries work together at a charging station."
+      },
+      {
+        "start": 7.947708,
+        "end": 12.313958,
+        "text": "They store electricity when demand is low and supply it when more drivers need to charge."
+      }
+    ]
+  }
+]
