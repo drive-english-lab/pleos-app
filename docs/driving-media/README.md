@@ -48,4 +48,4 @@ adb shell am instrument --user 10 -w io.github.driveenglishlab.pleos.platform.te
 
 [주차](parked.jpg) · [D 미디어](driving.jpg) · [841dp·큰 글자·다크](large-dark-driving.jpg) · [권한 미확인](permission-missing.jpg). 이미지는 실제 AVD 앱 창 캡처이며 차량 시스템 영역과 실제 데이터는 공개하지 않는다.
 
-차량 legacy 이전/다음도 전체 기사 이동이다. Media3의 generic previous는3초 이후 같은 기사를 재시작하므로 generic 이전/다음 명령을 숨기고 *_MEDIA_ITEM 명령만 노출했다. 실제7초 이후 이전 기사, playing/paused 유지, 첫/마지막 legacy action 비활성을 instrument에서 확인했다.
+차량 legacy 이전/다음도 전체 기사 이동이다. Media3의 generic previous는3초 이후 같은 기사를 재시작하므로 generic 이전/다음 명령을 실제 기사 경계에 맞추고 전체 기사 이동으로 매핑했다. Notification 미디어 키와 modern controller의 예상 위치 계산에도 같은 규칙을 적용한다. 실제7초 이후 이전 기사, playing/paused 유지, 첫/마지막 legacy action 비활성을 instrument에서 확인했다.

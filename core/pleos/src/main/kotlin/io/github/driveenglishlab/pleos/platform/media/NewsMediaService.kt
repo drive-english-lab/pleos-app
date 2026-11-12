@@ -179,7 +179,7 @@ class NewsMediaService : MediaLibraryService() {
 
 /** Keep output blocked for the entire disallowed policy, including later external PLAY. */
 @OptIn(UnstableApi::class)
-internal class OutputPolicyPlayer(player: ExoPlayer, private val onExplicitStop: () -> Unit) : ForwardingSimpleBasePlayer(player) {
+internal class OutputPolicyPlayer(private val delegate: ExoPlayer, private val onExplicitStop: () -> Unit) : ForwardingSimpleBasePlayer(delegate) {
     var outputAllowed = true
         private set
     fun updateOutputAllowed(allowed: Boolean) {
@@ -190,11 +190,19 @@ internal class OutputPolicyPlayer(player: ExoPlayer, private val onExplicitStop:
     }
     override fun getState(): SimpleBasePlayer.State {
         val state = super.getState()
-        // The legacy bridge prefers generic previous (restart after 3s) over previous-item.
-        // Expose only whole-article navigation, including its actual first/last boundaries.
-        val commands = state.availableCommands.buildUpon().removeAll(Player.COMMAND_SEEK_TO_PREVIOUS, Player.COMMAND_SEEK_TO_NEXT)
+        // Notification media keys use generic navigation; all paths mean whole articles here.
+        val commands = state.availableCommands.buildUpon().removeAll(Player.COMMAND_SET_REPEAT_MODE, Player.COMMAND_SET_SHUFFLE_MODE)
+        if (state.availableCommands.contains(Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM)) commands.add(Player.COMMAND_SEEK_TO_PREVIOUS)
+        else commands.remove(Player.COMMAND_SEEK_TO_PREVIOUS)
+        if (state.availableCommands.contains(Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM)) commands.add(Player.COMMAND_SEEK_TO_NEXT)
+        else commands.remove(Player.COMMAND_SEEK_TO_NEXT)
         if (!outputAllowed) commands.removeAll(Player.COMMAND_PLAY_PAUSE, Player.COMMAND_PREPARE)
-        return state.buildUpon().setAvailableCommands(commands.build()).build()
+        return state.buildUpon().setAvailableCommands(commands.build()).setMaxSeekToPreviousPositionMs(Long.MAX_VALUE).build()
+    }
+    override fun handleSeek(mediaItemIndex: Int, positionMs: Long, seekCommand: Int): ListenableFuture<*> = when (seekCommand) {
+        Player.COMMAND_SEEK_TO_PREVIOUS -> { if (delegate.hasPreviousMediaItem()) delegate.seekToPreviousMediaItem(); Futures.immediateVoidFuture() }
+        Player.COMMAND_SEEK_TO_NEXT -> { if (delegate.hasNextMediaItem()) delegate.seekToNextMediaItem(); Futures.immediateVoidFuture() }
+        else -> super.handleSeek(mediaItemIndex, positionMs, seekCommand)
     }
     override fun handleSetPlayWhenReady(playWhenReady: Boolean): ListenableFuture<*> =
         if (outputAllowed || !playWhenReady) super.handleSetPlayWhenReady(playWhenReady)

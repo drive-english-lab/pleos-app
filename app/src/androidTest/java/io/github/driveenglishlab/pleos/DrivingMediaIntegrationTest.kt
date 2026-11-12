@@ -72,6 +72,10 @@ class DrivingMediaIntegrationTest {
         await("selected/ready " + id) { main { browser.currentMediaItem?.mediaId == id && browser.playbackState == Player.STATE_READY } }
         if (playing) { main { browser.play() }; await("actual playback") { main { browser.isPlaying } } }
     }
+    private fun key(controller: PlatformController, code: Int) = main {
+        controller.dispatchMediaButtonEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_DOWN, code))
+        controller.dispatchMediaButtonEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_UP, code))
+    }
     @Test fun twoControllersSharePlaybackSeekAndStopIntent() {
         val first = browser(); val second = browser()
         try {
@@ -90,6 +94,8 @@ class DrivingMediaIntegrationTest {
             await("STOP removes foreground notification") { !serviceForeground() }
             Thread.sleep(500)
             assertFalse(main { first.isPlaying })
+            main { first.play() }
+            await("explicit PLAY prepares the stopped item") { main { first.isPlaying } }
         } finally { main { first.stop(); first.release(); second.release() } }
     }
     @Test fun endAndArticleBoundariesDoNotAutoplayOrWrap() {
@@ -107,6 +113,13 @@ class DrivingMediaIntegrationTest {
             assertEquals("second-life", main { b.currentMediaItem?.mediaId })
             select(b, "city-library")
             assertFalse(main { b.isCommandAvailable(Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM) })
+            assertFalse(main { b.isCommandAvailable(Player.COMMAND_SEEK_TO_PREVIOUS) })
+            select(b, "cooler-streets", position = 7_000)
+            main { b.seekToPrevious() }
+            await("modern generic previous selects article after seven seconds") { main { b.currentMediaItem?.mediaId == "city-library" } }
+            assertFalse(main { b.playWhenReady })
+            main { b.seekToNext() }
+            await("modern generic next selects article") { main { b.currentMediaItem?.mediaId == "cooler-streets" } }
         } finally { main { b.stop(); b.release() } }
     }
     @Test fun platformLegacyBrowseIdSearchPlayAndStop() {
@@ -123,6 +136,12 @@ class DrivingMediaIntegrationTest {
             main { controller.transportControls.playFromMediaId("city-library", null) }
             await("legacy ID actual play") { controller.metadata?.description?.mediaId == "city-library" && controller.playbackState?.state == 3 }
             assertEquals(0L, controller.playbackState!!.actions and android.media.session.PlaybackState.ACTION_SKIP_TO_PREVIOUS)
+            key(controller, android.view.KeyEvent.KEYCODE_MEDIA_NEXT)
+            await("notification media key next") { controller.metadata?.description?.mediaId == "cooler-streets" && controller.playbackState?.state == 3 }
+            main { controller.transportControls.seekTo(7_000) }
+            await("position before previous media key") { controller.playbackState!!.position >= 6_000 }
+            key(controller, android.view.KeyEvent.KEYCODE_MEDIA_PREVIOUS)
+            await("notification media key previous selects whole article") { controller.metadata?.description?.mediaId == "city-library" && controller.playbackState?.state == 3 }
             main { controller.transportControls.pause() }
             await("legacy pause") { controller.playbackState?.state == 2 }
             main { controller.transportControls.playFromSearch("cooler", null) }
