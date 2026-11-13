@@ -1,6 +1,6 @@
 # Pleos Android app
 
-Pleos Connect용 Android 앱이다. 현재 실행 화면은 개발 환경·연결 점검이다. schema5 계약, Room 보존 이행과 청취·기사 질문·연습의 저장/API port를 구현했다. 제품 화면·실제 미디어/음성·Auth와 업무 서버 연결은 아직 미완료다.
+Pleos Connect용 Android 앱이다. 현재 실행 화면은 개발 환경·연결 점검이다. schema5 계약, Room 보존 이행과 청취·기사 질문·연습의 저장/API port를 구현했다. 실제 익명 Auth/프로필·기본 설정 서버 연결을 추가했으며 제품 화면·미디어/음성과 나머지 업무 서버 연결은 계속 구현 중이다.
 
 ## 환경과 실행
 
@@ -85,3 +85,13 @@ python3 scripts/sync-feature-contracts.py --check
 Room2→3 명시 migration은8개 feature cache/journal을 더하고 기존 payload/hash·답/pending·노출/중지 의도를 보존한다. 당일/난이도 설정과 전용 journal은 epoch 독립이고 카드/시각·추천/선택 sidecar cache와 명령은 학습 epoch별이다. 원래 intent의 clock/boot 관찰은 JSON 그대로 보존하며 wire/hash를 재작성하지 않는다. 실제 없는 날짜/순서/coverage는 만들지 않는다.
 
 최종 AVD data40개(기존29+계약8+이행/수명3), domain48개, debug/release/lint(error0/warning26)를 확인했다. Gradle connected runner의 장치 감시 대기 뒤 최신 APK를 직접 설치하고 단일 `am instrument`로40개를 검증했다. 실제 Auth/Gleo/음성·제품 화면 연결 완료는 아니다. FeatureLifecycle의 삭제/owner 전환 hook과 ProfileSyncWorker의 전후 guard는 실제 Auth/merge/delete/logout composition에서 이어 연결한다. 화면이 바뀌지 않아 이번 변경의 Sites 배포는 하지 않았다.
+
+## 익명 Auth·프로필 실제 연결 · 2026-11-13
+
+`ProfileRepository`가 Supabase Auth SDK3.6.0의 익명 생성/복원·서버 bootstrap/read/preferences를 연결한다. 기존 버전을 유지하고 Auth 모듈만 명시 의존성으로 추가했다. `AuthSessionStore`는 AndroidKeyStore AES-GCM과 noBackup 디렉터리를 사용하며 SDK 로그를 비활성화했다. 생성 요청 전 Room/보호 파일의 fence를 영속화해 복원 실패/응답 유실을 새로운 guest로 바꾸지 않는다. 첫 provisional owner/outbox의 ID와 불변 bytes를 보존한다. 다른 server profile은 명시 전환 필요 상태로 남기고 기존 기록을 옮겨 붙이지 않는다.
+
+설정 command는 ACK까지 원래 operation/payload를 유지한다. 확인된 원격 privacy epoch가 증가하면 옛 학습/학습 outbox를 제거하고 독립 선호·미완료 설정 command는 유지한다. stale owner/session 결과는 거절한다. 프로필 repository의 실제 연결과 앱 제품 화면의 wiring은 구분한다. 이 변경으로 개발 점검 화면을 제품 화면으로 교체하지 않았다.
+
+검증: domain JVM48개, AVD 데이터48개 통과/실제 연동 전용1개 기본 skip(runner49개), 별도 opt-in 실제 SDK/Auth/API/DB1개 통과. 실제 테스트 사용자와 owned DB 행은 host runner가 정리한다. debug/release/lint(error0/warning27) 통과. 추가 warning1개는 고정 Auth SDK의 새 버전 안내다. 앱의 서버용/모델용 비밀값은0개다.
+
+실제 테스트는 서버 저장소의 `scripts/verify_android_profile_runtime.py --live`로 실행한다. test APK에만 localhost HTTP 허용과 INTERNET를 두고 adb reverse로 localhost8008의 테스트 서버에 연결한다. 앱 release 네트워크 정책은 변경하지 않았다. 실제 Gleo·차량·제품 화면/이력 삭제/계정 병합은 후속 작업이다. visible diff가 없어 Sites 갱신은 제외했다.

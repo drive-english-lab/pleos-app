@@ -63,6 +63,7 @@ dependencies {
     androidTestImplementation("androidx.test.ext:junit:1.3.0")
     implementation(libs.datastore.preferences)
     implementation(libs.supabase.postgrest)
+    implementation(libs.supabase.auth)
     implementation(libs.ktor.okhttp)
     implementation(libs.serialization.json)
     implementation(libs.hilt.android)

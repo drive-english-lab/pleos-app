@@ -76,6 +76,8 @@ abstract class LearningDao {
     @Insert(onConflict = OnConflictStrategy.ABORT) abstract suspend fun insertRecord(record: LearningRecord)
     @Insert(onConflict = OnConflictStrategy.ABORT) abstract suspend fun insertOutbox(record: OutboxRecord)
     @Insert(onConflict = OnConflictStrategy.ABORT) abstract suspend fun insertJournal(journal: OwnerJournal)
+    @Query("SELECT * FROM owner_journal WHERE profileId = :profile AND kind = 'auth_creation' LIMIT 1")
+    abstract suspend fun authCreation(profile: String): OwnerJournal?
     @Query("SELECT * FROM learning_record WHERE profileId = :profile AND privacyEpoch = :epoch AND recordId = :id")
     abstract suspend fun record(profile: String, epoch: Long, id: String): LearningRecord?
     @Query("SELECT * FROM learning_outbox WHERE profileId = :profile AND privacyEpoch = :epoch AND isolated = 0 AND payloadSchemaVersion = 5 ORDER BY rowid LIMIT 50")
@@ -94,6 +96,11 @@ abstract class LearningDao {
     protected abstract suspend fun updateRead(profile: String, epoch: Long, id: String, kind: String, payload: String, version: Long, previousVersion: Long): Int
     @Query("SELECT * FROM history_coverage WHERE profileId = :profile AND privacyEpoch = :epoch")
     abstract suspend fun historyCoverage(profile: String, epoch: Long): LocalHistoryCoverage?
+    @Insert(onConflict = OnConflictStrategy.REPLACE) abstract suspend fun putHistoryCoverage(value: LocalHistoryCoverage)
+    @Query("SELECT * FROM learning_record WHERE profileId = :profile AND kind = 'profile_settings_command' ORDER BY rowid LIMIT 1")
+    abstract suspend fun pendingProfileSettings(profile: String): LearningRecord?
+    @Query("DELETE FROM learning_record WHERE profileId = :profile AND recordId = :id AND kind = 'profile_settings_command' AND payloadJson = :payload")
+    abstract suspend fun acknowledgeProfileSettings(profile: String, id: String, payload: String): Int
     @Insert(onConflict = OnConflictStrategy.ABORT) abstract suspend fun insertBinding(binding: PracticeBinding)
     @Query("SELECT * FROM practice_binding WHERE profileId = :profile AND privacyEpoch = :epoch AND lessonId = :lesson")
     abstract suspend fun binding(profile: String, epoch: Long, lesson: String): PracticeBinding?

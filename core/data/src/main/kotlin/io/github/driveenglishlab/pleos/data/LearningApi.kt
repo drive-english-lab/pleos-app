@@ -2,6 +2,7 @@ package io.github.driveenglishlab.pleos.data
 
 import android.content.Context
 import io.github.driveenglishlab.pleos.domain.*
+import io.github.driveenglishlab.pleos.data.wire.WirePersonalSettingsPatch
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.okhttp.OkHttp
 import io.ktor.client.request.*
@@ -65,6 +66,11 @@ class LearningApi internal constructor(private val sessions: LearningSessionSour
     constructor(context: Context, origin: String, sessions: LearningSessionSource, allowLocalHttp: Boolean = false) :
         this(sessions, LearningContractJson(context.applicationContext), KtorLearningTransport(origin, allowLocalHttp))
 
+    internal fun validateSettings(request: WirePersonalSettingsPatch) {
+        contracts.validate("personal-data.openapi.json", contracts.schema("personal-data.openapi.json", "#/components/schemas/SettingsPatch"),
+            json.encodeToJsonElement(WirePersonalSettingsPatch.serializer(), request))
+    }
+
     private fun sameSession(a: LearningCallScope?, b: LearningCallScope): Boolean = a != null &&
         a.owner.profileId == b.owner.profileId && a.owner.privacyEpoch == b.owner.privacyEpoch && a.owner.revision == b.owner.revision &&
         a.session.subjectId == b.session.subjectId && a.session.sessionId == b.session.sessionId && a.session.installationId == b.session.installationId
@@ -81,7 +87,8 @@ class LearningApi internal constructor(private val sessions: LearningSessionSour
             val context = content?.get("client_context")?.jsonObject ?: content?.get("profile_context")?.jsonObject
             if (context != null) {
                 if (context["profile_id"]?.jsonPrimitive?.content != scope.owner.profileId.toString() ||
-                    ("privacy_epoch" in context && context["privacy_epoch"]?.jsonPrimitive?.long != scope.owner.privacyEpoch)) throw LearningProtocolException()
+                    ("privacy_epoch" in context && template != "/v1/profile/preferences" && context["privacy_epoch"]?.jsonPrimitive?.long != scope.owner.privacyEpoch)) throw LearningProtocolException()
+                if (template == "/v1/profile/preferences" && context["privacy_epoch"]!!.jsonPrimitive.long > scope.owner.privacyEpoch) throw LearningProtocolException()
                 if ("presentation_token" in context && (context["presentation_token"]?.jsonPrimitive?.content != scope.owner.presentationToken.toString() ||
                     context["context_revision"]?.jsonPrimitive?.long != scope.owner.revision)) throw LearningProtocolException()
             }
@@ -137,7 +144,7 @@ class LearningApi internal constructor(private val sessions: LearningSessionSour
                         if (returned["profile_id"]?.jsonPrimitive?.content != scope.owner.profileId.toString()) throw LearningProtocolException()
                         val epoch = returned["privacy_epoch"]?.jsonPrimitive?.long
                         if (epoch != null) when (template) {
-                            "/v1/profile" -> if (epoch < scope.owner.privacyEpoch) throw LearningProtocolException()
+                            "/v1/profile", "/v1/profile/preferences" -> if (epoch < scope.owner.privacyEpoch) throw LearningProtocolException()
                             "/v1/profile/history-deletions" -> if (epoch != scope.owner.privacyEpoch + 1 ||
                                 result["previous_privacy_epoch"]?.jsonPrimitive?.long != scope.owner.privacyEpoch) throw LearningProtocolException()
                             else -> if (epoch != scope.owner.privacyEpoch) throw LearningProtocolException()
