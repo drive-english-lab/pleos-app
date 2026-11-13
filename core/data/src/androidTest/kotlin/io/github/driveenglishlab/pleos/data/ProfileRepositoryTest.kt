@@ -22,14 +22,14 @@ class ProfileRepositoryTest {
     private val db = Room.inMemoryDatabaseBuilder(context, LearningDatabase::class.java).build()
     private val dao get() = db.learning()
     private class Auth : ProfileAuth {
-        var session: LearningSession? = null; var creations = 0; var unavailable = false
+        var session: LearningSession? = null; var creations = 0; var unavailable = false;var currentUnavailable=false
         val operation = UUID.randomUUID()
         override suspend fun ensureSession(allowCreate: Boolean, beforeCreate: suspend () -> Unit): LearningSession {
             check(!unavailable)
             if (session == null) { check(allowCreate); beforeCreate(); creations++; session = LearningSession(UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), "synthetic-session-token") }
             return session!!
         }
-        override suspend fun currentSession() = session
+        override suspend fun currentSession(): LearningSession? { check(!currentUnavailable);return session }
         override suspend fun bootstrapOperation(profileId: UUID) = operation
     }
     private fun profile(owner: LocalOwner, epoch: Long = owner.privacyEpoch, version: Long = 1) = buildJsonObject {
@@ -72,6 +72,14 @@ class ProfileRepositoryTest {
         val auth = Auth(); val repository = repo(auth) { _, _ -> throw AssertionError("No new guest allowed.") }
         assertEquals(LearningReply.Failed("SESSION_RECOVERY_REQUIRED", true), repository.connect())
         assertEquals(0, auth.creations); assertEquals(local, dao.currentOwner())
+    }
+
+    @Test fun credentialReadFailureClosesTheSessionSnapshotWithoutReplacingTheActiveOwner() = runBlocking {
+        val local=dao.provisionalOwner();val auth=Auth();val repository=repo(auth) { _, _ -> jsonResponse(profile(local)) }
+        assertTrue(repository.connect() is LearningReply.Stored)
+        val active=dao.currentOwner();auth.currentUnavailable=true
+        assertNull(repository.current());assertEquals(LearningReply.Failed("SESSION_UNAVAILABLE",true),repository.refresh())
+        assertEquals(active,dao.currentOwner());assertEquals(1,auth.creations)
     }
 
     @Test fun bootstrapFailureThenRetryUsesSameProfileOperationAndSession() = runBlocking {

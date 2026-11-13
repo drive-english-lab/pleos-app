@@ -24,12 +24,13 @@ class ProfileRepository internal constructor(
     private val api = apiFactory(this)
     private val dao get() = database.learning()
 
-    override suspend fun current(): LearningCallScope? {
+    override suspend fun current(): LearningCallScope? = try {
         val owner = dao.currentOwner() ?: return null
         if (owner.status !in setOf("provisional", "active")) return null
         val session = auth.currentSession() ?: return null
-        return LearningCallScope(OwnerContext(UUID.fromString(owner.profileId), owner.privacyEpoch, owner.revision, presentationToken), session)
-    }
+        LearningCallScope(OwnerContext(UUID.fromString(owner.profileId), owner.privacyEpoch, owner.revision, presentationToken), session)
+    } catch (error: CancellationException) { throw error }
+      catch (_: Exception) { null }
 
     /** On restoration/network/storage failure retain the same local owner and immutable outbox. */
     suspend fun connect(): LearningReply<WirePersonalProfileView> = mutex.withLock {

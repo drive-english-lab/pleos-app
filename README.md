@@ -95,3 +95,11 @@ Room2→3 명시 migration은8개 feature cache/journal을 더하고 기존 payl
 검증: domain JVM48개, AVD 데이터48개 통과/실제 연동 전용1개 기본 skip(runner49개), 별도 opt-in 실제 SDK/Auth/API/DB1개 통과. 실제 테스트 사용자와 owned DB 행은 host runner가 정리한다. debug/release/lint(error0/warning27) 통과. 추가 warning1개는 고정 Auth SDK의 새 버전 안내다. 앱의 서버용/모델용 비밀값은0개다.
 
 실제 테스트는 서버 저장소의 `scripts/verify_android_profile_runtime.py --live`로 실행한다. test APK에만 localhost HTTP 허용과 INTERNET를 두고 adb reverse로 localhost8008의 테스트 서버에 연결한다. 앱 release 네트워크 정책은 변경하지 않았다. 실제 Gleo·차량·제품 화면/이력 삭제/계정 병합은 후속 작업이다. visible diff가 없어 Sites 갱신은 제외했다.
+
+## 공개 기사·대본 및 private 음원 접근 · 2026-11-13
+
+`CatalogRepository`는 publishable key의 고정 GET으로 공개 catalog/bundle/script만 읽는다. 고정 article/bundle/source snapshot·role/base script·언어·UTF-8 text hash를 검사하고, 원문 시각 unknown과 서버 게시 시각을 분리한다. 목록 없음은 빈 결과이고 철회된 고정 자료는 CONTENT_UNAVAILABLE이다. 원문/Rubric private 테이블에는 접근하지 않는다.
+
+`AudioAccessRepository`는 고정 asset의 URI credential만 갱신하며 기사/위치/run을 선택하지 않는다. 최초 요청을 재시도할 때 같은 operation을 유지하고 긴 재생·seek/resume의 force refresh와 확정 만료 뒤에는 새 operation을 쓴다. 프로세스 내 monotonic4분 refresh hint는 출력 허용/차량 시각이 아니며 재실행으로 복원하지 않는다. 같은 owner/content의 동시 응답은 같은 원래 receipt를 공유하고 owner/session 변경 뒤 이전 URI는 반환하지 않는다. URI/hash/duration/Storage origin을 검증하고 URL의 toString은 redacted다. 서버가 권리/원본 object metadata를 재검사한다. 이미 받은 byte의 즉시 철회는 보장하지 않는다.
+
+검증: JVM48개, AVD 데이터59개 통과/실연동 전용1개 기본 skip(runner60개), 별도 실제 SDK/Auth·공개 catalog GET·설정 API/DB1개 통과. debug/release/lint(error0/warning27), 두 contract generator check 통과. malformed URI/date·해시/고정 snapshot·캐시 격리·credential 만료/재시도/동시 요청을 확인했다. 화면/조작 변경이 없어 pleos-sites-preview 기준 Sites 갱신은 제외했다. 실제 Media3/차량/제품 화면 연결은 후속 task다.

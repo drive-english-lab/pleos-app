@@ -28,6 +28,7 @@ class ProfileRuntimeTest {
         var auth = SupabaseProfileAuth(store)
         fun repository() = ProfileRepository(db, auth) { sessions -> LearningApi(context, "http://127.0.0.1:8008", sessions, allowLocalHttp = true) }
         try {
+            assertTrue("Real public catalog read failed.", CatalogRepository(context).catalogPage() is io.github.driveenglishlab.pleos.domain.CatalogRead.Stored)
             val local = db.learning().provisionalOwner()
             val first = repository().connect(); assertTrue("Real SDK/bootstrap failed.", first is LearningReply.Stored)
             first as LearningReply.Stored
