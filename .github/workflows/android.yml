@@ -22,7 +22,9 @@ jobs:
       - name: Verify Android SDK Platform 36
         run: test -f "$ANDROID_HOME/platforms/android-36/android.jar"
       - name: Check generated learning contracts
-        run: python3 scripts/sync-learning-contracts.py --check
+        run: |
+          python3 scripts/sync-learning-contracts.py --check
+          python3 scripts/sync-feature-contracts.py --check
       - name: Download verified Gradle distribution
         run: |
           archive="$RUNNER_TEMP/gradle-8.13-bin.zip"

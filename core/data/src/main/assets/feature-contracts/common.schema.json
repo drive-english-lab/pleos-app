@@ -1,0 +1,1506 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:drive-english:contract:5",
+  "title": "Drive English shared contract types",
+  "description": "Draft revision5; source packaged3 unchanged during planning. English eligibility, form fidelity, support role/language and persisted dialogue business progress are separate.",
+  "$defs": {
+    "ProfileContext": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "profile_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "privacy_epoch": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "profile_id",
+        "privacy_epoch"
+      ],
+      "description": "Server-derived owner and deletion generation. Incoming values are expected context only; JWT subject + active session binding authorize the request."
+    },
+    "ClientContext": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "profile_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "privacy_epoch": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "context_revision": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "presentation_token": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+        }
+      },
+      "required": [
+        "profile_id",
+        "privacy_epoch",
+        "context_revision",
+        "presentation_token"
+      ],
+      "description": "Owner/epoch are checked against the verified session and stored operation; revision/token only control presentation. They cannot grant access."
+    },
+    "ContentRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "article_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "bundle_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "source_snapshot_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "listening_mode": {
+          "type": "string",
+          "enum": [
+            "original_full",
+            "briefing"
+          ]
+        },
+        "listening_script_id": {
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "required": [
+        "article_id",
+        "bundle_id",
+        "source_snapshot_id",
+        "listening_mode",
+        "listening_script_id"
+      ]
+    },
+    "Settings": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "topics": {
+          "type": "array",
+          "maxItems": 20,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+          }
+        },
+        "listening_mode": {
+          "type": "string",
+          "enum": [
+            "original_full",
+            "briefing"
+          ]
+        },
+        "followup_policy": {
+          "anyOf": [
+            {
+              "type": "string",
+              "enum": [
+                "en_summary",
+                "ko_summary",
+                "ko_translation",
+                "none"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "explicit_fields": {
+          "type": "array",
+          "maxItems": 3,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "enum": [
+              "topics",
+              "listening_mode",
+              "followup_policy"
+            ]
+          }
+        },
+        "onboarding_complete": {
+          "type": "boolean"
+        },
+        "version": {
+          "type": "integer",
+          "minimum": 1
+        }
+      },
+      "required": [
+        "topics",
+        "listening_mode",
+        "followup_policy",
+        "explicit_fields",
+        "onboarding_complete",
+        "version"
+      ],
+      "description": "Default original_full is not an explicit choice. Followup is null until selected; none is an explicit no-followup choice. Completed onboarding requires non-null followup. Merge chooses each explicitly chosen current-vehicle field, otherwise the target account field.",
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "onboarding_complete": {
+                "const": true
+              }
+            },
+            "required": [
+              "onboarding_complete"
+            ]
+          },
+          "then": {
+            "properties": {
+              "followup_policy": {
+                "type": "string",
+                "enum": [
+                  "en_summary",
+                  "ko_summary",
+                  "ko_translation",
+                  "none"
+                ]
+              }
+            }
+          }
+        }
+      ]
+    },
+    "HelpKind": {
+      "type": "string",
+      "enum": [
+        "fact_explanation",
+        "sentence_starter",
+        "partial_correction",
+        "complete_example"
+      ]
+    },
+    "Capture": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "type": "string",
+          "enum": [
+            "gleo",
+            "parked_stt"
+          ]
+        },
+        "form_fidelity": {
+          "type": "string",
+          "enum": [
+            "unknown",
+            "confirmed_form",
+            "literal_contract_verified"
+          ]
+        },
+        "uncertain_spans": {
+          "type": "array",
+          "maxItems": 8,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 240
+          }
+        },
+        "spoken_language": {
+          "type": "string",
+          "enum": [
+            "en",
+            "ko",
+            "mixed",
+            "unknown"
+          ]
+        },
+        "english_evidence": {
+          "type": "string",
+          "enum": [
+            "verified_path",
+            "specific_confirmation",
+            "verified_non_english",
+            "unverified"
+          ]
+        },
+        "language_evidence_ref": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 160
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "path",
+        "form_fidelity",
+        "uncertain_spans",
+        "spoken_language",
+        "english_evidence",
+        "language_evidence_ref"
+      ],
+      "description": "Capture claims are data, not authorization. Server-configured verified path/version or explicit confirmation must support any form correction; unknown forbids form correction. spoken_language describes original speech, not answer_text. Validate configured route/version or one original-capture/lesson/owner-bound specific confirmation before acceptance. Generic yes/new text cannot overwrite known Korean evidence. Mixed names/quotes are allowed only when the core English answer is verified. If uncertainty remains after one confirmation, suspend/no valid English turn. Unknown form alone does not block verified-English content judgement. Claims never authorize storage/output.",
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "english_evidence": {
+                "enum": [
+                  "verified_path",
+                  "specific_confirmation"
+                ]
+              }
+            },
+            "required": [
+              "english_evidence"
+            ]
+          },
+          "then": {
+            "properties": {
+              "spoken_language": {
+                "enum": [
+                  "en",
+                  "mixed"
+                ]
+              },
+              "language_evidence_ref": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 160
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "english_evidence": {
+                "const": "verified_non_english"
+              }
+            },
+            "required": [
+              "english_evidence"
+            ]
+          },
+          "then": {
+            "properties": {
+              "spoken_language": {
+                "enum": [
+                  "ko",
+                  "mixed"
+                ]
+              },
+              "language_evidence_ref": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 160
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "english_evidence": {
+                "const": "unverified"
+              }
+            },
+            "required": [
+              "english_evidence"
+            ]
+          },
+          "then": {
+            "properties": {
+              "language_evidence_ref": {
+                "type": "null"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "spoken_language": {
+                "const": "unknown"
+              }
+            },
+            "required": [
+              "spoken_language"
+            ]
+          },
+          "then": {
+            "properties": {
+              "english_evidence": {
+                "const": "unverified"
+              },
+              "language_evidence_ref": {
+                "type": "null"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "OperationStatus": {
+      "type": "string",
+      "enum": [
+        "pending",
+        "succeeded",
+        "failed_retryable",
+        "failed_final",
+        "cancelled"
+      ]
+    },
+    "SourceInfo": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "publisher": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "original_url": {
+          "type": "string",
+          "format": "uri",
+          "maxLength": 2048
+        },
+        "published_at_raw": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "published_at_utc": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "date-time"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "timezone_status": {
+          "type": "string",
+          "enum": [
+            "verified",
+            "unknown"
+          ]
+        }
+      },
+      "required": [
+        "publisher",
+        "original_url",
+        "published_at_raw",
+        "published_at_utc",
+        "timezone_status"
+      ]
+    },
+    "PracticeContentRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "article_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "bundle_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "source_snapshot_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "listening_mode": {
+          "type": "string",
+          "enum": [
+            "original_full",
+            "briefing"
+          ]
+        },
+        "listening_script_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "task_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "basic_question_version_id": {
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "required": [
+        "article_id",
+        "bundle_id",
+        "source_snapshot_id",
+        "listening_mode",
+        "listening_script_id",
+        "task_id",
+        "basic_question_version_id"
+      ],
+      "description": "Mode/script-specific task plus the canonical basic-question version. Server verifies article/snapshot/bundle/script/task/question mappings; caller IDs grant no authority."
+    },
+    "LessonState": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "lesson_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "version": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "phase": {
+          "type": "string",
+          "enum": [
+            "question_wait",
+            "feedback_pending",
+            "retry_offer",
+            "suspended",
+            "completed"
+          ]
+        },
+        "valid_first_attempt_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "valid_retry_attempt_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "pending_attempt_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "pending_feedback_attempt_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "end_reason": {
+          "anyOf": [
+            {
+              "type": "string",
+              "enum": [
+                "sufficient_first_answer",
+                "retry_evaluated",
+                "retry_declined"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "ended_at": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "date-time"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "content_success": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "retry_outcome": {
+          "anyOf": [
+            {
+              "type": "string",
+              "enum": [
+                "improved",
+                "unchanged",
+                "unassessable"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "lesson_id",
+        "version",
+        "phase",
+        "valid_first_attempt_id",
+        "valid_retry_attempt_id",
+        "pending_attempt_id",
+        "pending_feedback_attempt_id",
+        "end_reason",
+        "ended_at",
+        "content_success",
+        "retry_outcome"
+      ],
+      "description": "Server-owned state; model output/client flags never set anchors or terminal state directly. Unassessable uses no valid turn. Completed may still have pending feedback delivery and is then resumable. Retry refusal preserves the first validated content_success (including sufficient content with language_form correction); refusal awards no new success. Without a retry, retry_outcome is null, meaning not assessed. Assign valid first/retry/content_success only after server-verified English eligibility and assessable recognition. Non-English/unverified holds do not create or replace anchors, completion or first success; preserve a prior valid first on a held retry.",
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "phase": {
+                "const": "completed"
+              }
+            },
+            "required": [
+              "phase"
+            ]
+          },
+          "then": {
+            "properties": {
+              "end_reason": {
+                "type": "string",
+                "enum": [
+                  "sufficient_first_answer",
+                  "retry_evaluated",
+                  "retry_declined"
+                ]
+              },
+              "ended_at": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "pending_attempt_id": {
+                "type": "null"
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "end_reason": {
+                "type": "null"
+              },
+              "ended_at": {
+                "type": "null"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "end_reason": {
+                "const": "sufficient_first_answer"
+              }
+            },
+            "required": [
+              "end_reason"
+            ]
+          },
+          "then": {
+            "properties": {
+              "valid_first_attempt_id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "valid_retry_attempt_id": {
+                "type": "null"
+              },
+              "content_success": {
+                "const": true
+              },
+              "retry_outcome": {
+                "type": "null"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "end_reason": {
+                "const": "retry_evaluated"
+              }
+            },
+            "required": [
+              "end_reason"
+            ]
+          },
+          "then": {
+            "properties": {
+              "valid_first_attempt_id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "valid_retry_attempt_id": {
+                "type": "string",
+                "format": "uuid"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "end_reason": {
+                "const": "retry_declined"
+              }
+            },
+            "required": [
+              "end_reason"
+            ]
+          },
+          "then": {
+            "properties": {
+              "valid_first_attempt_id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "valid_retry_attempt_id": {
+                "type": "null"
+              },
+              "content_success": {
+                "type": "boolean"
+              },
+              "retry_outcome": {
+                "type": "null"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "BasicQuestionRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "article_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "basic_question_version_id": {
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "required": [
+        "article_id",
+        "basic_question_version_id"
+      ],
+      "description": "Immutable canonical identity for question meaning, required facts and judgement criteria. Publisher reuses it across equal-semantic mode/task/audio/bundle variants; server validates task mapping. Changing example wording alone never resets this identity."
+    },
+    "HistoryCoverage": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "origin": {
+          "type": "string",
+          "enum": [
+            "known_new_profile",
+            "history_reset",
+            "legacy_or_incomplete"
+          ]
+        },
+        "version": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "history_gap": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "origin",
+        "version",
+        "history_gap"
+      ],
+      "description": "Minimal profile-level provenance, not a retained per-question deletion list. New empty history after deletion or legacy gaps does not prove no prior example exposure.",
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "origin": {
+                "const": "known_new_profile"
+              }
+            },
+            "required": [
+              "origin"
+            ]
+          },
+          "then": {
+            "properties": {
+              "history_gap": {
+                "const": false
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "history_gap": {
+                "const": true
+              }
+            }
+          }
+        }
+      ]
+    },
+    "QuestionExampleExposure": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "question_ref": {
+          "$ref": "common.schema.json#/$defs/BasicQuestionRef"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "exposed",
+            "unexposed_verified",
+            "unknown"
+          ]
+        },
+        "basis": {
+          "type": "string",
+          "enum": [
+            "confirmed_presentation",
+            "complete_retained_history",
+            "history_gap",
+            "unresolved_presentation"
+          ]
+        },
+        "exposure_version": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "coverage_version": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "confirmed_presentation_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "question_ref",
+        "status",
+        "basis",
+        "exposure_version",
+        "coverage_version",
+        "confirmed_presentation_id"
+      ],
+      "description": "Read-only current projection per profile/current epoch/article/canonical question. Exposed dominates uncertainty; verified absence requires complete retained history and no unresolved earlier presentation. Missing rows never imply verified absence.",
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "exposed"
+              }
+            },
+            "required": [
+              "status"
+            ]
+          },
+          "then": {
+            "properties": {
+              "basis": {
+                "const": "confirmed_presentation"
+              },
+              "confirmed_presentation_id": {
+                "type": "string",
+                "format": "uuid"
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "confirmed_presentation_id": {
+                "type": "null"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "unexposed_verified"
+              }
+            },
+            "required": [
+              "status"
+            ]
+          },
+          "then": {
+            "properties": {
+              "basis": {
+                "const": "complete_retained_history"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "unknown"
+              }
+            },
+            "required": [
+              "status"
+            ]
+          },
+          "then": {
+            "properties": {
+              "basis": {
+                "enum": [
+                  "history_gap",
+                  "unresolved_presentation"
+                ]
+              }
+            }
+          }
+        }
+      ]
+    },
+    "ExampleExposureAssessment": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "question_ref": {
+          "$ref": "common.schema.json#/$defs/BasicQuestionRef"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "exposed",
+            "unexposed_verified",
+            "unknown"
+          ]
+        },
+        "basis": {
+          "type": "string",
+          "enum": [
+            "confirmed_presentation",
+            "complete_retained_history",
+            "history_gap",
+            "unresolved_presentation"
+          ]
+        },
+        "exposure_version": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "coverage_version": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "confirmed_presentation_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "assessment_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "boundary_kind": {
+          "type": "string",
+          "enum": [
+            "lesson_start",
+            "attempt_acceptance"
+          ]
+        },
+        "boundary_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "history_lineage_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "boundary_sequence": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "assessed_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": 1
+        }
+      },
+      "required": [
+        "question_ref",
+        "status",
+        "basis",
+        "exposure_version",
+        "coverage_version",
+        "confirmed_presentation_id",
+        "assessment_id",
+        "boundary_kind",
+        "boundary_id",
+        "history_lineage_id",
+        "boundary_sequence",
+        "assessed_at",
+        "revision"
+      ],
+      "description": "Server-derived assessment at a causal boundary, independent of answer payload and current lesson help. Created before model execution under the exposure lock. Unknown cannot be upgraded to verified absence by a late empty ACK; stronger earlier exposure proof may revise unknown to exposed. Future presentations do not reclassify a proven earlier answer.",
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "exposed"
+              }
+            },
+            "required": [
+              "status"
+            ]
+          },
+          "then": {
+            "properties": {
+              "basis": {
+                "const": "confirmed_presentation"
+              },
+              "confirmed_presentation_id": {
+                "type": "string",
+                "format": "uuid"
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "confirmed_presentation_id": {
+                "type": "null"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "unexposed_verified"
+              }
+            },
+            "required": [
+              "status"
+            ]
+          },
+          "then": {
+            "properties": {
+              "basis": {
+                "const": "complete_retained_history"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "unknown"
+              }
+            },
+            "required": [
+              "status"
+            ]
+          },
+          "then": {
+            "properties": {
+              "basis": {
+                "enum": [
+                  "history_gap",
+                  "unresolved_presentation"
+                ]
+              }
+            }
+          }
+        }
+      ]
+    },
+    "SupportArtifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "support_ref": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "kind": {
+          "anyOf": [
+            {
+              "$ref": "common.schema.json#/$defs/HelpKind"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "text": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 600
+        },
+        "text_hash": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "origin": {
+          "type": "string",
+          "enum": [
+            "published_task",
+            "validated_feedback"
+          ]
+        },
+        "feedback_attempt_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "role": {
+          "type": "string",
+          "enum": [
+            "question_meaning",
+            "core_explanation",
+            "simple_explanation",
+            "sentence_starter",
+            "partial_correction",
+            "complete_example"
+          ]
+        },
+        "language": {
+          "type": "string",
+          "enum": [
+            "ko",
+            "en",
+            "mixed"
+          ]
+        }
+      },
+      "required": [
+        "support_ref",
+        "kind",
+        "text",
+        "text_hash",
+        "origin",
+        "feedback_attempt_id",
+        "role",
+        "language"
+      ],
+      "description": "Prepared, immutable reviewed output component. Not evidence of received help. Exact text/hash is bound to the question/task; full examples cannot be hidden in untracked generic feedback. Role/language are explicit and do not come from ref suffixes/text detection. kind is a metric HelpKind, nullable only for question_meaning; null still records actual help/ref/role and never means no help. Default question_meaning/core_explanation is ko; an explicit response-language change uses an approved matching artifact, never silent replacement.",
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "origin": {
+                "const": "published_task"
+              }
+            },
+            "required": [
+              "origin"
+            ]
+          },
+          "then": {
+            "properties": {
+              "feedback_attempt_id": {
+                "type": "null"
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "feedback_attempt_id": {
+                "type": "string",
+                "format": "uuid"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "role": {
+                "const": "question_meaning"
+              }
+            },
+            "required": [
+              "role"
+            ]
+          },
+          "then": {
+            "properties": {
+              "kind": {
+                "type": "null"
+              },
+              "language": {
+                "enum": [
+                  "ko",
+                  "en"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "role": {
+                "const": "core_explanation"
+              }
+            },
+            "required": [
+              "role"
+            ]
+          },
+          "then": {
+            "properties": {
+              "kind": {
+                "const": "fact_explanation"
+              },
+              "language": {
+                "enum": [
+                  "ko",
+                  "en"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "role": {
+                "const": "simple_explanation"
+              }
+            },
+            "required": [
+              "role"
+            ]
+          },
+          "then": {
+            "properties": {
+              "kind": {
+                "const": "fact_explanation"
+              },
+              "language": {
+                "enum": [
+                  "en"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "role": {
+                "const": "sentence_starter"
+              }
+            },
+            "required": [
+              "role"
+            ]
+          },
+          "then": {
+            "properties": {
+              "kind": {
+                "const": "sentence_starter"
+              },
+              "language": {
+                "enum": [
+                  "en"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "role": {
+                "const": "partial_correction"
+              }
+            },
+            "required": [
+              "role"
+            ]
+          },
+          "then": {
+            "properties": {
+              "kind": {
+                "const": "partial_correction"
+              },
+              "language": {
+                "enum": [
+                  "ko",
+                  "en",
+                  "mixed"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "role": {
+                "const": "complete_example"
+              }
+            },
+            "required": [
+              "role"
+            ]
+          },
+          "then": {
+            "properties": {
+              "kind": {
+                "const": "complete_example"
+              },
+              "language": {
+                "enum": [
+                  "en"
+                ]
+              }
+            }
+          }
+        }
+      ]
+    },
+    "EnglishAttemptStatus": {
+      "type": "string",
+      "enum": [
+        "verified_english",
+        "not_english",
+        "unverified"
+      ],
+      "description": "Read-only server-derived eligibility from validated original-language evidence, independent of content judgement and form fidelity. English-looking normalized text is not proof."
+    },
+    "PracticeSupportManifest": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "task_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "question_ref": {
+          "$ref": "common.schema.json#/$defs/BasicQuestionRef"
+        },
+        "supports": {
+          "type": "array",
+          "minItems": 5,
+          "maxItems": 16,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "common.schema.json#/$defs/SupportArtifact"
+          }
+        }
+      },
+      "required": [
+        "task_id",
+        "question_ref",
+        "supports"
+      ],
+      "description": "Published exact role/language/ref/text/hash map. Require five reviewed defaults for every task; optional approved language variants fit the same immutable question. Partial correction may be private feedback instead of a publication default. Check unique support_ref and main fact coverage server-side.",
+      "allOf": [
+        {
+          "properties": {
+            "supports": {
+              "contains": {
+                "type": "object",
+                "properties": {
+                  "role": {
+                    "const": "question_meaning"
+                  },
+                  "language": {
+                    "const": "ko"
+                  }
+                },
+                "required": [
+                  "role",
+                  "language"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "properties": {
+            "supports": {
+              "contains": {
+                "type": "object",
+                "properties": {
+                  "role": {
+                    "const": "core_explanation"
+                  },
+                  "language": {
+                    "const": "ko"
+                  }
+                },
+                "required": [
+                  "role",
+                  "language"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "properties": {
+            "supports": {
+              "contains": {
+                "type": "object",
+                "properties": {
+                  "role": {
+                    "const": "simple_explanation"
+                  },
+                  "language": {
+                    "const": "en"
+                  }
+                },
+                "required": [
+                  "role",
+                  "language"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "properties": {
+            "supports": {
+              "contains": {
+                "type": "object",
+                "properties": {
+                  "role": {
+                    "const": "sentence_starter"
+                  },
+                  "language": {
+                    "const": "en"
+                  }
+                },
+                "required": [
+                  "role",
+                  "language"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "properties": {
+            "supports": {
+              "contains": {
+                "type": "object",
+                "properties": {
+                  "role": {
+                    "const": "complete_example"
+                  },
+                  "language": {
+                    "const": "en"
+                  }
+                },
+                "required": [
+                  "role",
+                  "language"
+                ]
+              }
+            }
+          }
+        }
+      ]
+    },
+    "DialogueProgress": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "hint_method_announced": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "hint_method_announced"
+      ],
+      "description": "Durable business flag per owner/epoch/lesson, initially false. Only actual verified HINT_METHOD output completion journals true. Server OR-merges within a lesson; false never resets existing true. New lesson resets; same lesson retry/resume/another device preserves. No elapsed timer, live lease/output token or safety grant is stored here."
+    }
+  }
+}

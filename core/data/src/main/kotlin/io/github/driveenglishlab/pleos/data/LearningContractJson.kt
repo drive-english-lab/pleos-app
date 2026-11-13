@@ -4,6 +4,7 @@ import android.content.Context
 import io.github.driveenglishlab.pleos.data.wire.learningWireSerializers
 import java.net.URI
 import java.time.OffsetDateTime
+import java.time.LocalDate
 import java.util.UUID
 import kotlinx.serialization.json.*
 
@@ -19,18 +20,20 @@ internal val learningJson = Json {
 internal class LearningProtocolException : IllegalArgumentException("Invalid learning contract payload.")
 
 /** Offline validation for the exact schema keywords used in the bundled reviewed contracts. */
-internal class LearningContractJson(context: Context) {
+internal class LearningContractJson(context: Context,
+    assetDirectory: String = "learning-contracts",
+    names: List<String> = listOf("common.schema.json", "personal-data.openapi.json", "inference.openapi.json")) {
     private val documents: Map<String, JsonObject>
     init {
-        val names = listOf("common.schema.json", "personal-data.openapi.json", "inference.openapi.json")
-        val manifest = context.assets.open("learning-contracts/manifest.json").bufferedReader().use { learningJson.parseToJsonElement(it.readText()).jsonObject }
+        val manifest = context.assets.open("$assetDirectory/manifest.json").bufferedReader().use { learningJson.parseToJsonElement(it.readText()).jsonObject }
+        require(manifest.keys == names.toSet()) { "Bundled contract manifest is incomplete." }
         documents = names.associateWith { name ->
-            val source = context.assets.open("learning-contracts/$name").bufferedReader().use { it.readText() }
+            val source = context.assets.open("$assetDirectory/$name").bufferedReader().use { it.readText() }
             require(LearningJson.hash(source) == manifest[name]?.jsonPrimitive?.content) { "Bundled contract hash mismatch." }
             learningJson.parseToJsonElement(source).jsonObject
         }
         for ((_, document) in documents) {
-            val definitions = document["\$defs"]?.jsonObject ?: document["components"]!!.jsonObject["schemas"]!!.jsonObject
+            val definitions = document["\$defs"]?.jsonObject ?: document["components"]?.jsonObject?.get("schemas")?.jsonObject ?: JsonObject(emptyMap())
             definitions.values.forEach { checkKeywords(it.jsonObject) }
         }
     }
@@ -38,7 +41,7 @@ internal class LearningContractJson(context: Context) {
     private fun checkKeywords(schema: JsonObject) {
         val known = setOf("\$ref", "\$schema", "\$id", "title", "description", "type", "properties", "required", "additionalProperties",
             "const", "enum", "format", "allOf", "anyOf", "oneOf", "if", "then", "else", "pattern", "minLength", "maxLength", "minItems", "maxItems",
-            "uniqueItems", "contains", "items", "minimum", "maximum", "minProperties", "default", "readOnly", "discriminator")
+            "uniqueItems", "contains", "items", "minimum", "maximum", "minProperties", "default", "readOnly", "discriminator", "examples")
         require(schema.keys.all { it in known || it.startsWith("x-") }) { "Unsupported learning schema keyword." }
         schema["properties"]?.jsonObject?.values?.forEach { checkKeywords(it.jsonObject) }
         listOf("items", "contains", "if", "then", "else").forEach { key -> schema[key]?.let { checkKeywords(it.jsonObject) } }
@@ -46,6 +49,18 @@ internal class LearningContractJson(context: Context) {
     }
 
     fun operation(file: String, path: String, method: String): JsonObject = documents.getValue(file)["paths"]!!.jsonObject[path]!!.jsonObject[method]!!.jsonObject
+    fun dereference(file: String, value: JsonObject): Pair<String, JsonObject> {
+        var source = file
+        var resolved = value
+        repeat(16) {
+            val reference = resolved["\$ref"]?.jsonPrimitive?.content ?: return source to resolved
+            val parts = reference.split('#', limit = 2)
+            source = parts[0].ifEmpty { source }
+            if (source !in documents || parts.size != 2 || !parts[1].startsWith('/')) throw LearningProtocolException()
+            resolved = schema(source, "#" + parts[1])
+        }
+        throw LearningProtocolException()
+    }
     fun schema(file: String, pointer: String): JsonObject {
         var value: JsonElement = documents.getValue(file)
         for (key in pointer.removePrefix("#/").split('/')) value = value.jsonObject.getValue(key.replace("~1", "/").replace("~0", "~"))
@@ -112,6 +127,7 @@ internal class LearningContractJson(context: Context) {
                     when (format) {
                         "uuid" -> if (text.length != 36 || UUID.fromString(text).toString() != text.lowercase(java.util.Locale.ROOT)) return false
                         "date-time" -> OffsetDateTime.parse(text)
+                        "date" -> LocalDate.parse(text)
                         "uri" -> if (!URI(text).isAbsolute) return false
                         null -> Unit
                         else -> return false

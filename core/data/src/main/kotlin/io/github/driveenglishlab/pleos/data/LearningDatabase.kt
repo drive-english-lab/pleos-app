@@ -325,9 +325,13 @@ abstract class LearningDao {
 
 @Database(entities = [LocalOwner::class, LearningRecord::class, OutboxRecord::class, OwnerJournal::class,
     LocalHistoryCoverage::class, PracticeBinding::class, LocalPresentationTicket::class, LocalPresentationObservation::class,
-    LocalPresentationReceipt::class, LocalDialogueCompletion::class], version = 2, exportSchema = true)
+    LocalPresentationReceipt::class, LocalDialogueCompletion::class,
+    LocalProgressPreference::class, LocalProgressPreferenceJournal::class, LocalProgressCache::class, LocalProgressJournal::class,
+    LocalAiLearningPreference::class, LocalAiLearningPreferenceJournal::class, LocalAiLearningCache::class, LocalAiLearningJournal::class], version = 3, exportSchema = true)
 abstract class LearningDatabase : RoomDatabase() {
     abstract fun learning(): LearningDao
+    abstract fun progress(): LearningProgressDao
+    abstract fun aiLearning(): AiLearningDao
 }
 
 @Singleton
@@ -363,5 +367,5 @@ class LearningStore @Inject constructor(private val database: LearningDatabase) 
 object LearningDataModule {
     @Provides @Singleton
     fun database(@ApplicationContext context: Context): LearningDatabase =
-        Room.databaseBuilder(context, LearningDatabase::class.java, "learning.db").addMigrations(LEARNING_MIGRATION_1_2).build()
+        Room.databaseBuilder(context, LearningDatabase::class.java, "learning.db").addMigrations(LEARNING_MIGRATION_1_2, LEARNING_MIGRATION_2_3).build()
 }

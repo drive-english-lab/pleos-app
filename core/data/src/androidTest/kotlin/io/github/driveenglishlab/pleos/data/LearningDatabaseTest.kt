@@ -13,7 +13,7 @@ import org.junit.runner.RunWith
 @RunWith(AndroidJUnit4::class)
 class LearningDatabaseTest {
     private val context get() = InstrumentationRegistry.getInstrumentation().targetContext
-    private fun db(name: String) = Room.databaseBuilder(context, LearningDatabase::class.java, name).addMigrations(LEARNING_MIGRATION_1_2).build()
+    private fun db(name: String) = Room.databaseBuilder(context, LearningDatabase::class.java, name).addMigrations(LEARNING_MIGRATION_1_2, LEARNING_MIGRATION_2_3).build()
     private fun answer(owner: LocalOwner): AcceptedAnswer {
         val content = ContentRef(UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), ListeningMode.ORIGINAL_FULL)
         val lease = CaptureLease(UUID.randomUUID(), UUID.randomUUID(),

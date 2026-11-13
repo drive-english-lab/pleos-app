@@ -1,0 +1,949 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Drive English Listening Preference and Speaking Records",
+    "version": "1.0.0",
+    "description": "S3 planned extension, not deployed. Six protected operations use schema_version5 plus feature_contract_version1; original22 operations/JSON3 are unchanged. Verify JWT subject/session/installation. Profile/epoch are expected context, never authority. Daily preference is history-epoch independent; cards/time/visibility require current epoch. Mutation <=16 KiB; key equals operation_id. GET never evaluates, acknowledges delivery, changes resume or starts media/input. Actual route/codec/generator/DB support remains a follow-on gate."
+  },
+  "paths": {
+    "/v1/profile/daily-listening-preference": {
+      "get": {
+        "operationId": "readDailyListeningPreference",
+        "summary": "Read epoch-independent choice and calendar clock anchor.",
+        "security": [
+          {
+            "UserBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "personal-data.openapi.json#/components/parameters/InstallationId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Validated feature1 result, not presentation evidence.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "learning-progress.schema.json#/$defs/DailyPreferenceView"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Access JWT missing/invalid.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "personal-data.openapi.json#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Inactive session/binding or wrong expected profile.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "personal-data.openapi.json#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Feature/record/attempt unavailable; no private-owner disclosure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "personal-data.openapi.json#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "CAS, epoch, immutable payload or snapshot conflict. Read current state; no silent rebase.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "personal-data.openapi.json#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "UTF-8 mutation body exceeds16 KiB.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "personal-data.openapi.json#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid schema5/feature1 shape or evidence.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "personal-data.openapi.json#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited; preserve pending state.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "personal-data.openapi.json#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Actual business/source/clock adapter unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "personal-data.openapi.json#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "Deadline exceeded; preserve operation and accepted answer.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "personal-data.openapi.json#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/profile/daily-listening-preference/choices": {
+      "post": {
+        "operationId": "setDailyListeningPreference",
+        "summary": "Commit explicit listen-only/default choice using independent CAS.",
+        "security": [
+          {
+            "UserBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "personal-data.openapi.json#/components/parameters/InstallationId"
+          },
+          {
+            "$ref": "personal-data.openapi.json#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Validated feature1 result, not presentation evidence.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "learning-progress.schema.json#/$defs/DailyPreferenceReceipt"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Access JWT missing/invalid.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "personal-data.openapi.json#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Inactive session/binding or wrong expected profile.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "personal-data.openapi.json#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Feature/record/attempt unavailable; no private-owner disclosure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "personal-data.openapi.json#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "CAS, epoch, immutable payload or snapshot conflict. Read current state; no silent rebase.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "personal-data.openapi.json#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "UTF-8 mutation body exceeds16 KiB.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "personal-data.openapi.json#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid schema5/feature1 shape or evidence.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "personal-data.openapi.json#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited; preserve pending state.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "personal-data.openapi.json#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Actual business/source/clock adapter unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "personal-data.openapi.json#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "Deadline exceeded; preserve operation and accepted answer.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "personal-data.openapi.json#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "learning-progress.schema.json#/$defs/DailyPreferenceRequest"
+              }
+            }
+          }
+        },
+        "description": "New explicit choice uses a different choice_id. The same current choice_id/decision is allowed only for unresolved-to-confirmed original-evidence resolution under current CAS/new immutable operation. Confirmed boundaries cannot be rewritten. Semantic clock/owner checks are server requirements, not JSON format evidence."
+      }
+    },
+    "/v1/profile/speaking-records": {
+      "get": {
+        "operationId": "listSpeakingRecords",
+        "summary": "Read automatic cards with separate snapshot cursor.",
+        "security": [
+          {
+            "UserBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "personal-data.openapi.json#/components/parameters/InstallationId"
+          },
+          {
+            "name": "client_privacy_epoch",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "description": "Expected history epoch; verified binding remains the access authority."
+          },
+          {
+            "name": "visibility",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "visible",
+                "hidden"
+              ],
+              "default": "visible"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 512
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50,
+              "default": 20
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Validated feature1 result, not presentation evidence.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "learning-progress.schema.json#/$defs/SpeakingRecordPage"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Access JWT missing/invalid.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "personal-data.openapi.json#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Inactive session/binding or wrong expected profile.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "personal-data.openapi.json#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Feature/record/attempt unavailable; no private-owner disclosure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "personal-data.openapi.json#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "CAS, epoch, immutable payload or snapshot conflict. Read current state; no silent rebase.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "personal-data.openapi.json#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "UTF-8 mutation body exceeds16 KiB.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "personal-data.openapi.json#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid schema5/feature1 shape or evidence.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "personal-data.openapi.json#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited; preserve pending state.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "personal-data.openapi.json#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Actual business/source/clock adapter unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "personal-data.openapi.json#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "Deadline exceeded; preserve operation and accepted answer.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "personal-data.openapi.json#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/profile/speaking-records/{lesson_id}": {
+      "get": {
+        "operationId": "readSpeakingRecord",
+        "summary": "Read original evidence/own sentence without presentation ACK.",
+        "security": [
+          {
+            "UserBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "personal-data.openapi.json#/components/parameters/InstallationId"
+          },
+          {
+            "name": "lesson_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "client_privacy_epoch",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "description": "Expected history epoch; verified binding remains the access authority."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Validated feature1 result, not presentation evidence.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "learning-progress.schema.json#/$defs/SpeakingRecordView"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Access JWT missing/invalid.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "personal-data.openapi.json#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Inactive session/binding or wrong expected profile.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "personal-data.openapi.json#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Feature/record/attempt unavailable; no private-owner disclosure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "personal-data.openapi.json#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "CAS, epoch, immutable payload or snapshot conflict. Read current state; no silent rebase.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "personal-data.openapi.json#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "UTF-8 mutation body exceeds16 KiB.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "personal-data.openapi.json#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid schema5/feature1 shape or evidence.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "personal-data.openapi.json#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited; preserve pending state.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "personal-data.openapi.json#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Actual business/source/clock adapter unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "personal-data.openapi.json#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "Deadline exceeded; preserve operation and accepted answer.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "personal-data.openapi.json#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/profile/speaking-records/{lesson_id}/visibility": {
+      "patch": {
+        "operationId": "setSpeakingRecordVisibility",
+        "summary": "Hide/unhide independently of answers/representative changes.",
+        "security": [
+          {
+            "UserBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "personal-data.openapi.json#/components/parameters/InstallationId"
+          },
+          {
+            "name": "lesson_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "$ref": "personal-data.openapi.json#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Validated feature1 result, not presentation evidence.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "learning-progress.schema.json#/$defs/VisibilityReceipt"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Access JWT missing/invalid.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "personal-data.openapi.json#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Inactive session/binding or wrong expected profile.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "personal-data.openapi.json#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Feature/record/attempt unavailable; no private-owner disclosure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "personal-data.openapi.json#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "CAS, epoch, immutable payload or snapshot conflict. Read current state; no silent rebase.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "personal-data.openapi.json#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "UTF-8 mutation body exceeds16 KiB.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "personal-data.openapi.json#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid schema5/feature1 shape or evidence.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "personal-data.openapi.json#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited; preserve pending state.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "personal-data.openapi.json#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Actual business/source/clock adapter unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "personal-data.openapi.json#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "Deadline exceeded; preserve operation and accepted answer.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "personal-data.openapi.json#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "learning-progress.schema.json#/$defs/VisibilityRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/attempts/{attempt_id}/practice-time": {
+      "post": {
+        "operationId": "recordAttemptPracticeTime",
+        "summary": "Record original practice-time evidence without changing attempt payload.",
+        "security": [
+          {
+            "UserBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "personal-data.openapi.json#/components/parameters/InstallationId"
+          },
+          {
+            "name": "attempt_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "$ref": "personal-data.openapi.json#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Validated feature1 result, not presentation evidence.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "learning-progress.schema.json#/$defs/PracticeTimeReceipt"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Access JWT missing/invalid.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "personal-data.openapi.json#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Inactive session/binding or wrong expected profile.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "personal-data.openapi.json#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Feature/record/attempt unavailable; no private-owner disclosure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "personal-data.openapi.json#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "CAS, epoch, immutable payload or snapshot conflict. Read current state; no silent rebase.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "personal-data.openapi.json#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "UTF-8 mutation body exceeds16 KiB.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "personal-data.openapi.json#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid schema5/feature1 shape or evidence.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "personal-data.openapi.json#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited; preserve pending state.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "personal-data.openapi.json#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Actual business/source/clock adapter unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "personal-data.openapi.json#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "Deadline exceeded; preserve operation and accepted answer.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "personal-data.openapi.json#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "learning-progress.schema.json#/$defs/PracticeTimeRequest"
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "UserBearer": {
+        "$ref": "personal-data.openapi.json#/components/securitySchemes/UserBearer"
+      }
+    },
+    "schemas": {
+      "ProfileSessionContext": {
+        "$ref": "learning-progress.schema.json#/$defs/ProfileSessionContext"
+      },
+      "ConfirmedDailyBoundary": {
+        "$ref": "learning-progress.schema.json#/$defs/ConfirmedDailyBoundary"
+      },
+      "UnresolvedDailyBoundary": {
+        "$ref": "learning-progress.schema.json#/$defs/UnresolvedDailyBoundary"
+      },
+      "DailyBoundary": {
+        "$ref": "learning-progress.schema.json#/$defs/DailyBoundary"
+      },
+      "DailyChoice": {
+        "$ref": "learning-progress.schema.json#/$defs/DailyChoice"
+      },
+      "ServerClockSample": {
+        "$ref": "learning-progress.schema.json#/$defs/ServerClockSample"
+      },
+      "DailyPreferenceView": {
+        "$ref": "learning-progress.schema.json#/$defs/DailyPreferenceView"
+      },
+      "DailyPreferenceRequest": {
+        "$ref": "learning-progress.schema.json#/$defs/DailyPreferenceRequest"
+      },
+      "DailyPreferenceReceipt": {
+        "$ref": "learning-progress.schema.json#/$defs/DailyPreferenceReceipt"
+      },
+      "ConfirmedPracticeTime": {
+        "$ref": "learning-progress.schema.json#/$defs/ConfirmedPracticeTime"
+      },
+      "UnknownPracticeTime": {
+        "$ref": "learning-progress.schema.json#/$defs/UnknownPracticeTime"
+      },
+      "OriginalPracticeTime": {
+        "$ref": "learning-progress.schema.json#/$defs/OriginalPracticeTime"
+      },
+      "PracticeTimeEvidence": {
+        "$ref": "learning-progress.schema.json#/$defs/PracticeTimeEvidence"
+      },
+      "PracticeTimeRequest": {
+        "$ref": "learning-progress.schema.json#/$defs/PracticeTimeRequest"
+      },
+      "PracticeTimeReceipt": {
+        "$ref": "learning-progress.schema.json#/$defs/PracticeTimeReceipt"
+      },
+      "RecordVisibility": {
+        "$ref": "learning-progress.schema.json#/$defs/RecordVisibility"
+      },
+      "VisibilityRequest": {
+        "$ref": "learning-progress.schema.json#/$defs/VisibilityRequest"
+      },
+      "VisibilityReceipt": {
+        "$ref": "learning-progress.schema.json#/$defs/VisibilityReceipt"
+      },
+      "ObservedSupportSummary": {
+        "$ref": "learning-progress.schema.json#/$defs/ObservedSupportSummary"
+      },
+      "ExampleExposureSummary": {
+        "$ref": "learning-progress.schema.json#/$defs/ExampleExposureSummary"
+      },
+      "RecordAssistance": {
+        "$ref": "learning-progress.schema.json#/$defs/RecordAssistance"
+      },
+      "RepresentativeAnswer": {
+        "$ref": "learning-progress.schema.json#/$defs/RepresentativeAnswer"
+      },
+      "LatestRecordResult": {
+        "$ref": "learning-progress.schema.json#/$defs/LatestRecordResult"
+      },
+      "RecordSourceAccess": {
+        "$ref": "learning-progress.schema.json#/$defs/RecordSourceAccess"
+      },
+      "SpeakingRecordSummary": {
+        "$ref": "learning-progress.schema.json#/$defs/SpeakingRecordSummary"
+      },
+      "QuoteExcerpt": {
+        "$ref": "learning-progress.schema.json#/$defs/QuoteExcerpt"
+      },
+      "RepresentativeQuote": {
+        "$ref": "learning-progress.schema.json#/$defs/RepresentativeQuote"
+      },
+      "AttemptEvidenceLink": {
+        "$ref": "learning-progress.schema.json#/$defs/AttemptEvidenceLink"
+      },
+      "SpeakingRecordDetail": {
+        "$ref": "learning-progress.schema.json#/$defs/SpeakingRecordDetail"
+      },
+      "SpeakingRecordPage": {
+        "$ref": "learning-progress.schema.json#/$defs/SpeakingRecordPage"
+      },
+      "SpeakingRecordView": {
+        "$ref": "learning-progress.schema.json#/$defs/SpeakingRecordView"
+      }
+    }
+  },
+  "x-contract-state": {
+    "status": "planned-not-implemented",
+    "base-schema-version": "5",
+    "feature-contract-version": "1",
+    "planned-protected-operations": 6,
+    "preserved-base-operations": 22,
+    "semantic-rules": "learning-progress.md and data-model.md C30-C41"
+  }
+}

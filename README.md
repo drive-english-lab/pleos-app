@@ -73,3 +73,15 @@ Room의 새 provisional owner·기기 저장을 서버 로그인/저장 완료�
 Room1의 schema3 원본·outbox·owner·journal은 migration2에서 보존한다. legacy payload는 v5 전송과 구분하고, 근거 없는 노출/영어 증거를 verified로 만들지 않는다. 계약 JSON3개와 manifest에서105개 wire type/21개 보호 operation을 생성하며 CI의 `--check`로 차이를 검출한다. GET/receipt는 출력 명령이 아니다. 준비한 도움은 실제 관찰과 구분하고 기본 Gleo capability/feedback presentation verifier는 비활성이다.
 
 이 변경은 화면·문구·화면 전환을 바꾸지 않아 기존 Sites 배포 대상에서 제외했다. 현재 구현은 전체 뉴스 학습 기능 완료가 아니다. 전체 기능 이슈는 열어 두며 PR은 독립 기반에 한정한다.
+
+## S3/S4 독립 계약과 Room3
+
+기존 `learning-contracts`3개/105타입·21보호 operation을 유지하고, 별도 `feature-contracts`7개에서 learning-progress1/ai-learning1의77타입·12개 typed API를 생성한다. 공통 오류·필수/null/버전/enum·owner/epoch·입력/응답 변경을 검사하며 API 성공은 출력 명령이 아니다.
+
+```sh
+python3 scripts/sync-feature-contracts.py --check
+```
+
+Room2→3 명시 migration은8개 feature cache/journal을 더하고 기존 payload/hash·답/pending·노출/중지 의도를 보존한다. 당일/난이도 설정과 전용 journal은 epoch 독립이고 카드/시각·추천/선택 sidecar cache와 명령은 학습 epoch별이다. 원래 intent의 clock/boot 관찰은 JSON 그대로 보존하며 wire/hash를 재작성하지 않는다. 실제 없는 날짜/순서/coverage는 만들지 않는다.
+
+최종 AVD data40개(기존29+계약8+이행/수명3), domain48개, debug/release/lint(error0/warning26)를 확인했다. Gradle connected runner의 장치 감시 대기 뒤 최신 APK를 직접 설치하고 단일 `am instrument`로40개를 검증했다. 실제 Auth/Gleo/음성·제품 화면 연결 완료는 아니다. FeatureLifecycle의 삭제/owner 전환 hook과 ProfileSyncWorker의 전후 guard는 실제 Auth/merge/delete/logout composition에서 이어 연결한다. 화면이 바뀌지 않아 이번 변경의 Sites 배포는 하지 않았다.

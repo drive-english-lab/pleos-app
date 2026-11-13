@@ -34,3 +34,6 @@ CODEX.md
 *.tmp
 *.swp
 Thumbs.db
+out/
+*.class
+.vscode/

@@ -17,7 +17,7 @@ import org.junit.runner.RunWith
 class LearningMigrationTest {
     private val context get() = InstrumentationRegistry.getInstrumentation().targetContext
     private fun open(name: String) = Room.databaseBuilder(context, LearningDatabase::class.java, name)
-        .addMigrations(LEARNING_MIGRATION_1_2).build()
+        .addMigrations(LEARNING_MIGRATION_1_2, LEARNING_MIGRATION_2_3).build()
     private fun scope(owner: LocalOwner) = OwnerContext(UUID.fromString(owner.profileId), owner.privacyEpoch, owner.revision, UUID.randomUUID())
     private fun practice() = PracticeContentRef(ContentRef(UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(),
         ListeningMode.ORIGINAL_FULL), UUID.randomUUID(), UUID.randomUUID())

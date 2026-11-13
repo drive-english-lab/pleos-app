@@ -60,7 +60,8 @@ internal class KtorLearningTransport(origin: String, allowLocalHttp: Boolean = f
  * changes epoch, creates a guest, regenerates feedback or retries behind the user.
  */
 class LearningApi internal constructor(private val sessions: LearningSessionSource,
-    private val contracts: LearningContractJson, private val transport: LearningHttpTransport) {
+    private val contracts: LearningContractJson, private val transport: LearningHttpTransport,
+    private val json: Json = learningJson) {
     constructor(context: Context, origin: String, sessions: LearningSessionSource, allowLocalHttp: Boolean = false) :
         this(sessions, LearningContractJson(context.applicationContext), KtorLearningTransport(origin, allowLocalHttp))
 
@@ -80,17 +81,19 @@ class LearningApi internal constructor(private val sessions: LearningSessionSour
             val context = content?.get("client_context")?.jsonObject ?: content?.get("profile_context")?.jsonObject
             if (context != null) {
                 if (context["profile_id"]?.jsonPrimitive?.content != scope.owner.profileId.toString() ||
-                    context["privacy_epoch"]?.jsonPrimitive?.long != scope.owner.privacyEpoch) throw LearningProtocolException()
+                    ("privacy_epoch" in context && context["privacy_epoch"]?.jsonPrimitive?.long != scope.owner.privacyEpoch)) throw LearningProtocolException()
                 if ("presentation_token" in context && (context["presentation_token"]?.jsonPrimitive?.content != scope.owner.presentationToken.toString() ||
                     context["context_revision"]?.jsonPrimitive?.long != scope.owner.revision)) throw LearningProtocolException()
             }
+            content?.get("profile_id")?.let { if (it.jsonPrimitive.content != scope.owner.profileId.toString()) throw LearningProtocolException() }
             val query = queryArguments.filterValues { it != null }.mapValues { it.value!! }
+            if (file in featureApiDocuments && query["client_privacy_epoch"]?.toLong() != null &&
+                query["client_privacy_epoch"]?.toLong() != scope.owner.privacyEpoch) throw LearningProtocolException()
             var path = template
             for ((name, value) in pathArguments) path = path.replace("{$name}", value)
             if (path.contains('{') || path.contains('}')) throw LearningProtocolException()
             for (original in operation["parameters"]?.jsonArray ?: JsonArray(emptyList())) {
-                var parameter = original.jsonObject
-                parameter["\$ref"]?.jsonPrimitive?.content?.let { parameter = contracts.schema(file, it) }
+                val (parameterFile, parameter) = contracts.dereference(file, original.jsonObject)
                 val location = parameter["in"]!!.jsonPrimitive.content
                 if (location == "header") continue
                 val name = parameter["name"]!!.jsonPrimitive.content
@@ -101,7 +104,7 @@ class LearningApi internal constructor(private val sessions: LearningSessionSour
                 }
                 val schema = parameter["schema"]!!.jsonObject
                 val encoded = if (schema["type"] == JsonPrimitive("integer")) JsonPrimitive(value.toLongOrNull() ?: throw LearningProtocolException()) else JsonPrimitive(value)
-                contracts.validate(file, schema, encoded)
+                contracts.validate(parameterFile, schema, encoded)
             }
             val body = payload?.toString()?.toByteArray(Charsets.UTF_8)
             if (body != null && body.size > if (template == "/v1/profile/sync") 256 * 1024 else 16 * 1024) return LearningReply.Failed("REQUEST_TOO_LARGE", false)
@@ -132,8 +135,8 @@ class LearningApi internal constructor(private val sessions: LearningSessionSour
                 result["profile_context"]?.jsonObject?.let { returned ->
                     if (template != "/v1/profile/bootstrap") {
                         if (returned["profile_id"]?.jsonPrimitive?.content != scope.owner.profileId.toString()) throw LearningProtocolException()
-                        val epoch = returned["privacy_epoch"]!!.jsonPrimitive.long
-                        when (template) {
+                        val epoch = returned["privacy_epoch"]?.jsonPrimitive?.long
+                        if (epoch != null) when (template) {
                             "/v1/profile" -> if (epoch < scope.owner.privacyEpoch) throw LearningProtocolException()
                             "/v1/profile/history-deletions" -> if (epoch != scope.owner.privacyEpoch + 1 ||
                                 result["previous_privacy_epoch"]?.jsonPrimitive?.long != scope.owner.privacyEpoch) throw LearningProtocolException()
@@ -141,11 +144,28 @@ class LearningApi internal constructor(private val sessions: LearningSessionSour
                         }
                     }
                 }
+                for (owner in listOfNotNull(result["profile_id"], result["preference"]?.jsonObject?.get("profile_id"))) {
+                    if (owner.jsonPrimitive.content != scope.owner.profileId.toString()) throw LearningProtocolException()
+                }
+                if (file in featureApiDocuments) {
+                    // Action receipts nest the recommendation view; it has its own learning epoch.
+                    result["recommendation"]?.takeIf { it is JsonObject }?.jsonObject?.get("profile_context")?.jsonObject?.let { nested ->
+                        if (nested["profile_id"]?.jsonPrimitive?.content != scope.owner.profileId.toString() ||
+                            nested["privacy_epoch"]?.jsonPrimitive?.long != scope.owner.privacyEpoch) throw LearningProtocolException()
+                    }
+                    for ((key, expected) in pathArguments) {
+                        val actual = result[key] ?: result["record"]?.jsonObject?.get(key)
+                        if (actual != null && actual.jsonPrimitive.content != expected) throw LearningProtocolException()
+                    }
+                    for (key in listOf("article_id", "source_snapshot_id", "listening_mode", "target_band")) {
+                        if (key in query && result[key]?.jsonPrimitive?.content != query[key]) throw LearningProtocolException()
+                    }
+                }
                 if (template == "/v1/attempts/{attempt_id}" && result["attempt_id"]?.jsonPrimitive?.content != pathArguments["attempt_id"]) throw LearningProtocolException()
-                return LearningReply.Stored(scope, learningJson.decodeFromJsonElement(responseType, parsed))
+                return LearningReply.Stored(scope, json.decodeFromJsonElement(responseType, parsed))
             }
-            val schema = contracts.schema(file, "#/components/schemas/ErrorEnvelope")
-            contracts.validate(file, schema, parsed)
+            val schema = contracts.schema("personal-data.openapi.json", "#/components/schemas/ErrorEnvelope")
+            contracts.validate("personal-data.openapi.json", schema, parsed)
             val error = parsed.jsonObject["error"]!!.jsonObject
             val retryAfter = response.headers.entries.firstOrNull { it.key.equals("Retry-After", true) }?.value?.toLongOrNull()?.takeIf { it >= 0 }
             return LearningReply.Failed(error["code"]!!.jsonPrimitive.content, error["retryable"]!!.jsonPrimitive.boolean, retryAfter)

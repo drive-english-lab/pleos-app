@@ -24,3 +24,21 @@ val LEARNING_MIGRATION_1_2 = object : Migration(1, 2) {
         db.execSQL("CREATE INDEX IF NOT EXISTS index_dialogue_completion_profileId_privacyEpoch_lessonId ON dialogue_completion(profileId, privacyEpoch, lessonId)")
     }
 }
+
+/** Add separate feature storage. Existing rows, payload bytes and history evidence stay untouched. */
+val LEARNING_MIGRATION_2_3 = object : Migration(2, 3) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("CREATE TABLE daily_preference_cache (profileId TEXT NOT NULL PRIMARY KEY, version INTEGER NOT NULL, payloadJson TEXT NOT NULL)")
+        db.execSQL("CREATE TABLE daily_preference_journal (operationId TEXT NOT NULL PRIMARY KEY, profileId TEXT NOT NULL, ownerRevision INTEGER NOT NULL, localSequence INTEGER NOT NULL, intentJson TEXT NOT NULL, payloadJson TEXT NOT NULL, payloadHash TEXT NOT NULL, state TEXT NOT NULL, isolated INTEGER NOT NULL)")
+        db.execSQL("CREATE INDEX index_daily_preference_journal_profileId_isolated_localSequence ON daily_preference_journal(profileId, isolated, localSequence)")
+        db.execSQL("CREATE TABLE speaking_records_cache (profileId TEXT NOT NULL, privacyEpoch INTEGER NOT NULL, kind TEXT NOT NULL, cacheKey TEXT NOT NULL, revision INTEGER NOT NULL, payloadJson TEXT NOT NULL, PRIMARY KEY(profileId, privacyEpoch, kind, cacheKey))")
+        db.execSQL("CREATE TABLE speaking_records_journal (operationId TEXT NOT NULL PRIMARY KEY, profileId TEXT NOT NULL, privacyEpoch INTEGER NOT NULL, ownerRevision INTEGER NOT NULL, kind TEXT NOT NULL, payloadJson TEXT NOT NULL, payloadHash TEXT NOT NULL, state TEXT NOT NULL, isolated INTEGER NOT NULL)")
+        db.execSQL("CREATE INDEX index_speaking_records_journal_profileId_privacyEpoch_isolated ON speaking_records_journal(profileId, privacyEpoch, isolated)")
+        db.execSQL("CREATE TABLE learning_preference_cache (profileId TEXT NOT NULL PRIMARY KEY, version INTEGER NOT NULL, payloadJson TEXT NOT NULL)")
+        db.execSQL("CREATE TABLE learning_preference_journal (operationId TEXT NOT NULL PRIMARY KEY, profileId TEXT NOT NULL, ownerRevision INTEGER NOT NULL, localSequence INTEGER NOT NULL, intentJson TEXT NOT NULL, payloadJson TEXT NOT NULL, payloadHash TEXT NOT NULL, state TEXT NOT NULL, isolated INTEGER NOT NULL)")
+        db.execSQL("CREATE INDEX index_learning_preference_journal_profileId_isolated_localSequence ON learning_preference_journal(profileId, isolated, localSequence)")
+        db.execSQL("CREATE TABLE ai_learning_cache (profileId TEXT NOT NULL, privacyEpoch INTEGER NOT NULL, kind TEXT NOT NULL, cacheKey TEXT NOT NULL, revision INTEGER NOT NULL, payloadJson TEXT NOT NULL, PRIMARY KEY(profileId, privacyEpoch, kind, cacheKey))")
+        db.execSQL("CREATE TABLE ai_learning_journal (operationId TEXT NOT NULL PRIMARY KEY, profileId TEXT NOT NULL, privacyEpoch INTEGER NOT NULL, ownerRevision INTEGER NOT NULL, kind TEXT NOT NULL, payloadJson TEXT NOT NULL, payloadHash TEXT NOT NULL, state TEXT NOT NULL, isolated INTEGER NOT NULL)")
+        db.execSQL("CREATE INDEX index_ai_learning_journal_profileId_privacyEpoch_isolated ON ai_learning_journal(profileId, privacyEpoch, isolated)")
+    }
+}
