@@ -23,6 +23,22 @@ def generate(bundle):
     assert set(manifest)=={filename,f'{bundle}.openapi.json'}
     for name,digest in manifest.items():
         assert hashlib.sha256((directory/name).read_bytes()).hexdigest()==digest
+    # Check every local JSON pointer, including OpenAPI-only references which
+    # need not be reached while generating Kotlin DTOs. Never retrieve remotely.
+    documents={name:json.loads((directory/name).read_text()) for name in manifest}
+    def check_refs(value,current):
+        if isinstance(value,dict):
+            if '$ref' in value:
+                target,mark,pointer=value['$ref'].partition('#');target=target or current
+                assert mark and target in documents and pointer.startswith('/'),value['$ref']
+                resolved=documents[target]
+                for token in pointer[1:].split('/'):
+                    token=token.replace('~1','/').replace('~0','~')
+                    resolved=resolved[int(token)] if isinstance(resolved,list) else resolved[token]
+            for child in value.values():check_refs(child,current)
+        elif isinstance(value,list):
+            for child in value:check_refs(child,current)
+    for name,document in documents.items():check_refs(document,name)
     doc=json.loads((directory/filename).read_text())
     prefix='Wire'+pascal(bundle)
     models=OrderedDict((prefix+name,value) for name,value in doc['$defs'].items())

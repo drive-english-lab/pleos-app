@@ -21,10 +21,10 @@ class ReviewSegmentMigrationTest {
     private fun schema(version: Int) = testAssets.open("io.github.driveenglishlab.pleos.data.LearningDatabase/$version.json")
         .bufferedReader().use { JSONObject(it.readText()).getJSONObject("database") }
     private fun open(name: String) = Room.databaseBuilder(context, LearningDatabase::class.java, name)
-        .addMigrations(LEARNING_MIGRATION_1_2, LEARNING_MIGRATION_2_3, LEARNING_MIGRATION_3_4).build()
+        .addMigrations(LEARNING_MIGRATION_1_2, LEARNING_MIGRATION_2_3, LEARNING_MIGRATION_3_4, LEARNING_MIGRATION_4_5).build()
     private fun ownerScope(owner: LocalOwner) = OwnerContext(UUID.fromString(owner.profileId), owner.privacyEpoch, owner.revision, UUID.randomUUID())
     private val addedTables = listOf("review_context", "review_operation", "review_observation", "fresh_practice_intent",
-        "preparation_waiter", "settings_draft", "source6_record", "segment_state", "segment_journal", "segment_completion")
+        "preparation_waiter", "settings_draft", "source6_record", "segment_state", "segment_journal", "segment_completion", "playback_request_intent", "catalog_view_page")
     private val epochTables = addedTables.filterNot { it == "settings_draft" }
 
     private fun createVersion(name: String, version: Int, seed: (SQLiteDatabase) -> Unit) {
@@ -52,8 +52,8 @@ class ReviewSegmentMigrationTest {
         return db.openHelper.readableDatabase.query("SELECT COUNT(*) FROM $table$where", args).use { it.moveToFirst(); it.getInt(0) }
     }
 
-    @Test fun realVersionsOneTwoAndThreeReachRoomFourWithoutConvertingOldTimeOrOutboxBytes() = runBlocking {
-        for (version in 1..3) {
+    @Test fun realVersionsOneThroughFourReachRoomFiveWithoutConvertingOldTimeOrOutboxBytes() = runBlocking {
+        for (version in 1..4) {
             val name = "review-room-$version-${UUID.randomUUID()}.db"
             val profile = UUID.randomUUID().toString(); val checkpoint = UUID.randomUUID().toString(); val event = UUID.randomUUID().toString()
             val legacyTime = "{\n  \"position_ms\": 4321, \"duration_ms\": 98765, \"phase\": \"followup\", \"play_intent\": false, \"pause_reason\": \"user\", \"main_coverage_status\": \"partial\"\n}"
@@ -69,7 +69,7 @@ class ReviewSegmentMigrationTest {
                     old.execSQL("INSERT INTO history_coverage VALUES(?, 4, 'legacy_or_incomplete', 2, 1)", arrayOf<Any>(profile))
                 }
                 old.execSQL("INSERT INTO owner_journal VALUES(?, ?, 9, 'logout', 'pending', 'original-reference')", arrayOf<Any>(UUID.randomUUID().toString(), profile))
-                if (version == 3) {
+                if (version >= 3) {
                     old.execSQL("INSERT INTO learning_preference_cache VALUES(?, 3, ?)", arrayOf<Any>(profile, "{\"band\":\"intermediate\"}"))
                     old.execSQL("INSERT INTO daily_preference_cache VALUES(?, 2, ?)", arrayOf<Any>(profile, "{\"decision\":\"listen_only\"}"))
                 }
@@ -78,7 +78,7 @@ class ReviewSegmentMigrationTest {
             try {
                 val actualOwner = requireNotNull(db.learning().currentOwner()) // Triggers Room migration + full schema validation.
                 assertEquals(LocalOwner(profileId = profile, privacyEpoch = 4, revision = 9, status = "active"), actualOwner)
-                assertEquals(4, db.openHelper.readableDatabase.version)
+                assertEquals(5, db.openHelper.readableDatabase.version)
                 val record = requireNotNull(db.learning().record(profile, 4, checkpoint))
                 assertEquals(legacyTime, record.payloadJson); assertEquals(6L, record.version)
                 assertEquals(if (version == 1) 3 else 5, record.payloadSchemaVersion)
@@ -88,17 +88,17 @@ class ReviewSegmentMigrationTest {
                 assertEquals(if (version == 1) "legacy" else "profile_sync", operation.transport)
                 assertTrue(requireNotNull(db.learning().historyCoverage(profile, 4)).historyGap)
                 for (table in addedTables) assertEquals("No guessed new evidence in $table after v$version", 0, count(db, table))
-                if (version == 3) {
+                if (version >= 3) {
                     assertEquals("{\"band\":\"intermediate\"}", db.aiLearning().preference(profile)?.payloadJson)
                     assertEquals("{\"decision\":\"listen_only\"}", db.progress().preference(profile)?.payloadJson)
                 }
                 db.openHelper.readableDatabase.query("SELECT kind,status,isolatedSessionReference FROM owner_journal").use {
                     assertTrue(it.moveToFirst()); assertEquals("logout", it.getString(0)); assertEquals("pending", it.getString(1)); assertEquals("original-reference", it.getString(2))
                 }
-                // Generated schema4 is packaged in androidTest assets and matches the opened identity.
-                val expected = schema(4)
-                assertEquals(4, expected.getInt("version"))
-                assertEquals(28, expected.getJSONArray("entities").length())
+                // Generated schema5 is packaged in androidTest assets and matches the opened identity.
+                val expected = schema(5)
+                assertEquals(5, expected.getInt("version"))
+                assertEquals(30, expected.getJSONArray("entities").length())
                 db.openHelper.readableDatabase.query("SELECT identity_hash FROM room_master_table WHERE id=42").use {
                     assertTrue(it.moveToFirst()); assertEquals(expected.getString("identityHash"), it.getString(0))
                 }
@@ -125,6 +125,10 @@ class ReviewSegmentMigrationTest {
         sql.execSQL("INSERT INTO segment_state VALUES(?, ?, ?, 'followup', 'main', 'legacy_time', ?, ?, NULL, ?, ?, 1, ?, NULL, 0, 1)", arrayOf<Any>(profile, epoch, selection, revision, text, text, run, text))
         sql.execSQL("INSERT INTO segment_journal VALUES(?, ?, ?, ?, ?, ?, 'observation', ?, ?, 'pending', 0, NULL)", arrayOf<Any>(segment.operationId, profile, epoch, revision, selection, run, text, hash))
         sql.execSQL("INSERT INTO segment_completion VALUES(?, ?, ?, ?, ?, ?, ?, ?)", arrayOf<Any>(profile, epoch, run, selection, UUID.randomUUID().toString(), UUID.randomUUID().toString(), text, "original-server-receipt"))
+        sql.execSQL("INSERT INTO playback_request_intent VALUES(?, ?, ?, ?, ?, ?, ?, ?, 'ACTIVE', 0, NULL, NULL, 0, NULL, 0)",
+            arrayOf<Any>(UUID.randomUUID().toString(), profile, epoch, revision, UUID.randomUUID().toString(), UUID.randomUUID().toString(), text, hash))
+        sql.execSQL("INSERT INTO catalog_view_page VALUES(?, ?, ?, 'interests', '', ?, '', 1, ?, ?)",
+            arrayOf<Any>(profile, epoch, revision, UUID.randomUUID().toString(), text, hash))
         return EpochFixture(profile, epoch, selection, run, review, segment, text)
     }
     private fun assertEpochPresent(db: LearningDatabase, value: EpochFixture) {

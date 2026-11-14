@@ -29,17 +29,22 @@ import kotlinx.coroutines.launch
 fun PracticeScreen(state: ProductScreenState, send: (UiIntent) -> Unit, requestMicrophone: () -> Unit) {
     val study = state.learning
     val practice = study.practice
-    if (practice == null) {
+    if (practice == null || practice.owner != state.session.owner || study.owner != null && study.owner != state.session.owner) {
         ProductStatus("연습을 준비하고 있어요", "듣던 기사와 진행을 유지하고 있어요", loading = true)
         return
     }
-    val progress = practice?.progress
+    val progress = practice.progress
     val processing = SessionOperationKind.FEEDBACK in state.session.activeOperations
+    val attempt = progress?.pendingFeedbackAttemptId ?: practice.feedback?.attemptId ?: study.lastAttemptId
+    val assessment = attempt?.let { matchingAssessment(state, practice.lesson.lessonId, it) }
+    val assessmentRequired = practice.feedback != null || assessment != null
+    val effectiveReady = assessment?.displayReady == true
+    val shownSupport = study.support?.takeUnless { assessmentRequired && !effectiveReady }
     Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(24.dp)) {
         Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(24.dp)) {
             Text(study.articleTitle ?: "같은 기사로 말하기", style = MaterialTheme.typography.titleLarge, modifier = Modifier.semantics { heading() })
             Text(practice.questionEn, style = MaterialTheme.typography.bodyLarge)
-            study.support?.let { binding ->
+            shownSupport?.let { binding ->
                 Text(when(binding.artifact.role) {
                     SupportRole.QUESTION_MEANING -> "질문 뜻"
                     SupportRole.CORE_EXPLANATION, SupportRole.SIMPLE_EXPLANATION -> "내용 이해하기"
@@ -56,19 +61,10 @@ fun PracticeScreen(state: ProductScreenState, send: (UiIntent) -> Unit, requestM
                 }
                 processing -> ProductStatus(if (practice.requestState == PracticeRequestState.PROCESSING_NOTICE) "피드백을 준비하고 있어요" else "답변을 저장하고 있어요",
                     "저장한 답변은 유지돼요", loading = true)
-                practice.feedback != null -> {
-                    val feedback = requireNotNull(practice.feedback)
-                    Text(when(feedback.englishAttemptStatus) {
-                        EnglishAttemptStatus.NOT_ENGLISH -> "영어로 다시 답해 보세요"
-                        EnglishAttemptStatus.UNVERIFIED -> "원래 답변 언어 확인이 필요해요"
-                        EnglishAttemptStatus.VERIFIED_ENGLISH -> if (feedback.judgement == Judgement.UNASSESSABLE) "답변을 다시 확인해 주세요" else "내 답변 피드백"
-                    }, style = MaterialTheme.typography.titleMedium)
-                    Text(feedback.feedbackKo, style = MaterialTheme.typography.bodyMedium)
-                    if (feedback.progress.contentSuccess == true) Text("기사의 핵심 내용을 담아 말했어요", style = MaterialTheme.typography.bodySmall)
-                    if (feedback.progress.retryOutcome != null) Text(when(feedback.progress.retryOutcome) {
-                        "improved" -> "다시 말한 답변에 보완할 점이 반영됐어요"
-                        else -> "다시 답한 결과를 저장했어요"
-                    }, style = MaterialTheme.typography.bodySmall)
+                assessmentRequired && attempt != null -> {
+                    AssessmentReviewPanel(state, practice.lesson.lessonId, attempt, "parked_feedback", send, showFeedback = true)
+                    if (assessment?.displayReady == true && assessment.contentSuccess == true)
+                        Text("현재 판정에서 기사의 핵심 내용을 담아 말한 것으로 확인됐어요", style = MaterialTheme.typography.bodySmall)
                     Unit
                 }
                 practice.progress == null -> ProductStatus("연습 연결을 확인해 주세요", "질문은 유지돼요. 연결을 확인한 뒤 다시 열 수 있어요")
@@ -89,25 +85,26 @@ fun PracticeScreen(state: ProductScreenState, send: (UiIntent) -> Unit, requestM
                     ProductButton("답변 취소", { send(UiIntent.CancelAnswer(state.origin)) }, secondary = true)
                 }
                 state.session.inputPhase == InputPhase.FINALIZING -> ProductButton("답변 취소", { send(UiIntent.CancelAnswer(state.origin)) }, secondary = true)
-                !processing && practice.feedback != null && practice.progress?.pendingFeedbackAttemptId != null -> {
+                !processing && effectiveReady && practice.feedback != null && practice.progress?.pendingFeedbackAttemptId != null -> {
                     ProductButton(if (progress?.phase == "completed") "연습 마치기" else "다시 답하기", {
                         send(if (progress?.phase == "completed") UiIntent.FinishPractice(state.origin) else UiIntent.RetryAnswer(state.origin))
                     })
                     if (progress?.phase == "retry_offer") ProductButton("이번 연습 마치기", { send(UiIntent.FinishPractice(state.origin, true)) }, secondary = true)
                 }
-                !processing && practice.progress?.nextTurn != null -> ProductButton("답변 시작", { send(UiIntent.StartAnswer(state.origin)) })
+                !processing && (!assessmentRequired || effectiveReady) && practice.progress?.nextTurn != null -> ProductButton("답변 시작", { send(UiIntent.StartAnswer(state.origin)) })
             }
-            if (!processing && study.lastAttemptId != null && practice.feedback == null) {
+            if (!processing && !assessmentRequired && study.lastAttemptId != null && practice.feedback == null) {
                 ProductButton("저장된 결과 확인", { send(UiIntent.RetryFeedback(state.origin, true)) }, secondary = true)
                 ProductButton("피드백 다시 요청", { send(UiIntent.RetryFeedback(state.origin)) }, secondary = true)
             }
-            if (!processing && state.session.inputPhase == InputPhase.IDLE) {
+            if (!processing && (!assessmentRequired || effectiveReady) && state.session.inputPhase == InputPhase.IDLE) {
                 ProductButton("질문 뜻", { send(UiIntent.RequestHelp(state.origin, HelpRequest.QUESTION_MEANING)) }, secondary = true)
                 ProductButton("힌트", { send(UiIntent.RequestHelp(state.origin, HelpRequest.HINT)) }, secondary = true)
                 ProductButton("예문", { send(UiIntent.RequestHelp(state.origin, HelpRequest.EXAMPLE)) }, secondary = true)
             }
             ProductButton("저장 후 나가기", { send(UiIntent.FinishPractice(state.origin)) }, enabled = !processing, secondary = true)
         }
+        if (study.support != null && shownSupport == null) ProductButton("도움 닫기", { send(UiIntent.CloseSupport(state.origin)) }, secondary = true)
     }
 }
 

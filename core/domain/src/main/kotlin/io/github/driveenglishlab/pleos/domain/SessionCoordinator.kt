@@ -213,8 +213,21 @@ class SessionCoordinator {
         true
     }
 
-    suspend fun requestMediaIntent(owner: OwnerContext, intent: PlaybackIntent): Boolean = mutex.withLock {
+    /** A new explicit listening choice supersedes an older asynchronous output grant. */
+    suspend fun invalidateMediaActivation(owner: OwnerContext): Boolean = mutex.withLock {
         if (owner != view.owner) return@withLock false
+        invalidateOfferLocked(ReviewOfferEvent.ExplicitStop)
+        operations.remove(SessionOperationKind.SELECTION)
+        view = view.copy(intentGeneration = view.intentGeneration + 1, activeOperations = operations.keys.toSet())
+        true
+    }
+
+    suspend fun requestMediaIntent(owner: OwnerContext, intent: PlaybackIntent,
+        expectedNavigationGeneration: Long? = null, expectedIntentGeneration: Long? = null,
+        expectedSelectionId: java.util.UUID? = null): Boolean = mutex.withLock {
+        if (owner != view.owner || expectedNavigationGeneration?.let { it != view.navigationGeneration } == true ||
+            expectedIntentGeneration?.let { it != view.intentGeneration } == true ||
+            expectedSelectionId?.let { it != (view.preparedListening?.selectionId ?: view.listening?.selectionId) } == true) return@withLock false
         if (intent == PlaybackIntent.PLAY && (!view.mediaConnected || !view.access.ownerValid ||
                 view.access.power != PowerAvailability.ALLOWED || view.listening == null && view.preparedListening == null ||
                 (view.preparedListening?.stage ?: view.listening?.stage) == ListeningStage.ARTICLE_OFFER)) return@withLock false
@@ -565,20 +578,28 @@ class SessionCoordinator {
         true
     }
 
-    suspend fun segmentPermission(program: SegmentProgram): Boolean = mutex.withLock {
-        program.owner == view.owner && view.preparedListening?.accepts(program) == true && view.mediaConnected &&
+    suspend fun segmentPermission(program: SegmentProgram, expectedIntentGeneration: Long? = null,
+        requirePlayIntent: Boolean = false): Boolean = mutex.withLock {
+        expectedIntentGeneration?.let { it == view.intentGeneration } != false &&
+            (!requirePlayIntent || view.intent == PlaybackIntent.PLAY) &&
+            program.owner == view.owner && view.preparedListening?.accepts(program) == true && view.mediaConnected &&
             view.access.ownerValid && view.access.power == PowerAvailability.ALLOWED && view.task == null &&
             view.inputPhase == InputPhase.IDLE && view.pendingAnswer == null && view.voiceInput == VoiceInputActivity.IDLE &&
             view.practiceModal?.visible != true && view.reviewPolicy.auxiliary == null
     }
+
+    /** Rights may require I/O. The original play generation must still own output afterwards. */
+    suspend fun segmentOutputPermission(program: SegmentProgram, intentGeneration: Long,
+        verifyContent: suspend () -> Boolean): Boolean =
+        segmentPermission(program, intentGeneration, true) && verifyContent() &&
+            segmentPermission(program, intentGeneration, true)
 
     /** Caller carries the previous binding across the asynchronous runtime observation. */
     suspend fun observeSegment(snapshot: SegmentPlaybackSnapshot, playing: Boolean, expectedPreviousRun: UUID? = null): Boolean = mutex.withLock {
         val work = view.preparedListening ?: return@withLock false
         if (snapshot.program.owner != view.owner || !work.accepts(snapshot.program) || work.runId !in setOf(expectedPreviousRun, snapshot.runId)) return@withLock false
         view = view.copy(preparedListening = work.copy(cursor = snapshot.cursor, runId = if (snapshot.bindingAcknowledged) snapshot.runId else work.runId),
-            mediaPositionMs = null, mediaPlaying = playing && snapshot.bindingAcknowledged,
-            intent = if (snapshot.cursor.playIntent) PlaybackIntent.PLAY else if (view.intent == PlaybackIntent.STOPPED) PlaybackIntent.STOPPED else PlaybackIntent.USER_PAUSED)
+            mediaPositionMs = null, mediaPlaying = playing && snapshot.bindingAcknowledged && view.intent == PlaybackIntent.PLAY)
         true
     }
 
@@ -688,6 +709,15 @@ class SessionCoordinator {
     private fun outputMatchesWork(output: OutputExpectation): Boolean =
         if (output.preparedWork != null) view.preparedListening?.sameWork(output.preparedWork) == true && view.listening == null
         else output.work != null && view.listening?.sameWork(output.work) == true && view.preparedListening == null
+
+    /** Reviewing an existing result cancels silence timers without resuming input or media. */
+    suspend fun holdAssessmentReview(owner: OwnerContext): Boolean = mutex.withLock {
+        if (owner != view.owner || input.phase != InputPhase.IDLE || view.captureLease != null) return@withLock false
+        clock.cancel(); waitRoute = null
+        invalidateOfferLocked(ReviewOfferEvent.InputOrRestriction)
+        view = view.copy(expectedOutput = null)
+        true
+    }
 
     /** Immediate local fence before any review network/material work. No success is implied. */
     suspend fun suspendForReviewTools(owner: OwnerContext): Boolean = mutex.withLock {

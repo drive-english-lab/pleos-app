@@ -24,6 +24,7 @@ interface GleoProductRuntimeProvider { val gleoProduct: GleoProductRuntime? }
 
 object GleoProductActionParser {
     val functions = setOf("DRIVE_ENGLISH_PLAYBACK", "DRIVE_ENGLISH_ARTICLE_QUESTION", "DRIVE_ENGLISH_PRACTICE")
+    val pendingChoiceCommands=setOf("pending_original","pending_wait","pending_alternative")
     fun parse(packageName: String, incomingAction: String?, parameters: String?): GleoProductAction? = try {
         val name = incomingAction?.removePrefix("$packageName.")
         require(name in functions && parameters != null && parameters.toByteArray(Charsets.UTF_8).size <= 16_384)
@@ -52,14 +53,16 @@ object GleoProductActionParser {
         require(values.keys.all { it in allowed })
         when (name) {
             "DRIVE_ENGLISH_PLAYBACK" -> {
-                require(values["command"] in setOf("start", "pause", "resume", "next", "stop", "change_format", "listen_only_today", "default_interaction"))
+                require(values["command"] in setOf("start", "pause", "resume", "next", "stop", "change_format", "listen_only_today", "default_interaction")+pendingChoiceCommands)
                 require(values["mode"] == null || values["mode"] in setOf("original_full", "briefing"))
                 require(values["command"] != "change_format" || values["mode"] != null)
+                if(values["command"] in pendingChoiceCommands)require(values.keys==setOf("command"))
             }
             "DRIVE_ENGLISH_ARTICLE_QUESTION" -> require(values["questionText"] != null)
             else -> {
-                require(values["command"] in setOf("start", "answer", "hint", "explain_question", "explain_facts", "sentence_starter", "partial_correction", "complete_example", "retry", "finish", "resume"))
+                require(values["command"] in setOf("start", "answer", "hint", "explain_question", "explain_facts", "sentence_starter", "partial_correction", "complete_example", "retry", "review_assessment", "read_assessment", "finish", "resume") + GleoLearningPreferenceCommand.wires)
                 require(values["command"] != "answer" || values["utteranceText"] != null)
+                if(values["command"] in GleoLearningPreferenceCommand.wires)require(values.keys==setOf("command"))
             }
         }
         GleoProductAction(requireNotNull(name), values.toMap())

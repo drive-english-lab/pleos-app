@@ -34,7 +34,7 @@ sealed interface ListeningResult {
 
 /** Foreground transaction client. Data receipts never start audio or mark media as played. */
 class ListeningRepository internal constructor(private val api: LearningApi, private val dao: LearningDao,
-    contracts: LearningContractJson, private val isCurrent: suspend (OwnerContext) -> Boolean,
+    private val contracts: LearningContractJson, private val isCurrent: suspend (OwnerContext) -> Boolean,
     private val transition: ListeningTransitionPort = ListeningTransitionPort { false }) {
     constructor(context: Context, api: LearningApi, database: LearningDatabase, isCurrent: suspend (OwnerContext) -> Boolean,
         transition: ListeningTransitionPort = ListeningTransitionPort { false }) :
@@ -210,6 +210,7 @@ class ListeningRepository internal constructor(private val api: LearningApi, pri
             val frozen = frozenRequest(scope.owner,operationId,"format_change_request",learningJson.encodeToJsonElement(WirePersonalFormatChangeRequest.serializer(),candidate))
             learningJson.decodeFromJsonElement(WirePersonalFormatChangeRequest.serializer(),frozen)
         }
+        if(previous!=null)reaffirmFormatReceipt(scope,original,request,targetMode,operationId)?.let{return@mutate it}
         if (request.profileContext != scope.owner.profileWire() || request.streamId != original.streamId.toString() ||
             request.expectedHeadSelectionId != head.selectionId || request.sourceSelectionId != source.selectionId ||
             request.sourceCheckpointId != point.checkpointId || request.targetListeningMode != LearningJson.wire(targetMode))
@@ -273,19 +274,62 @@ class ListeningRepository internal constructor(private val api: LearningApi, pri
 
     suspend fun selectResume(scope: LearningCallScope, operationId: UUID = UUID.randomUUID()): ListeningResult = mutate(scope,operationId) { original ->
         val checkpoint = original.checkpoint ?: return@mutate ListeningResult.Failed(operationId,"NO_CHECKPOINT")
-        val synced = journal.flushAll(scope)
-        if (synced is LearningReply.Failed) return@mutate ListeningResult.Failed(operationId,synced.code)
-        val request = WirePersonalResumeSelection("5",operationId.toString(),scope.owner.profileWire(),original.resumeVersion,WirePersonalResumeRef("listening",checkpoint.recordId))
-        val frozen = frozenRequest(scope.owner,operationId,"resume_request",learningJson.encodeToJsonElement(WirePersonalResumeSelection.serializer(),request))
-        when (val reply = api.selectActiveResume(scope,learningJson.decodeFromJsonElement(WirePersonalResumeSelection.serializer(),frozen))) {
+        val saved=savedRequest(scope.owner,operationId,"resume_request")
+        val request=if(saved!=null)learningJson.decodeFromJsonElement(WirePersonalResumeSelection.serializer(),saved) else {
+            val synced = journal.flushAll(scope)
+            if (synced is LearningReply.Failed) return@mutate ListeningResult.Failed(operationId,synced.code)
+            val current=when(val profile=api.readProfile(scope)) {
+                is LearningReply.Failed->return@mutate ListeningResult.Failed(operationId,profile.code)
+                is LearningReply.Stored->profile.value
+            }
+            if(current.profileContext!=scope.owner.profileWire() || !stillCurrent(original,operationId))return@mutate ListeningResult.Superseded
+            val candidate=WirePersonalResumeSelection("5",operationId.toString(),scope.owner.profileWire(),current.resumeVersion,WirePersonalResumeRef("listening",checkpoint.recordId))
+            learningJson.decodeFromJsonElement(WirePersonalResumeSelection.serializer(),frozenRequest(scope.owner,operationId,"resume_request",
+                learningJson.encodeToJsonElement(WirePersonalResumeSelection.serializer(),candidate)))
+        }
+        if(request.operationId!=operationId.toString() || request.profileContext!=scope.owner.profileWire() || request.activeResume!=WirePersonalResumeRef("listening",checkpoint.recordId))
+            return@mutate ListeningResult.Superseded
+        if(!localOwnerCurrent(scope.owner) || !stillCurrent(original,operationId))return@mutate ListeningResult.Superseded
+        when (val reply = api.selectActiveResume(scope,request)) {
             is LearningReply.Failed -> ListeningResult.Failed(operationId,reply.code)
             is LearningReply.Stored -> {
-                if (reply.value.activeResume != request.activeResume || reply.value.resumeVersion <= original.resumeVersion)
+                if (reply.value.profileContext!=request.profileContext || reply.value.activeResume != request.activeResume || reply.value.resumeVersion <= request.expectedResumeVersion)
                     return@mutate ListeningResult.Failed(operationId,"INVALID_RESPONSE")
                 saveReceipt(scope.owner,operationId,"resume_receipt",learningJson.encodeToJsonElement(WirePersonalProfileView.serializer(),reply.value))
                 apply(original,original.copy(resumeVersion = reply.value.resumeVersion),operationId)
             }
         }
+    }
+
+    /** A format ACK already attached as B is enough to resume the same operation's next step.
+     * It never chooses B again, restores A, advances a cursor, or accepts an unrelated current C.
+     */
+    private suspend fun reaffirmFormatReceipt(scope:LearningCallScope,original:ListeningFrame,request:WirePersonalFormatChangeRequest,
+        mode:ListeningMode,operationId:UUID):ListeningResult? {
+        val row=dao.record(scope.owner.profileId.toString(),scope.owner.privacyEpoch,stableRecordId("receipt:$operationId").toString())?:return null
+        if(row.kind!="format_change_receipt" || row.payloadSchemaVersion!=5)return ListeningResult.Failed(operationId,"INVALID_LOCAL_STATE")
+        val value=try {
+            val element=contracts.parse(row.payloadJson)
+            contracts.validate("personal-data.openapi.json",contracts.schema("personal-data.openapi.json","#/components/schemas/FormatChangeRequest"),
+                learningJson.encodeToJsonElement(WirePersonalFormatChangeRequest.serializer(),request))
+            contracts.validate("personal-data.openapi.json",contracts.schema("personal-data.openapi.json","#/components/schemas/FormatChangeResponse"),element)
+            learningJson.decodeFromJsonElement(WirePersonalFormatChangeResponse.serializer(),element)
+        }catch(error:CancellationException){throw error}
+         catch(_:Exception){return ListeningResult.Failed(operationId,"INVALID_LOCAL_STATE")}
+        val selected=value.selection;val point=value.checkpoint
+        if(request.operationId!=operationId.toString() || request.profileContext!=scope.owner.profileWire() || request.targetListeningMode!=LearningJson.wire(mode) ||
+            value.operationId!=request.operationId || value.profileContext!=request.profileContext || value.streamId!=request.streamId ||
+            value.streamVersion<=request.expectedStreamVersion || selected.previousSelectionId!=request.expectedHeadSelectionId ||
+            selected.formatChangeSource?.selectionId!=request.sourceSelectionId || selected.formatChangeSource.checkpointId!=request.sourceCheckpointId ||
+            selected.contentRef.listeningMode!=request.targetListeningMode || point.recordId!=request.checkpointId ||
+            point.payload.selectionId!=selected.selectionId || point.payload.contentRef!=selected.contentRef || point.payload.streamId!=request.streamId)
+            return ListeningResult.Failed(operationId,"INVALID_LOCAL_STATE")
+        if(original.selection!=selected || original.headSelection!=selected || original.checkpoint!=point || original.streamVersion!=value.streamVersion ||
+            original.streamId.toString()!=value.streamId)return null
+        val owner=dao.currentOwner()
+        if(owner==null || owner.profileId!=scope.owner.profileId.toString() || owner.privacyEpoch!=scope.owner.privacyEpoch || owner.revision!=scope.owner.revision ||
+            owner.status !in setOf("active","provisional") || !stillCurrent(original,operationId))return ListeningResult.Superseded
+        return ListeningResult.Ready(original)
     }
 
     /** Rebind stored business data to the same verified local owner; never restore live grants. */
@@ -362,6 +406,9 @@ class ListeningRepository internal constructor(private val api: LearningApi, pri
     }
     private suspend fun saveReceipt(owner: OwnerContext, id: UUID, kind: String, value: JsonElement) =
         dao.saveRead(owner,readRecord(owner,stableRecordId("receipt:" + id),kind,value.toString(),1))
+    private suspend fun localOwnerCurrent(expected:OwnerContext):Boolean=dao.currentOwner()?.let {
+        it.profileId==expected.profileId.toString() && it.privacyEpoch==expected.privacyEpoch && it.revision==expected.revision && it.status in setOf("active","provisional")
+    }==true
     private suspend fun stillCurrent(original: ListeningFrame, operationId: UUID): Boolean = isCurrent(original.owner) && lane.withLock { frame == original && pending == operationId }
     private suspend fun apply(original: ListeningFrame, value: ListeningFrame, operationId: UUID): ListeningResult {
         if (!isCurrent(original.owner)) return ListeningResult.Superseded

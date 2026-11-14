@@ -34,6 +34,8 @@ data class LocalSource6Record(val profileId:String,val privacyEpoch:Long,val kin
 abstract class ReviewDao {
     @Query("SELECT * FROM source6_record WHERE profileId=:profile AND privacyEpoch=:epoch AND kind=:kind AND recordId=:id")
     abstract suspend fun source6Record(profile:String,epoch:Long,kind:String,id:String):LocalSource6Record?
+    @Query("SELECT * FROM source6_record WHERE profileId=:profile AND privacyEpoch=:epoch AND kind=:kind")
+    abstract suspend fun source6Records(profile:String,epoch:Long,kind:String):List<LocalSource6Record>
     @Insert(onConflict=OnConflictStrategy.ABORT) protected abstract suspend fun insertSource6(value:LocalSource6Record)
     @Query("UPDATE source6_record SET version=:version,payloadJson=:json,payloadHash=:hash WHERE profileId=:profile AND privacyEpoch=:epoch AND kind=:kind AND recordId=:id AND version=:previous")
     protected abstract suspend fun advanceSource6(profile:String,epoch:Long,kind:String,id:String,previous:Long,version:Long,json:String,hash:String):Int
@@ -70,7 +72,10 @@ abstract class ReviewDao {
     protected abstract suspend fun advanceWaiter(id: String, previous: Long, version: Long, response: String): Int
     @Query("UPDATE preparation_waiter SET cancelled=1 WHERE requestId=:id") protected abstract suspend fun cancelWaiterRow(id: String)
     @Query("SELECT * FROM settings_draft WHERE profileId=:profile AND privacyEpoch=:epoch") abstract suspend fun draft(profile: String, epoch: Long): LocalSettingsDraft?
+    @Query("SELECT * FROM settings_draft WHERE profileId=:profile ORDER BY ownerRevision DESC, revision DESC, privacyEpoch DESC")
+    protected abstract suspend fun profileDrafts(profile:String):List<LocalSettingsDraft>
     @Insert(onConflict = OnConflictStrategy.ABORT) protected abstract suspend fun insertDraft(value: LocalSettingsDraft)
+    @Update protected abstract suspend fun replaceOwnerDraft(value:LocalSettingsDraft):Int
     @Query("UPDATE settings_draft SET revision=:revision,draftJson=:json,previewToken=:preview,savedOperationId=:saved WHERE profileId=:profile AND privacyEpoch=:epoch AND revision=:previous")
     protected abstract suspend fun advanceDraft(profile: String, epoch: Long, previous: Long, revision: Long, json: String, preview: String?, saved: String?): Int
     @Query("DELETE FROM settings_draft WHERE profileId=:profile AND privacyEpoch=:epoch AND revision=:revision")
@@ -137,6 +142,31 @@ abstract class ReviewDao {
         require(LearningJson.hash(old.payloadJson)==old.payloadHash)
         if(value.version==old.version){require(incrementalCanonical(learningJson.parseToJsonElement(old.payloadJson))==normalized.payloadJson);return false}
         require(advanceSource6(value.profileId,value.privacyEpoch,value.kind,value.recordId,old.version,value.version,normalized.payloadJson,normalized.payloadHash)==1);return true
+    }
+    /** Read proof may be cached only while its original acknowledged format operation still exists. */
+    @Transaction open suspend fun isCurrentOwner(expected:OwnerContext):Boolean =
+        try { requireOwner(expected); true } catch(_:IllegalArgumentException) { false }
+
+    @Transaction open suspend fun storeConfirmedFormatHead(owner:OwnerContext,operationId:String,requestHash:String,
+        receiptHash:String,value:LocalSource6Record):Boolean {
+        requireOwner(owner)
+        val original=requireNotNull(operation(operationId))
+        require(owned(original,owner) && original.kind=="source6_format" && original.status=="acknowledged" &&
+            original.payloadHash==requestHash && LearningJson.hash(original.payloadJson)==requestHash &&
+            original.receiptJson?.let { LearningJson.hash(it) }==receiptHash &&
+            value.kind=="confirmed_auto_format_head" && value.recordId==operationId && value.version==1L)
+        return storeSource6(owner,value)
+    }
+    /** Legacy originals stay schema5 and must still exist inside this same owner transaction. */
+    @Transaction open suspend fun storeConfirmedLegacyFormatHead(owner:OwnerContext,operationId:String,legacy:LearningDao,
+        requestJson:String,receiptJson:String,value:LocalSource6Record):Boolean {
+        requireOwner(owner)
+        val request=requireNotNull(legacy.record(owner.profileId.toString(),owner.privacyEpoch,stableRecordId("request:$operationId").toString()))
+        val receipt=requireNotNull(legacy.record(owner.profileId.toString(),owner.privacyEpoch,stableRecordId("receipt:$operationId").toString()))
+        require(request.kind=="format_change_request" && receipt.kind=="format_change_receipt" && request.payloadSchemaVersion==5 && receipt.payloadSchemaVersion==5 &&
+            request.version==1L && receipt.version==1L && request.payloadJson==requestJson && receipt.payloadJson==receiptJson &&
+            value.kind=="confirmed_auto_format_head" && value.recordId==operationId && value.version==1L)
+        return storeSource6(owner,value)
     }
     @Transaction open suspend fun storeContext(owner: OwnerContext, value: LocalReviewContext): Boolean {
         requireOwner(owner); require(value.profileId == owner.profileId.toString() && value.privacyEpoch == owner.privacyEpoch && value.version >= 1)
@@ -211,6 +241,30 @@ abstract class ReviewDao {
         return value.copy(revision=previous+1,draftJson=json,previewToken=preview,savedOperationId=saved)
     }
     @Transaction open suspend fun closeDraft(owner:OwnerContext,revision:Long){requireOwner(owner);require(deleteDraft(owner.profileId.toString(),owner.privacyEpoch,revision)==1)}
+    /** Ordinary settings survive a learning epoch change; they are never copied to a different profile. */
+    @Transaction open suspend fun ownerDraftRows(owner:OwnerContext):List<LocalSettingsDraft> {
+        requireOwner(owner);return profileDrafts(owner.profileId.toString())
+    }
+    @Transaction open suspend fun writeOwnerDraft(owner:OwnerContext,expected:LocalSettingsDraft?,value:LocalSettingsDraft,source:LocalSettingsDraft?=null):LocalSettingsDraft {
+        requireOwner(owner)
+        require(value.profileId==owner.profileId.toString() && value.privacyEpoch==owner.privacyEpoch && value.ownerRevision==owner.revision)
+        require(value.previewToken==null && value.savedOperationId==null && value.revision>=1)
+        require(draft(value.profileId,value.privacyEpoch)==expected) { "Settings draft changed." }
+        if(source!=null) {
+            require(source.profileId==value.profileId && draft(source.profileId,source.privacyEpoch)==source) { "Preserved settings draft changed." }
+        }
+        if(expected==null)insertDraft(value) else {
+            require(value.revision>expected.revision);require(replaceOwnerDraft(value)==1)
+        }
+        return value
+    }
+    @Transaction open suspend fun discardOwnerDraftRows(owner:OwnerContext,expectedRows:List<LocalSettingsDraft>,ownedEpochs:Set<Long>):Boolean {
+        requireOwner(owner)
+        require(profileDrafts(owner.profileId.toString())==expectedRows) { "Settings draft changed." }
+        val rows=expectedRows.filter{it.privacyEpoch in ownedEpochs}
+        rows.forEach{require(deleteDraft(it.profileId,it.privacyEpoch,it.revision)==1)}
+        return rows.isNotEmpty()
+    }
     /** Explicit local history purge; the authoritative server deletion receipt is a separate gate. */
     @Transaction open suspend fun purgeProfile(profile:String){clearContexts(profile);clearOperations(profile);clearObservations(profile);clearFresh(profile);clearWaiters(profile);clearDrafts(profile);clearSource6(profile)}
     /** Keep immutable bytes until server confirmation; isolated requests never re-enter pending. */

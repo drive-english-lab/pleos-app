@@ -9,6 +9,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import io.github.driveenglishlab.pleos.data.wire.*
+import io.github.driveenglishlab.pleos.domain.IdentityRecoveryState
 import io.github.driveenglishlab.pleos.ui.*
 import io.github.driveenglishlab.pleos.ui.components.*
 import java.util.UUID
@@ -33,6 +34,7 @@ fun ProfileScreen(state: ProductScreenState, send: (UiIntent) -> Unit) {
     if (history == null) {
         ProductStatus(if (state.historyStatus == LoadStatus.FAILED) "기록을 불러오지 못했어요" else "학습 기록을 확인하고 있어요",
             "기존 기록과 이어할 학습은 유지돼요", loading = state.historyStatus == LoadStatus.LOADING) {
+            IdentityRecoveryNotice(state)
             ProductButton("기록 다시 확인", { send(UiIntent.ReadHistory(state.origin)) })
         }
         return
@@ -41,6 +43,7 @@ fun ProfileScreen(state: ProductScreenState, send: (UiIntent) -> Unit) {
     val attempts = history.records.filterIsInstance<WirePersonalReadAttempt>()
     Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(24.dp)) {
         Text("내 학습 기록", style = MaterialTheme.typography.headlineMedium)
+        IdentityRecoveryNotice(state)
         Text("로그인 없이 함께 쓰면 같은 기록으로 남아요. 계정 전환은 주차 중에 할 수 있어요", style = MaterialTheme.typography.bodySmall)
         LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(24.dp)) {
             item { Text("내가 말할 수 있게 된 내용", style = MaterialTheme.typography.titleLarge) }
@@ -50,9 +53,14 @@ fun ProfileScreen(state: ProductScreenState, send: (UiIntent) -> Unit) {
             items(records.visibleItems, key = { "speaking/${it.lessonId}" }) { record ->
                 Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
                     Text(record.articleTitle, style = MaterialTheme.typography.titleMedium)
-                    Text(record.meaningSummary, style = MaterialTheme.typography.bodyMedium)
+                    val lessonId = UUID.fromString(record.lessonId)
+                    val attemptId = UUID.fromString(record.representative.attemptId)
+                    val current = matchingAssessment(state, lessonId, attemptId)
+                    if (current?.displayReady == true && current.contentSuccess == true && current.reviewStatus != "corrected")
+                        Text(record.meaningSummary, style = MaterialTheme.typography.bodyMedium)
+                    AssessmentReviewPanel(state, lessonId, attemptId, "record", send, showFeedback = current?.reviewStatus == "corrected", showActions = false)
                     Text(practiceDate(record.representative.practiceTime), style = MaterialTheme.typography.bodySmall)
-                    if (record.representative.formStatus == "unknown") Text("내용을 말해낸 기록 · 원래 문장 형태는 미확인", style = MaterialTheme.typography.bodySmall)
+                    if (record.representative.formStatus == "unknown") Text("원래 답변의 문장 형태는 미확인이에요", style = MaterialTheme.typography.bodySmall)
                     ProductButton("내 말 살펴보기", { send(UiIntent.ShowSpeakingRecord(state.origin, UUID.fromString(record.lessonId))) }, secondary = true)
                 }
             }
@@ -72,7 +80,10 @@ fun ProfileScreen(state: ProductScreenState, send: (UiIntent) -> Unit) {
                         progress.phase == "completed" -> "연습을 마쳤어요"
                         else -> "이어서 할 연습이 있어요"
                     }, style = MaterialTheme.typography.bodyMedium)
-                    if (progress.contentSuccess == true) Text("기사의 핵심을 담아 말한 기록", style = MaterialTheme.typography.bodySmall)
+                    val latestAttempt = progress.pendingFeedbackAttemptId ?: progress.pendingAttemptId ?: progress.validRetryAttemptId ?: progress.validFirstAttemptId
+                    latestAttempt?.let { attemptId ->
+                        AssessmentReviewPanel(state, UUID.fromString(lesson.lessonId), UUID.fromString(attemptId), "record", send)
+                    }
                     Text(when (lesson.priorExampleExposure.status) {
                         "exposed" -> "이 질문의 예문을 이전에 제공받았어요"
                         "unexposed_verified" -> "회차 시작 전 예문 미제공이 확인됐어요"
@@ -107,27 +118,29 @@ private fun practiceDate(value: WireProgressOriginalPracticeTime): String = when
 @Composable
 private fun SpeakingRecordDetail(state: ProductScreenState, record: WireProgressSpeakingRecordDetail, send: (UiIntent) -> Unit) {
     val id = UUID.fromString(record.lessonId)
+    val representativeId = UUID.fromString(record.representative.attemptId)
+    val representative = matchingAssessment(state, id, representativeId)
+    val eligible = representative?.displayReady == true && representative.contentSuccess == true
+    val latestId = record.latestResult.attemptId?.let(UUID::fromString)
     Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(24.dp)) {
         LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(24.dp)) {
             item { Text(record.articleTitle, style = MaterialTheme.typography.titleLarge) }
             item { Text(record.questionText, style = MaterialTheme.typography.bodyMedium) }
             item { Text(practiceDate(record.representative.practiceTime), style = MaterialTheme.typography.bodySmall) }
-            item {
+            item { AssessmentReviewPanel(state, id, representativeId, "record", send, showFeedback = true) }
+            if (eligible && representative?.reviewStatus != "corrected") item {
                 Text("내가 설명한 내용", style = MaterialTheme.typography.titleMedium)
                 Text(record.meaningSummary, style = MaterialTheme.typography.bodyMedium)
             }
-            record.representativeQuote?.let { quote -> item {
-                Text("그때 내가 한 말", style = MaterialTheme.typography.titleMedium)
-                Text(quote.text, style = MaterialTheme.typography.bodyLarge)
-            } } ?: item { Text("내용을 말해낸 기록은 있어요. 원래 문장 형태는 확인되지 않아 인용문을 표시하지 않아요", style = MaterialTheme.typography.bodySmall) }
-            item { Text("최근 보완 결과", style = MaterialTheme.typography.titleMedium)
-                Text(when(record.latestResult.expressionStatus) {
-                    "improved" -> "다시 말한 답변에 보완할 점이 반영됐어요"
-                    "needs_work" -> "아직 다듬어 볼 표현이 있어요"
-                    "not_evaluated" -> "표현 보완 결과는 평가하지 않았어요"
-                    "no_open_correction" -> "확인된 표현에서 추가 교정은 제안하지 않았어요"
-                    else -> "표현 보완 여부를 확인하지 못했어요"
-                }, style = MaterialTheme.typography.bodyMedium)
+            if (eligible && record.representative.formStatus == "confirmed") {
+                record.representativeQuote?.takeIf { it.attemptId == record.representative.attemptId }?.let { quote -> item {
+                    Text("그때 내가 한 말", style = MaterialTheme.typography.titleMedium)
+                    Text(quote.text, style = MaterialTheme.typography.bodyLarge)
+                } } ?: item { Text("확인된 원래 문장을 표시할 수 없어요", style = MaterialTheme.typography.bodySmall) }
+            }
+            if (latestId != null && latestId != representativeId) item {
+                Text("최근 답변 판정", style = MaterialTheme.typography.titleMedium)
+                AssessmentReviewPanel(state, id, latestId, "record", send, showFeedback = true)
             }
             item { Text("받았던 도움", style = MaterialTheme.typography.titleMedium)
                 if (record.assistance.supportStatus == "unknown") Text("도움 기록 일부를 확인하지 못했어요", style = MaterialTheme.typography.bodySmall)
@@ -147,13 +160,23 @@ private fun SpeakingRecordDetail(state: ProductScreenState, record: WireProgress
                 }, style = MaterialTheme.typography.bodySmall)
             }
             record.sourceAccess.reasonKo?.let { reason -> item { ProductNotice(reason) } }
-            if (record.sourceAccess.originalFeedback == "available") {
-                val feedback = record.retryAttempt?.feedbackAttemptId ?: record.firstAttempt?.feedbackAttemptId
-                if (feedback != null) item { ProductButton("원래 피드백 보기", { send(UiIntent.ShowOriginalFeedback(state.origin, id, UUID.fromString(feedback))) }, secondary = true) }
-            }
             item { ProductButton("같은 질문으로 새 연습", { send(UiIntent.RepracticeRecord(state.origin, id)) }, enabled = record.sourceAccess.newPractice == "available") }
             item { ProductButton(if (record.visibility.hidden) "기록 숨김 해제" else "이 기록 숨기기", { send(UiIntent.HideSpeakingRecord(state.origin, id, !record.visibility.hidden)) }, secondary = true) }
         }
         ProductButton("기록 목록으로", { send(UiIntent.CloseSpeakingRecord(state.origin)) }, secondary = true)
+    }
+}
+
+@Composable
+internal fun IdentityRecoveryNotice(state: ProductScreenState, allowUnbound: Boolean = false) {
+    state.identityRecovery?.takeIf { it.owner == null || it.owner == state.session.owner ||
+        (allowUnbound && state.session.owner == null && it.state != IdentityRecoveryState.RESTORED) }?.let { recovery ->
+        ProductNotice(when (recovery.state) {
+            IdentityRecoveryState.RESTORED -> "서버에 저장된 기록이 연결됐어요. 다른 기기에서 아직 전송하지 않은 기록은 포함되지 않을 수 있어요"
+            IdentityRecoveryState.SYNC_PENDING -> "학습 기록의 동기화를 확인하고 있어요"
+            IdentityRecoveryState.RECOVERY_RETRYABLE -> "같은 기록의 연결을 다시 시도하고 있어요"
+            IdentityRecoveryState.IDENTITY_UNAVAILABLE -> "이 기기의 식별 정보를 확인할 수 없어요. 이전 미로그인 기록의 복구는 보장되지 않아요"
+            IdentityRecoveryState.ACCOUNT_SIGN_IN_REQUIRED -> "기존 계정의 기록을 연결하려면 로그인이 필요해요"
+        })
     }
 }

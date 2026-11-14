@@ -51,6 +51,8 @@ abstract class AiLearningDao {
     protected abstract suspend fun putCache(value: LocalAiLearningCache)
     @Query("SELECT * FROM ai_learning_journal WHERE profileId = :profile AND privacyEpoch = :epoch AND isolated = 0 AND state IN ('pending', 'sending', 'conflict') ORDER BY rowid")
     abstract suspend fun unsettled(profile: String, epoch: Long): List<LocalAiLearningJournal>
+    @Query("SELECT * FROM ai_learning_journal WHERE profileId = :profile AND privacyEpoch = :epoch AND kind = 'assessment_review_request' AND isolated = 0 ORDER BY rowid")
+    abstract suspend fun assessmentRequests(profile: String, epoch: Long): List<LocalAiLearningJournal>
     @Query("SELECT * FROM ai_learning_journal WHERE operationId = :id")
     abstract suspend fun operation(id: String): LocalAiLearningJournal?
     @Insert(onConflict = OnConflictStrategy.ABORT)
@@ -140,6 +142,46 @@ abstract class AiLearningDao {
         val previous = cache(value.profileId, value.privacyEpoch, value.kind, value.cacheKey)
         if (previous != null && previous.revision > value.revision) return false
         if (previous == value) return false
+        putCache(value)
+        return true
+    }
+
+    /** Mutable review progress can advance while the effective assessment revision stays fixed. */
+    @Transaction
+    open suspend fun saveAssessmentProjection(scope: OwnerContext, value: LocalAiLearningCache): Boolean {
+        authorize(scope)
+        require(value.profileId == scope.profileId.toString() && value.privacyEpoch == scope.privacyEpoch &&
+            value.kind == "assessment_review" && value.revision >= 1)
+        val next = learningJson.parseToJsonElement(value.payloadJson).jsonObject
+        val nextEffective = next.getValue("effective_assessment").jsonObject
+        require(next.getValue("profile_context").jsonObject.let {
+            it["profile_id"] == JsonPrimitive(value.profileId) && it["privacy_epoch"] == JsonPrimitive(value.privacyEpoch)
+        })
+        require(nextEffective["attempt_id"] == JsonPrimitive(value.cacheKey) &&
+            nextEffective.getValue("projection_revision").jsonPrimitive.long == value.revision)
+        val previous = cache(value.profileId, value.privacyEpoch, value.kind, value.cacheKey)
+        if (previous != null) {
+            if (value.revision < previous.revision) return false
+            val old = learningJson.parseToJsonElement(previous.payloadJson).jsonObject
+            val oldEffective = old.getValue("effective_assessment").jsonObject
+            for (key in listOf("lesson_id", "attempt_id", "original_feedback_hash")) require(oldEffective[key] == nextEffective[key])
+            val oldAssessment = oldEffective.getValue("assessment_revision").jsonPrimitive.long
+            val newAssessment = nextEffective.getValue("assessment_revision").jsonPrimitive.long
+            require(newAssessment >= oldAssessment)
+            if (newAssessment == oldAssessment) require(oldEffective["basis_assessment_hash"] == nextEffective["basis_assessment_hash"])
+            if (value.revision == previous.revision) require(oldEffective == nextEffective)
+            val oldReview = old["review"]?.takeUnless { it == JsonNull }?.jsonObject
+            val newReview = next["review"]?.takeUnless { it == JsonNull }?.jsonObject
+            if (oldReview != null && newReview != null && oldReview["review_id"] == newReview["review_id"]) {
+                for (key in listOf("lesson_id", "attempt_id", "source_ref", "target_assessment_revision", "target_assessment_hash", "basis_hash", "requested_at"))
+                    require(oldReview[key] == newReview[key])
+                val oldVersion = oldReview.getValue("version").jsonPrimitive.long
+                val newVersion = newReview.getValue("version").jsonPrimitive.long
+                if (newVersion < oldVersion) return false
+                if (newVersion == oldVersion) require(oldReview == newReview)
+            }
+            if (old == next) return false
+        }
         putCache(value)
         return true
     }

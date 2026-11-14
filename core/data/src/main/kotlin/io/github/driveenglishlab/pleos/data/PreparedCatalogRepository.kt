@@ -16,6 +16,13 @@ data class SourcePublicScript(val contentRef:WireSource6ContentRef6,val componen
     val text:String,val textHash:String,val language:String,val manifest:WireSource6SegmentManifest?) {
     override fun toString()="SourcePublicScript(content=redacted)"
 }
+/** Read-only proof for an unselected pending original. Contains no text or selection identity. */
+data class PendingOriginalMainEvidence(val articleId:UUID,val sourceSnapshotId:UUID,val sourceHash:String,
+    val componentId:UUID,val dependencyKey:String,val payloadHash:String,val rightsRevision:String,
+    val scriptId:UUID,val scriptHash:String,val manifestId:UUID,val manifestHash:String,val segmentsVersion:Long,
+    val language:String,val validationRevision:String) {
+    override fun toString()="PendingOriginalMainEvidence(content=redacted)"
+}
 data class PreparedSourceBinding(val content:PreparedContentRef,val selectedBand:String,val followupComponentId:UUID?,val practiceRef:PreparedPracticeRef?)
 private class PreparedContentUnavailable(val code:String):Exception()
 
@@ -35,6 +42,31 @@ class PreparedCatalogRepository internal constructor(private val codecs:Incremen
         api.catalog(scope,topics,limit,cursor)
     suspend fun readPreparedMain(scope:LearningCallScope,ref:PreparedContentRef):CatalogRead<SourcePublicScript> = main(scope,ref.source6Wire())
     suspend fun readPreparedFollowup(scope:LearningCallScope,ref:PreparedContentRef,kind:String):CatalogRead<SourcePublicScript> = followup(scope,ref.source6Wire(),kind)
+    /** Inspect B through the same rights-filtered public component view before any selection exists.
+     * The caller retains its original app/Gleo deadline and actual TTS/vehicle gate.
+     * No content ref, generation, binding, checkpoint, lesson or output is introduced.
+     */
+    suspend fun inspectPendingOriginal(scope:LearningCallScope,target:WireReview3PendingTarget3):CatalogRead<PendingOriginalMainEvidence> = readContent(scope){
+        codecs.encode("review3","PendingTarget3",target,WireReview3PendingTarget3.serializer())
+        val expected=target.originalComponent
+        if(target.originalAvailability!="ready" || expected==null || expected.status!="ready" || expected.kind!="main_original")
+            throw PreparedContentUnavailable("ORIGINAL_NOT_READY")
+        val id=expected.componentId?:throw PreparedContentUnavailable("ORIGINAL_NOT_READY")
+        val payloadHash=expected.payloadHash?:throw PreparedContentUnavailable("ORIGINAL_NOT_READY")
+        val validation=expected.validationRevision?:throw PreparedContentUnavailable("ORIGINAL_NOT_READY")
+        // The view rechecks listable source, current rights, independent validation
+        // and ready dependencies. An absent/revoked B never falls back to A/latest.
+        val row=component(id,target.articleId,target.sourceSnapshotId,target.sourceHash)
+        require(row.text("dependency_key")==expected.key && row.text("payload_hash")==payloadHash && row.text("kind")=="main_original")
+        val payload=row.getValue("payload").jsonObject
+        val text=payload.text("script_text",200000);val hash=payload.text("text_hash");val scriptId=payload.text("script_id")
+        require(payload.text("language")=="en" && LearningJson.hash(text)==hash && hash==target.sourceHash)
+        payload["format"]?.takeUnless{it===JsonNull}?.let{require(it==JsonPrimitive("original_full"))}
+        val segments=manifest(payload,text,scriptId,hash);require(segments.language=="en")
+        PendingOriginalMainEvidence(UUID.fromString(target.articleId),UUID.fromString(target.sourceSnapshotId),target.sourceHash,
+            row.uuid("component_id"),row.text("dependency_key"),row.text("payload_hash"),row.text("rights_revision"),UUID.fromString(scriptId),hash,
+            UUID.fromString(segments.manifestId),segments.manifestHash,segments.segmentsVersion,"en",validation)
+    }
     suspend fun readCurrentBinding(scope:LearningCallScope,ref:PreparedContentRef):CatalogRead<PreparedSourceBinding> = readContent(scope){
         val row=binding(scope,ref.source6Wire())
         val followup=row.getValue("followup_component_id").takeUnless{it===JsonNull}?.jsonPrimitive?.content?.let(UUID::fromString)

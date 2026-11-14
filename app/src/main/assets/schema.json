@@ -8,7 +8,7 @@
       "type": "function",
       "function": {
         "name": "DRIVE_ENGLISH_PLAYBACK",
-        "description": "Control English news listening, change the current article format, or choose listening-only interaction for today.",
+        "description": "Control news listening or explicitly choose the pending original, a different ready article, or keep waiting. pending_original, pending_alternative and pending_wait use only command, without mode or articleTitle, and each requires separately verified project schema approval and actual current pending input. They do not reformat the current article or apply global settings.",
         "parameters": {
           "type": "object",
           "properties": {
@@ -23,7 +23,10 @@
                 "stop",
                 "change_format",
                 "listen_only_today",
-                "default_interaction"
+                "default_interaction",
+                "pending_original",
+                "pending_wait",
+                "pending_alternative"
               ]
             },
             "articleTitle": {
@@ -74,13 +77,13 @@
       "type": "function",
       "function": {
         "name": "DRIVE_ENGLISH_PRACTICE",
-        "description": "Start or continue English speaking practice about a news article, submit an answer, request help, retry, or finish.",
+        "description": "Start or continue English speaking practice, review the original answer assessment, explicitly select a learning band for subsequent selections, or read/apply/keep/dismiss the current reference recommendation. New learning preference commands require separate actual project approval and verified current input; recommendation actions require exact actual reviewed delivery and explicit confirmation.",
         "parameters": {
           "type": "object",
           "properties": {
             "command": {
               "type": "string",
-              "description": "The explicit speaking practice action requested by the user.",
+              "description": "The exact explicit practice or learning preference action. A preference action uses only command, never utteranceText or articleTitle. It does not change the pinned article, current lesson, other settings drafts, or today listening-only choice.",
               "enum": [
                 "start",
                 "answer",
@@ -91,8 +94,17 @@
                 "partial_correction",
                 "complete_example",
                 "retry",
+                "review_assessment",
+                "read_assessment",
                 "finish",
-                "resume"
+                "resume",
+                "set_band_basic",
+                "set_band_intermediate",
+                "set_band_advanced",
+                "read_recommendation",
+                "apply_recommendation",
+                "keep_recommendation",
+                "dismiss_recommendation"
               ]
             },
             "utteranceText": {

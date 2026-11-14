@@ -29,8 +29,10 @@ class FeatureLifecycle @Inject constructor(private val database: LearningDatabas
         val profile=profileId.toString()
         database.progress().isolateLearning(profile);database.aiLearning().isolateLearning(profile)
         database.review().isolateLearning(profile);database.segments().isolate(profile)
+        database.serviceIntents().isolate(profile)
         database.progress().clearVisibleCache(profile);database.aiLearning().clearVisibleCache(profile)
         database.review().clearVisibleCache(profile);database.segments().clearVisibleState(profile)
+        database.serviceIntents().clearVisibleCatalog(profile)
     }
 
     /** Call within the same DB transaction as confirmed base-history deletion and epoch advance. */
@@ -46,6 +48,8 @@ class FeatureLifecycle @Inject constructor(private val database: LearningDatabas
         database.segments().deleteEpochState(profile, epoch)
         database.segments().deleteEpochJournal(profile, epoch)
         database.segments().deleteEpochCompletions(profile, epoch)
+        database.serviceIntents().deleteEpochIntents(profile, epoch)
+        database.serviceIntents().deleteEpochCatalog(profile, epoch)
     }
     /** A newer confirmed server generation also invalidates any older retained epochs.
      * Enumerate stored generations, never iterate an untrusted numeric epoch range.
@@ -54,7 +58,7 @@ class FeatureLifecycle @Inject constructor(private val database: LearningDatabas
         require(database.inTransaction());require(lastErasedEpoch>=0)
         val tables=listOf("speaking_records_cache","speaking_records_journal","ai_learning_cache","ai_learning_journal",
             "review_context","review_operation","review_observation","fresh_practice_intent","preparation_waiter","source6_record",
-            "segment_state","segment_journal","segment_completion")
+            "segment_state","segment_journal","segment_completion","playback_request_intent","catalog_view_page")
         val query=tables.joinToString(" UNION "){"SELECT privacyEpoch FROM $it WHERE profileId=? AND privacyEpoch<=?"}
         val args=tables.flatMap{listOf<Any>(profileId.toString(),lastErasedEpoch)}.toTypedArray()
         val epochs=linkedSetOf(lastErasedEpoch)
@@ -72,9 +76,11 @@ class FeatureLifecycle @Inject constructor(private val database: LearningDatabas
         database.aiLearning().isolateLearning(profile)
         database.review().isolateLearning(profile)
         database.segments().isolate(profile)
+        database.serviceIntents().isolate(profile)
         database.progress().clearVisibleCache(profile)
         database.aiLearning().clearVisibleCache(profile)
         database.review().clearVisibleCache(profile)
         database.segments().clearVisibleState(profile)
+        database.serviceIntents().clearVisibleCatalog(profile)
     }
 }

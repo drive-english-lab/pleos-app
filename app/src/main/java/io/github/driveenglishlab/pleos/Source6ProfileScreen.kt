@@ -30,7 +30,7 @@ fun Source6ProfileScreen(state: ProductScreenState, send: (UiIntent) -> Unit) {
     val history = state.source6History?.takeIf { owner != null && it.profile.profileContext.profileId == owner.profileId.toString() && it.profile.profileContext.privacyEpoch == owner.privacyEpoch }
     val records = state.source6SpeakingRecords.takeIf { owner != null && it.owner == owner } ?: Source6SpeakingRecordsState()
     if (owner == null) {
-        ProductStatus("기록을 연결하고 있어요", "사용자 확인이 끝나면 학습 기록을 볼 수 있어요", loading = true)
+        ProductStatus("기록을 연결하고 있어요", "사용자 확인이 끝나면 학습 기록을 볼 수 있어요", loading = true) { IdentityRecoveryNotice(state) }
         return
     }
     records.detail?.record?.let { detail -> Source6SpeakingDetail(state, records, detail, send); return }
@@ -44,6 +44,7 @@ fun Source6ProfileScreen(state: ProductScreenState, send: (UiIntent) -> Unit) {
     } }.toSet()
     Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(24.dp)) {
         Text("내 학습 기록", style = MaterialTheme.typography.headlineMedium)
+        IdentityRecoveryNotice(state)
         Text("로그인 없이 함께 쓰면 같은 기록으로 남아요. 계정 전환은 주차 중에 할 수 있어요", style = MaterialTheme.typography.bodySmall)
         LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(24.dp)) {
             item { Text("내가 말할 수 있게 된 내용", style = MaterialTheme.typography.titleLarge) }
@@ -55,7 +56,12 @@ fun Source6ProfileScreen(state: ProductScreenState, send: (UiIntent) -> Unit) {
             items(records.visibleItems, key = { "source6-speaking/${it.lessonId}" }) { record ->
                 Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
                     Text(record.articleTitle, style = MaterialTheme.typography.titleMedium)
-                    Text(record.meaningSummary, style = MaterialTheme.typography.bodyMedium)
+                    val lessonId = UUID.fromString(record.lessonId)
+                    val attemptId = UUID.fromString(record.representative.attemptId)
+                    val current = matchingAssessment(state, lessonId, attemptId)
+                    if (current?.displayReady == true && current.contentSuccess == true && current.reviewStatus != "corrected")
+                        Text(record.meaningSummary, style = MaterialTheme.typography.bodyMedium)
+                    AssessmentReviewPanel(state, lessonId, attemptId, "record", send, showFeedback = current?.reviewStatus == "corrected", showActions = false)
                     Text(source6PracticeDate(record.representative.practiceTime), style = MaterialTheme.typography.bodySmall)
                     Text(formLabel(record.representative.formStatus), style = MaterialTheme.typography.bodySmall)
                     ProductButton("내 말 살펴보기", { send(UiIntent.ShowSpeakingRecord(state.origin, UUID.fromString(record.lessonId))) }, secondary = true, enabled = state.canRead && !state.busy)
@@ -79,6 +85,10 @@ fun Source6ProfileScreen(state: ProductScreenState, send: (UiIntent) -> Unit) {
                         else -> "이어서 할 연습이 있어요"
                     }, style = MaterialTheme.typography.bodyMedium)
                     Text(summary?.let { source6PracticeDate(it.representative.practiceTime) } ?: "원래 연습일을 확인하지 못했어요", style = MaterialTheme.typography.bodySmall)
+                    val latestAttempt = progress.pendingFeedbackAttemptId ?: progress.pendingAttemptId ?: progress.validRetryAttemptId ?: progress.validFirstAttemptId
+                    latestAttempt?.let { attemptId ->
+                        AssessmentReviewPanel(state, UUID.fromString(lesson.lessonId), UUID.fromString(attemptId), "record", send)
+                    }
                     Text(exposureLabel(lesson.priorExampleExposure.status, prior = true), style = MaterialTheme.typography.bodySmall)
                     attempts.filter { it.payload.lessonId == lesson.lessonId }.forEach { attempt ->
                         Text(englishLabel(attempt.payload.englishAttemptStatus.name), style = MaterialTheme.typography.bodySmall)
@@ -113,25 +123,30 @@ fun Source6ProfileScreen(state: ProductScreenState, send: (UiIntent) -> Unit) {
 @Composable
 private fun Source6SpeakingDetail(state: ProductScreenState, records: Source6SpeakingRecordsState, record: WireSource6ProgressSpeakingRecordDetail, send: (UiIntent) -> Unit) {
     val id = UUID.fromString(record.lessonId)
-    val original = records.originalFeedback?.takeIf { record.sourceAccess.originalFeedback == "available" && it.lessonState.lessonId == record.lessonId && it.contentRef == record.contentRef }
+    val representativeId = UUID.fromString(record.representative.attemptId)
+    val representative = matchingAssessment(state, id, representativeId)
+    val eligible = representative?.displayReady == true && representative.contentSuccess == true
+    val latestId = record.latestResult.attemptId?.let(UUID::fromString)
     Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(24.dp)) {
         LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(24.dp)) {
             item { Text(record.articleTitle, style = MaterialTheme.typography.titleLarge) }
             item { Text(record.questionText, style = MaterialTheme.typography.bodyMedium) }
             item { Text(source6PracticeDate(record.representative.practiceTime), style = MaterialTheme.typography.bodySmall) }
-            item { Text("내가 설명한 내용", style = MaterialTheme.typography.titleMedium); Text(record.meaningSummary, style = MaterialTheme.typography.bodyMedium) }
-            record.representativeQuote?.let { quote -> item { Text("그때 내가 한 말", style = MaterialTheme.typography.titleMedium); Text(quote.text, style = MaterialTheme.typography.bodyLarge) } }
-                ?: item { Text("내용을 말해낸 기록은 있어요. 원래 문장 형태는 확인되지 않아 인용문을 표시하지 않아요", style = MaterialTheme.typography.bodySmall) }
+            item { AssessmentReviewPanel(state, id, representativeId, "record", send, showFeedback = true) }
+            if (eligible && representative?.reviewStatus != "corrected") item {
+                Text("내가 설명한 내용", style = MaterialTheme.typography.titleMedium)
+                Text(record.meaningSummary, style = MaterialTheme.typography.bodyMedium)
+            }
+            if (eligible && record.representative.formStatus == "confirmed") {
+                record.representativeQuote?.takeIf { it.attemptId == record.representative.attemptId }?.let { quote -> item {
+                    Text("그때 내가 한 말", style = MaterialTheme.typography.titleMedium)
+                    Text(quote.text, style = MaterialTheme.typography.bodyLarge)
+                } } ?: item { Text("확인된 원래 문장을 표시할 수 없어요", style = MaterialTheme.typography.bodySmall) }
+            }
             item { Text(englishLabel(record.representative.englishAttemptStatus), style = MaterialTheme.typography.bodySmall); Text(formLabel(record.representative.formStatus), style = MaterialTheme.typography.bodySmall) }
-            item {
-                Text("최근 보완 결과", style = MaterialTheme.typography.titleMedium)
-                Text(when (record.latestResult.expressionStatus) {
-                    "improved" -> "다시 말한 답변에 보완할 점이 반영됐어요"
-                    "needs_work" -> "아직 다듬어 볼 표현이 있어요"
-                    "not_evaluated" -> "표현 보완 결과는 평가하지 않았어요"
-                    "no_open_correction" -> "확인된 표현에서 추가 교정은 제안하지 않았어요"
-                    else -> "표현 보완 여부를 확인하지 못했어요"
-                }, style = MaterialTheme.typography.bodyMedium)
+            if (latestId != null && latestId != representativeId) item {
+                Text("최근 답변 판정", style = MaterialTheme.typography.titleMedium)
+                AssessmentReviewPanel(state, id, latestId, "record", send, showFeedback = true)
             }
             item {
                 Text("받았던 도움", style = MaterialTheme.typography.titleMedium)
@@ -141,16 +156,6 @@ private fun Source6SpeakingDetail(state: ProductScreenState, records: Source6Spe
             }
             record.sourceAccess.reasonKo?.let { reason -> item { ProductNotice(reason) } }
             if (records.failed) item { ProductNotice("기록을 새로 확인하지 못했어요. 표시 중인 기록은 유지돼요") }
-            if (record.sourceAccess.originalFeedback == "available") {
-                val feedbackId = record.retryAttempt?.feedbackAttemptId ?: record.firstAttempt?.feedbackAttemptId
-                if (feedbackId != null) item { ProductButton("원래 피드백 보기", { send(UiIntent.ShowOriginalFeedback(state.origin, id, UUID.fromString(feedbackId))) }, secondary = true, enabled = !state.busy && !records.loading) }
-            }
-            original?.feedback?.let { feedback -> item {
-                Text("당시 받은 피드백", style = MaterialTheme.typography.titleMedium)
-                Text(feedback.feedbackKo, style = MaterialTheme.typography.bodyMedium)
-                Text("기록을 읽는 중이에요. 현재 연습의 피드백 확인 상태는 바뀌지 않아요", style = MaterialTheme.typography.bodySmall)
-            } }
-            if (original != null && original.feedback == null) item { ProductNotice("저장된 피드백 결과를 아직 확인할 수 없어요") }
             item { ProductButton("같은 질문으로 새 연습", { send(UiIntent.RepracticeRecord(state.origin, id)) }, enabled = record.sourceAccess.newPractice == "available" && state.canRead && !state.busy) }
             item { ProductButton(if (record.visibility.hidden) "기록 숨김 해제" else "이 기록 숨기기", { send(UiIntent.HideSpeakingRecord(state.origin, id, !record.visibility.hidden)) }, secondary = true, enabled = !state.busy && id.toString() !in records.conflicts) }
         }

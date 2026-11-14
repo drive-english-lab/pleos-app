@@ -12,6 +12,8 @@ interface GleoProjectAdapter {
     val callback: GleoTransportPort
     val schemaApproval: Capability
     val actionParamJsonVerified: Boolean
+    /** Each additional pending-choice enum needs actual project schema approval of its own. */
+    fun pendingChoiceCommandVerified(command:String):Boolean=false
     fun acceptsSender(uid: Int, packageName: String?): Boolean
     val events: Flow<GleoRuntimeEvent>
     /** Associate the exact pending callback content with a real adapter output token. */
@@ -29,7 +31,7 @@ sealed interface GleoRuntimeEvent {
 data class GleoCaptureBinding(val inputId: UUID, val capture: Capture)
 
 interface GleoProductHandler {
-    suspend fun playback(command: String, title: String?, mode: String?): String
+    suspend fun playback(command: String, title: String?, mode: String?,capture:GleoCaptureBinding?=null): String
     suspend fun question(text: String, title: String?): String
     suspend fun practice(command: String, text: String?, title: String?, capture: GleoCaptureBinding?): String
 }
@@ -42,8 +44,11 @@ class GleoGateway(private val adapter: GleoProjectAdapter, private val handler: 
     override suspend fun handle(action: GleoProductAction): GleoCallback = withContext(Dispatchers.Main.immediate) {
         if (!actionParamJsonVerified) return@withContext GleoCallback(action.function, "fail", "음성 연결을 확인하지 못했어요. 저장한 진행은 유지돼요", null, "voice")
         val p = action.parameters
+        if(action.function=="DRIVE_ENGLISH_PLAYBACK" && p["command"] in GleoProductActionParser.pendingChoiceCommands &&
+            !adapter.pendingChoiceCommandVerified(requireNotNull(p["command"])))
+            return@withContext GleoCallback(action.function,"fail","이 대기 선택의 음성 연결을 확인하지 못했어요. 현재 기사는 유지돼요",null,"voice")
         val text = when (action.function) {
-            "DRIVE_ENGLISH_PLAYBACK" -> handler.playback(requireNotNull(p["command"]), p["articleTitle"], p["mode"])
+            "DRIVE_ENGLISH_PLAYBACK" -> handler.playback(requireNotNull(p["command"]), p["articleTitle"], p["mode"],adapter.captureFor(action))
             "DRIVE_ENGLISH_ARTICLE_QUESTION" -> handler.question(requireNotNull(p["questionText"]), p["articleTitle"])
             "DRIVE_ENGLISH_PRACTICE" -> handler.practice(requireNotNull(p["command"]), p["utteranceText"], p["articleTitle"], adapter.captureFor(action))
             else -> "요청을 확인하지 못했어요. 현재 학습은 유지돼요"

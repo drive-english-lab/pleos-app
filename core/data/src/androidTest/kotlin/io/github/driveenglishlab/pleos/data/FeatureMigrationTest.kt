@@ -17,7 +17,7 @@ import org.junit.runner.RunWith
 class FeatureMigrationTest {
     private val context get() = InstrumentationRegistry.getInstrumentation().targetContext
     private fun open(name: String) = Room.databaseBuilder(context, LearningDatabase::class.java, name)
-        .addMigrations(LEARNING_MIGRATION_1_2, LEARNING_MIGRATION_2_3, LEARNING_MIGRATION_3_4).build()
+        .addMigrations(LEARNING_MIGRATION_1_2, LEARNING_MIGRATION_2_3, LEARNING_MIGRATION_3_4, LEARNING_MIGRATION_4_5).build()
     private fun scope(owner: LocalOwner) = OwnerContext(UUID.fromString(owner.profileId), owner.privacyEpoch, owner.revision, UUID.randomUUID())
 
     @Test fun versionTwoPreservesPendingAnswerAndPauseAndExposureWithoutBackfillingFeatureEvidence() = runBlocking {
@@ -48,7 +48,7 @@ class FeatureMigrationTest {
         val db = open(name)
         try {
             val owner = db.learning().currentOwner()!!
-            assertEquals(4, db.openHelper.readableDatabase.version)
+            assertEquals(5, db.openHelper.readableDatabase.version)
             db.openHelper.readableDatabase.query("SELECT COUNT(*) FROM segment_state").use { it.moveToFirst(); assertEquals(0, it.getInt(0)) }
             db.openHelper.readableDatabase.query("SELECT COUNT(*) FROM review_context").use { it.moveToFirst(); assertEquals(0, it.getInt(0)) }
             assertEquals(3L, owner.revision)

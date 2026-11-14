@@ -1,6 +1,32 @@
 # Pleos Android app
 
-Pleos Connect용 Android 앱이다. 기본 진입은 실제 프로필·catalog·대본·단일 기사 미디어 port에 연결한 제품 화면이다. 차량 전원·owner·입력 권한을 확인하지 못하면 준비/제한 상태를 표시한다. 연결 점검은 별도 destination으로 보존한다. schema5·Room 기반은 구현했으며 기사 질문·연습의 제품 결합과 외부 음성 승인은 계속 진행 중이다.
+Pleos Connect용 Android 앱이다. 기본 진입은 실제 프로필·catalog·대본·단일 기사 미디어 port에 연결한 제품 화면이다. 차량 전원·owner·입력 권한을 확인하지 못하면 준비/제한 상태를 표시한다. 연결 점검은 별도 destination으로 보존한다. schema5·Room5와 기사 질문·연습의 제품 연결 코드를 갖추며 실제 음성·전원·자료 승인을 별도 확인한다.
+
+## R8 현재 구현·검증 · 2026-11-15
+
+대기 중인 같은 기사 B에 대해 계속 기다리기·원문 듣기·다른 준비 뉴스를 각각 명시적으로 선택한다. 듣던 A의 실제 위치와 전역 설정은 보존하고, 대안은 준비된 다른 기사만 고른다. 새 읽기 전용 GET은 원 요청/해시/현재 사용자·서버 메타데이터를 확인하며 구형 서버에서 POST로 우회하지 않는다. 앱 재시작·실패·늦은 응답은 저장 상태만 복원하고 자동 재생하지 않는다.
+
+Room5, 판정 재검토, 관심 뉴스/주요 이슈, 사용자별 설정 초안, Gleo 명령 adapter와 Pleos TTS3.3.1 의존성을 연결했다. 승인 데모 로더는 별도 사람 검수와 파일 해시·구간·24조합을 검증하며 승인 자산이 없으면 비활성이다. SDK 클래스가 debug/release APK에 포함된 것과 실제 음성 프로젝트 승인은 다르다.
+
+최종 검증은 domain73, AVD data133통과/실연동 opt-in1제외, platform19, Compose14통과/읽기 전용 진단 opt-in1제외다. debug/release·instrumentation APK와 lint(error0/warning37), 계약 동기화4개가 통과했다. 최초 data3실패는 실제 nonce 검사 순서와 source6 JSON 저장/비교 불일치를 수정하고 data134개를 재확인했다. 늦은 재생은 대본/권리 확인 이후에도 원 intent generation으로 차단한다.
+
+실제 개발 DB35개 이력과 기존 데이터/RLS 보존, 서버 Auth/API25+신규67+기존47조건을 확인했다. AVD의 별도 임시 SDK 저장소에서도 같은 프로필 복원·설정 왕복/정리가 통과했다. **기존 MainActivity 설치에는 저장된 세션 없이 creation fence가 남아 있어 보호 상태를 유지한다.** 읽기 전용 진단으로 확인했고 데이터 삭제·새 guest 생성으로 감추지 않았다. 이 설치의 정상 로그인/전체 학습 재생 성공으로 표시하지 않는다.
+
+실제 전원 신호는 UNKNOWN이며 Gleo/TTS 프로젝트·직접 mic·주행/실차, 승인 기사/고정 데모·출처 운영·모델 품질과 사용자 성과는 남아 있다. Sites는 로컬 concept4캡처를 확인했고 공유 배포하지 않았다. [최종 검증·캡처](../docs/verification/learning-review-20261115/README.md) · [실제 DB/API 기록](../docs/verification/learning-review-20261115/runtime-r7.md) · [승인 데모 입력 형식](core/data/review-demo-format.md).
+
+아래 R7/R6와 초기 연결 절은 각 시점의 이력이며 현재 완료 수·가용성과 구분한다.
+
+## R7 기준 이력 · 2026-11-15
+
+뉴스의 `내 관심 뉴스/최근 주요 이슈`, 기존 stream을 재사용하는 자동 진행·동일 기사 이어하기, 판정 재검토의 접수/현재 결과 분리와 owner별 설정 초안 보존을 연결했다. Room5 보존 이행과 독립 assessment-review/catalog-views/review2 strict 계약을 사용하며 기존 closed 계약은 유지한다. under_review/withheld·실패는 과거 성공으로 표시하지 않고 실제 권한/자료가 없으면 unavailable로 둔다.
+
+최신 로컬 검증은 domain **70개**, AVD data **89통과·실연동 opt-in1제외**, platform **16개**, Compose **10개**다. data는 기존86건(85통과/1제외)과 마지막 초안4건을 합친 값이다. debug/release·instrumentation APK 빌드 성공, lint **error0/warning37**, 계약 동기화4개 통과. 앱 기준 R6 HEAD `65dc5c7` 이후 로컬 변경을 검증한 결과이며 아직 후속 커밋/PR/CI 결과로 표시하지 않는다.
+
+같은 개발 DB의 보존 migration은 **13→33개 실제 적용**됐고 서버의 실제 Auth/API R7 **25조건**·기존 호환 **47조건**이 통과했다. 이는 Android SDK/실제 뉴스·음성의 통합 성공과 다르다. Root가 진행 중인 **AVD→localhost Auth/API 연결은 아직 성공 표시하지 않는다**.
+
+실제 Gleo/TTS/직접 mic·power/주행/실차, 기사별 원문 권리·승인 데모·수집 운영 및 OpenAI/Decisions 품질·운영 승인은 남아 있다. D24의 새 B 브리핑 대기→B 원문 명시 선택은 독립 review3 명세·분석 인계 대기이며 A/전역 설정을 바꾸는 우회는 제공하지 않는다. [최신 검증·캡처](../docs/verification/learning-review-20261115/README.md) · [실제 DB/API](../docs/verification/learning-review-20261115/runtime-r7.md).
+
+아래 R6 절은 기준 커밋 당시의 이력이다. 영구 migration 미적용 등 당시 상태를 현재 상태로 읽지 않는다.
 
 ## R6 기능 묶음 · 2026-11-15
 
@@ -56,7 +82,7 @@ SUPABASE_URL=https://your-project.supabase.co
 SUPABASE_PUBLISHABLE_KEY=sb_publishable_...
 ```
 
-승인된 공개 콘텐츠는 Supabase 직접 읽기, 개인 기록·추론은 사용자 세션을 검증하는 별도 LearningApi 경로다. 현재 진단은 SDK로 프로젝트 게이트웨이에 응답을 요청하고 DataStore에 마지막 점검 시각을 저장한다. 익명 Auth 세션 생성/복원과 프로필·기본 설정은 실제 검증했다. 나머지 업무 adapter와 제품 화면 결합은 구현 중이다. 사용자 세션 port에 서버용 secret/model key를 넣지 않는다.
+승인된 공개 콘텐츠는 Supabase 직접 읽기, 개인 기록·추론은 사용자 세션을 검증하는 별도 LearningApi 경로다. 현재 진단은 SDK로 프로젝트 게이트웨이에 응답을 요청하고 DataStore에 마지막 점검 시각을 저장한다. 익명 Auth 세션 생성/복원과 프로필·기본 설정은 실제 검증했다. 이후 R7 서버의 보존 DB 적용·Auth/API 경계도 확인했으며, 앱 localhost SDK 연결과 승인 자료/음성·차량 전체 흐름은 별도 검증 중이다. 사용자 세션 port에 서버용 secret/model key를 넣지 않는다.
 
 ## 제품 API 연결과 진단 진입
 

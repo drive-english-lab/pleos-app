@@ -19,11 +19,16 @@ internal class PreparedProductRuntime(context: Context, private val scope: Corou
     private val repository = SegmentPlaybackRepository(context, database.segments(), checkpoints) { profiles.current()?.owner == it }
     var auxiliaryPermission: suspend (OwnerContext, SegmentPurpose) -> Boolean = { _, _ -> false }
     var auxiliaryRunPermission: suspend (SegmentRun) -> Boolean = { false }
+    private data class OutputAuthority(val owner: OwnerContext, val selectionId: UUID, val intentGeneration: Long)
+    @Volatile private var outputAuthority: OutputAuthority? = null
     val leases = SegmentOutputLease { owner, purpose ->
         val view = coordinator.snapshot()
         owner == view.owner && view.access.ownerValid && view.access.power == PowerAvailability.ALLOWED &&
             view.voiceInput == VoiceInputActivity.IDLE && view.inputPhase == InputPhase.IDLE && view.pendingAnswer == null &&
-            view.practiceModal?.visible != true && (if (purpose in setOf(SegmentPurpose.MAIN, SegmentPurpose.FOLLOWUP)) true else auxiliaryPermission(owner, purpose))
+            view.practiceModal?.visible != true && (if (purpose in setOf(SegmentPurpose.MAIN, SegmentPurpose.FOLLOWUP))
+                outputAuthority?.let { it.owner == owner && it.selectionId == view.preparedListening?.selectionId &&
+                    it.intentGeneration == view.intentGeneration && view.intent == PlaybackIntent.PLAY } == true
+                else auxiliaryPermission(owner, purpose))
     }
     val speech: PleosTtsGateway = PleosTtsGateway(context, scope, voices.pleosTts, voices.pleosRegistration,
         permitted = { run -> if (run.purpose in setOf(SegmentPurpose.MAIN, SegmentPurpose.FOLLOWUP))
@@ -32,12 +37,22 @@ internal class PreparedProductRuntime(context: Context, private val scope: Corou
     val runtime: SegmentPlaybackCoordinator = SegmentPlaybackCoordinator(speech, repository.journal, leases, scope, ::allowed)
     val state get() = runtime.state
     private suspend fun allowed(program: SegmentProgram): Boolean {
-        if (!coordinator.segmentPermission(program)) return false
-        val call = profiles.current()?.takeIf { it.owner == program.owner } ?: return false
-        val ref = coordinator.state.value.preparedListening?.content ?: return false
-        val value = if (program.phase == SegmentPhase.MAIN) catalog.main(call, ref.source6Wire())
-            else catalog.main(call, ref.source6Wire()) // Recheck current source/rights independently of followup readiness.
-        return value is CatalogRead.Stored && profiles.current()?.owner == program.owner && coordinator.segmentPermission(program)
+        val authority = outputAuthority?.takeIf { it.owner == program.owner && it.selectionId == program.selectionId } ?: return false
+        return coordinator.segmentOutputPermission(program, authority.intentGeneration) {
+            val call = profiles.current()?.takeIf { it.owner == program.owner } ?: return@segmentOutputPermission false
+            val ref = coordinator.state.value.preparedListening?.content ?: return@segmentOutputPermission false
+            // Recheck source/rights independently of followup readiness.
+            val value = catalog.main(call, ref.source6Wire())
+            value is CatalogRead.Stored && outputAuthority === authority && profiles.current()?.owner == program.owner
+        }
+    }
+    /** The generation comes from the successful atomic product play command, never a later read. */
+    suspend fun play(owner: OwnerContext, selectionId: UUID, intentGeneration: Long): Boolean {
+        val view = coordinator.state.value
+        if (view.owner != owner || view.preparedListening?.selectionId != selectionId ||
+            view.intentGeneration != intentGeneration || view.intent != PlaybackIntent.PLAY) return false
+        outputAuthority = OutputAuthority(owner, selectionId, intentGeneration)
+        return runtime.play()
     }
     fun start() {
         scope.launch { runtime.state.collect { state -> state.snapshot?.let { snapshot ->
@@ -48,7 +63,7 @@ internal class PreparedProductRuntime(context: Context, private val scope: Corou
         scope.launch { coordinator.state.collect { view ->
             val current = runtime.state.value.snapshot ?: return@collect
             if (view.owner != current.program.owner) runtime.detach()
-            else if (!coordinator.segmentPermission(current.program) && current.activeRequest != null) runtime.hold(PauseReason.SYSTEM, true)
+            else if (!coordinator.segmentPermission(current.program) && current.activeRequest != null) hold(PauseReason.SYSTEM, true)
         } }
     }
     suspend fun attach(owner: OwnerContext, work: PreparedListeningWorkRef, script: SourcePublicScript, restored: Boolean = false): Boolean {
@@ -62,12 +77,13 @@ internal class PreparedProductRuntime(context: Context, private val scope: Corou
         val retained = repository.restore(program)
         return runtime.attach(program, work.cursor, retained = retained, explicitlyFromBeginning = false)
     }
-    suspend fun hold(reason: PauseReason = PauseReason.USER): Boolean {
+    suspend fun hold(reason: PauseReason = PauseReason.USER, preservePlayIntent: Boolean = false): Boolean {
+        outputAuthority = null
         val current = runtime.state.value.snapshot ?: return coordinator.state.value.preparedListening?.let {
             profiles.current()?.owner == coordinator.state.value.owner && speech.quiescent
         } == true
-        runtime.hold(reason)
+        runtime.hold(reason, preservePlayIntent)
         return runtime.state.value.snapshot?.program == current.program && speech.quiescent
     }
-    suspend fun detach() = runtime.detach()
+    suspend fun detach() { outputAuthority = null; runtime.detach() }
 }

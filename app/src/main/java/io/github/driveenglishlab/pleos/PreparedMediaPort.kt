@@ -46,9 +46,10 @@ internal class PreparedMediaPort(private val coordinator: SessionCoordinator, sc
         return when (command) {
             SegmentMediaCommand.PLAY -> {
                 if (!current.available || !coordinator.segmentPermission(snapshot.program) ||
-                    !coordinator.requestMediaIntent(expected.owner, PlaybackIntent.PLAY)) return false
+                    !coordinator.requestMediaIntent(expected.owner, PlaybackIntent.PLAY,
+                        expectedIntentGeneration = view.intentGeneration, expectedSelectionId = work.selectionId)) return false
                 // The runtime rechecks owner, source/rights, exclusive lease and actual Pleos gate.
-                preparedRuntime.runtime.play()
+                preparedRuntime.play(expected.owner, work.selectionId, view.intentGeneration + 1)
             }
             SegmentMediaCommand.PAUSE, SegmentMediaCommand.STOP, SegmentMediaCommand.FREEZE -> {
                 // Revoked playback permission must never prevent stopping the same original run.

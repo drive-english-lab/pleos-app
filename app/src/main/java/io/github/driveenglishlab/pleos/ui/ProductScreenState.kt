@@ -3,6 +3,9 @@ package io.github.driveenglishlab.pleos.ui
 import io.github.driveenglishlab.pleos.domain.*
 import io.github.driveenglishlab.pleos.ReviewToolsState
 import java.util.UUID
+import io.github.driveenglishlab.pleos.data.ReviewNext2State
+import io.github.driveenglishlab.pleos.data.ReviewNext3State
+import io.github.driveenglishlab.pleos.data.AssessmentReviewState
 import io.github.driveenglishlab.pleos.data.ProfileReadSnapshot
 import io.github.driveenglishlab.pleos.data.DailyListeningState
 import io.github.driveenglishlab.pleos.data.SpeakingRecordsState
@@ -37,8 +40,27 @@ data class ProductScreenState(val session: SessionView = SessionView(), val prof
     val learningRecommendation: LearningRecommendationState = LearningRecommendationState(), val bandDraft: LearningBand? = null,
     val preparedCatalog: List<WirePreparationDiscovery> = emptyList(), val categoryConfig: WirePreparationCategoryPublicProjection? = null,
     val preparedSource: WirePreparationDiscovery? = null, val preparedScript: SourcePublicScript? = null,
-    val segmentPlayback: SegmentRuntimeState = SegmentRuntimeState(), val followupWaiting: Boolean = false, val source6History: Source6ProfileSnapshot? = null, val source6SpeakingRecords: Source6SpeakingRecordsState = Source6SpeakingRecordsState(), val reviewTools: ReviewToolsState = ReviewToolsState()) {
+    val segmentPlayback: SegmentRuntimeState = SegmentRuntimeState(), val followupWaiting: Boolean = false, val source6History: Source6ProfileSnapshot? = null, val source6SpeakingRecords: Source6SpeakingRecordsState = Source6SpeakingRecordsState(), val reviewTools: ReviewToolsState = ReviewToolsState(),
+    val catalogViews: CatalogViewState = CatalogViewState(), val assessments: AssessmentReviewState = AssessmentReviewState(),
+    val identityRecovery: IdentityRecoveryProjection? = null, val playbackRequest: ReviewNext2State = ReviewNext2State(),
+    val playbackRequest3: ReviewNext3State = ReviewNext3State(), val originalOutputConfigured: Boolean = false) {
     val origin get() = UiOrigin(session.owner, session.listening, session.navigationGeneration, session.task, session.lessonId, session.preparedListening)
+    val activePlaybackRequest get() = listOfNotNull(playbackRequest3.intent, playbackRequest.intent).firstOrNull {
+        it.state in setOf(PlaybackRequestState.ACTIVE, PlaybackRequestState.EXPIRED) &&
+            it.outcome in setOf(null, PlaybackRequestOutcome.PENDING, PlaybackRequestOutcome.EXPIRED_WAITING_EXPLICIT)
+    } ?: playbackRequest3.intent ?: playbackRequest.intent
+    val pendingOriginalTarget get() = if (session.owner != null && playbackRequest3.owner == session.owner)
+        playbackRequest3.response?.pendingTarget ?: playbackRequest3.retainedParentAnchor?.pendingTarget else null
+    val supportedPendingChoices get() = if (session.owner != null && playbackRequest3.owner == session.owner) playbackRequest3.supportedChoices else emptySet()
+    val originalAlternativeAvailable get(): Boolean {
+        val pending = pendingOriginalTarget ?: return false
+        val mode = playbackRequest3.retainedParentAnchor?.parentListeningMode ?: activePlaybackRequest?.binding?.listeningMode
+        return selectionPending && PendingChoiceKind.ORIGINAL in supportedPendingChoices && originalOutputConfigured && mode != ListeningMode.ORIGINAL_FULL &&
+            (playbackRequest3.response?.outcomeProjection?.noCandidateReason != "original_unavailable" ||
+                playbackRequest3.pendingChoiceRetention?.parentProjectionObservedAfterChild == true) && pending.originalAvailability == "ready" &&
+            pending.originalComponent?.kind == "main_original" && pending.originalComponent?.status == "ready" &&
+            (playbackRequest3.response?.outcomeProjection?.state in setOf("pending", "expired_waiting_explicit") || playbackRequest3.retainedParentAnchor != null)
+    }
     val canRead get() = session.access.detailsOpen
     val mediaAllowed get() = session.ownerBinding == OwnerBindingStatus.VERIFIED && session.mediaConnected &&
         session.task == null && session.access.ownerValid && session.access.power == PowerAvailability.ALLOWED && (session.listening != null || session.preparedListening != null)
@@ -46,6 +68,13 @@ data class ProductScreenState(val session: SessionView = SessionView(), val prof
 
 sealed interface UiIntent {
     val origin: UiOrigin
+    data class CatalogViewChanged(override val origin: UiOrigin, val view: CatalogView) : UiIntent
+    data class CatalogFilterChanged(override val origin: UiOrigin, val category: CatalogCategoryId?) : UiIntent
+    data class MoreCatalogView(override val origin: UiOrigin) : UiIntent
+    data class SelectCatalogArticle(override val origin: UiOrigin, val key: CatalogArticleKey, val originView: CatalogView) : UiIntent
+    data class ReadAssessment(override val origin: UiOrigin, val lessonId: UUID, val attemptId: UUID, val entry: String) : UiIntent
+    data class RequestAssessmentReview(override val origin: UiOrigin, val lessonId: UUID, val attemptId: UUID, val entry: String) : UiIntent
+    data class RetryAssessmentReview(override val origin: UiOrigin, val lessonId: UUID, val attemptId: UUID, val entry: String) : UiIntent
     data class Band(override val origin: UiOrigin, val value: LearningBand) : UiIntent
     data class ReadRecommendation(override val origin: UiOrigin) : UiIntent
     data class Recommendation(override val origin: UiOrigin, val action: RecommendationAction, val explicitReview: Boolean = false) : UiIntent
@@ -87,6 +116,9 @@ sealed interface UiIntent {
     data class Navigate(override val origin: UiOrigin, val screen: SessionScreen) : UiIntent
     data class SelectArticle(override val origin: UiOrigin, val articleId: UUID?, val freshStream: Boolean = false) : UiIntent
     data class RetrySelection(override val origin: UiOrigin) : UiIntent
+    data class CancelSelection(override val origin: UiOrigin) : UiIntent
+    data class ReadyAlternative(override val origin: UiOrigin) : UiIntent
+    data class PendingOriginal(override val origin: UiOrigin) : UiIntent
     data class Resume(override val origin: UiOrigin) : UiIntent
     data class PlayPause(override val origin: UiOrigin, val wantPlay: Boolean) : UiIntent
     data class Stop(override val origin: UiOrigin) : UiIntent

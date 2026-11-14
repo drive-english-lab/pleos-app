@@ -49,6 +49,7 @@ fun NewsScreens(state: ProductScreenState, send: (UiIntent) -> Unit, onDiagnosti
         Box(Modifier.weight(1f).fillMaxWidth()) {
             when {
                 !state.canRead -> Column(Modifier.fillMaxSize()) {
+                    IdentityRecoveryNotice(state, allowUnbound = true)
                     ProductStatus("이어서 이용할 준비를 확인해 주세요", state.recovery ?: "차량과 학습 연결을 확인하고 있어요",
                         Modifier.weight(1f), loading = SessionOperationKind.PROFILE in state.session.activeOperations) {
                         FlowRow(horizontalArrangement = Arrangement.spacedBy(24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -140,22 +141,54 @@ private fun ProductHeader(state: ProductScreenState, onNews: () -> Unit, onHisto
 
 @Composable
 @OptIn(ExperimentalLayoutApi::class)
+internal fun ListeningSelectionControls(state: ProductScreenState, send: (UiIntent) -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        val target = state.pendingOriginalTarget
+        val title = target?.let { pending ->
+            state.catalogViews.items.firstOrNull { it.key.articleId.toString() == pending.articleId && it.key.sourceSnapshotId.toString() == pending.sourceSnapshotId }?.title
+                ?: state.preparedCatalog.firstOrNull { it.articleId == pending.articleId && it.sourceSnapshotId == pending.sourceSnapshotId }?.title
+        }
+        if (state.selectionPending && title != null) Text("준비 중인 기사 · $title", style = MaterialTheme.typography.bodyLarge)
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            val uncertain = state.playbackRequest3.pendingChoiceRetention?.reconciliation == io.github.driveenglishlab.pleos.data.PendingChoiceReconciliation.SAME_CHILD_REQUIRED
+            val canContinue = PendingChoiceKind.CONTINUE in state.supportedPendingChoices
+            val expired = state.activePlaybackRequest?.state != PlaybackRequestState.ACTIVE || state.playbackRequest3.retainedParentAnchor != null &&
+                state.playbackRequest3.response?.outcomeProjection?.state == "no_candidate"
+            ProductButton(if (!state.selectionPending) "새 뉴스 듣기" else if (uncertain || !canContinue) "선택 상태 확인"
+                else if (expired) "다시 기다리기" else "준비 상태 확인", {
+                send(if (state.selectionPending) UiIntent.RetrySelection(state.origin) else UiIntent.SelectArticle(state.origin, null, true))
+            }, enabled = !state.busy, busy = state.busy)
+            if (state.session.listening != null || state.session.preparedListening != null)
+                ProductButton("이어서 듣기", { send(UiIntent.Resume(state.origin)) }, enabled = !state.busy, secondary = true)
+            if (state.selectionPending) {
+                if (state.originalAlternativeAvailable) ProductButton("선택한 기사 원문 듣기", { send(UiIntent.PendingOriginal(state.origin)) }, enabled = !state.busy, secondary = true)
+                if (PendingChoiceKind.READY_ALTERNATIVE in state.supportedPendingChoices)
+                    ProductButton("준비된 다른 뉴스", { send(UiIntent.ReadyAlternative(state.origin)) }, enabled = !state.busy, secondary = true)
+                ProductButton("선택 취소", { send(UiIntent.CancelSelection(state.origin)) }, secondary = true)
+            }
+        }
+        state.noCandidateReason?.let { reason -> ProductNotice(when (reason) {
+            "all_listened" -> "준비된 뉴스를 모두 들었어요. 원하는 기사를 직접 골라 다시 들을 수 있어요"
+            "visited_in_stream" -> "이번에 고른 기사만 남아 있어요. 새 뉴스를 시작하거나 기사를 직접 골라 주세요"
+            "original_unavailable" -> "선택한 기사의 원문을 지금 들을 수 없어요. 듣던 기록과 설정은 유지돼요"
+            "ready_alternative_unavailable" -> "지금 바로 들을 다른 뉴스가 없어요. 같은 기사에서 다시 기다리거나 원문을 확인할 수 있어요"
+            else -> "선택한 관심 분야에서 이용할 새 뉴스가 없어요"
+        }) }
+    }
+}
+
+@Composable
+@OptIn(ExperimentalLayoutApi::class)
 private fun NewsPage(state: ProductScreenState, send: (UiIntent) -> Unit, openSource: (UiOrigin, URI) -> Unit) {
+    if (state.catalogViews.owner != null && state.catalogViews.owner == state.session.owner) {
+        CatalogViewsPanel(state, send, openSource)
+        return
+    }
     val preparedCatalog = state.categoryConfig != null || state.preparedCatalog.isNotEmpty()
     val empty = if (preparedCatalog) state.preparedCatalog.isEmpty() else state.catalog.isEmpty()
     Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(24.dp)) {
         Text("관심 있는 소식부터 들어보세요", style = MaterialTheme.typography.headlineMedium, modifier = Modifier.semantics { heading() })
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            ProductButton(if (state.selectionPending) "기사 선택 다시 확인" else "새 뉴스 듣기", {
-                send(if (state.selectionPending) UiIntent.RetrySelection(state.origin) else UiIntent.SelectArticle(state.origin, null, true))
-            }, enabled = !state.busy, busy = state.busy)
-            if (state.session.listening != null || state.session.preparedListening != null) ProductButton("이어서 듣기", { send(UiIntent.Resume(state.origin)) }, secondary = true)
-        }
-        if (state.noCandidateReason != null) ProductNotice(when (state.noCandidateReason) {
-            "all_listened" -> "준비된 뉴스를 모두 들었어요. 원하는 기사를 직접 골라 다시 들을 수 있어요"
-            "visited_in_stream" -> "이번에 고른 기사만 남아 있어요. 새 뉴스를 시작하거나 기사를 직접 골라 주세요"
-            else -> "선택한 관심 분야에서 이용할 새 뉴스가 없어요"
-        })
+        ListeningSelectionControls(state, send)
         when {
             state.catalogStatus == LoadStatus.LOADING && empty ->
                 ProductStatus("뉴스를 불러오고 있어요", "준비된 기사와 출처를 확인하고 있어요", loading = true)

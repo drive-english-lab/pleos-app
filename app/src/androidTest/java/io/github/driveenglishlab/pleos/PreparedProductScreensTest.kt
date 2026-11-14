@@ -103,7 +103,9 @@ class PreparedProductScreensTest {
         return base.copy(session = base.session.copy(screen = SessionScreen.PLAYER, task = task, lessonId = lessonId,
             practiceModal = PracticeModalSession(token, phase, PracticeModalVisibility.VISIBLE, original, ReviewEntryOrigin.NEWS,
                 PracticeModalLesson(phase, progress.version, if (feedback) attempt else null))),
-            learning = LearningPresentation(owner = owner, articleTitle = discovery.title, practice = projected))
+            learning = LearningPresentation(owner = owner, articleTitle = discovery.title, practice = projected),
+            assessments = if (feedback) syntheticRendererAssessment(rule.activity, owner, lessonId, attempt, task,
+                text = "합성 피드백: 두 지역을 연결한다는 내용을 담았어요") else base.assessments)
     }
     private fun validateTypedSources() {
         val codec = IncrementalContractJson(rule.activity)
@@ -150,7 +152,7 @@ class PreparedProductScreensTest {
         capture("prepared-modal-question", dialog = true)
         rule.runOnIdle { frame.value = modal(frame.value, feedback = true) }
         rule.onNodeWithText(question).assertIsDisplayed()
-        rule.onNodeWithText("내 답변 피드백").assertIsDisplayed()
+        rule.onNodeWithText("현재 판정").assertIsDisplayed()
         rule.onNodeWithText("합성 피드백: 두 지역을 연결한다는 내용을 담았어요").assertIsDisplayed()
         assertEquals(SessionScreen.PLAYER, frame.value.session.screen)
         capture("prepared-modal-feedback", dialog = true)

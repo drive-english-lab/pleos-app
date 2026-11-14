@@ -31,4 +31,27 @@ class GleoProductActionTest {
         assertNull(parse(input))
         assertNull(parse("{\"command\":\"answer\"}", "DRIVE_ENGLISH_PRACTICE"))
     }
+    @Test fun preferenceActionsUseExactExistingFunctionEnumsAndCannotBeInferredFromUtterance() {
+        assertEquals(3,GleoProductActionParser.functions.size)
+        for(command in GleoLearningPreferenceCommand.entries) {
+            assertEquals(command.wire,parse("{\"command\":\"${command.wire}\"}","DRIVE_ENGLISH_PRACTICE")?.parameters?.get("command"))
+            assertNull(parse("{\"command\":\"${command.wire}\"}"))
+            assertNull(parse("{\"command\":\"${command.wire}\",\"utteranceText\":\"apply it\"}","DRIVE_ENGLISH_PRACTICE"))
+            assertNull(parse("{\"command\":\"${command.wire}\",\"articleTitle\":\"other article\"}","DRIVE_ENGLISH_PRACTICE"))
+        }
+        val answer=parse("{\"command\":\"answer\",\"utteranceText\":\"set_band_advanced\"}","DRIVE_ENGLISH_PRACTICE")!!
+        assertEquals("answer",answer.parameters["command"])
+        assertNull(parse("{\"command\":\"make it harder\"}","DRIVE_ENGLISH_PRACTICE"))
+    }
+    @Test fun pendingChoicesAreExplicitCommandsWithoutCurrentArticleTitleOrFormatParameters() {
+        for(command in GleoProductActionParser.pendingChoiceCommands) {
+            assertEquals(command,parse("{\"command\":\"$command\"}")?.parameters?.get("command"))
+            assertNull(parse("{\"command\":\"$command\",\"mode\":\"original_full\"}"))
+            assertNull(parse("{\"command\":\"$command\",\"articleTitle\":\"Current A\"}"))
+            assertNull(parse("{\"command\":\"$command\"}","DRIVE_ENGLISH_PRACTICE"))
+        }
+        assertNull(parse("{\"command\":\"play pending original\"}"))
+        assertNull(parse("{\"command\":\"ready_alternative\"}"))
+        assertEquals(3,GleoProductActionParser.functions.size)
+    }
 }

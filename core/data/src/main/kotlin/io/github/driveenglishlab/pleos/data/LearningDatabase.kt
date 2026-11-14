@@ -368,13 +368,15 @@ abstract class LearningDao {
     LocalAiLearningPreference::class, LocalAiLearningPreferenceJournal::class, LocalAiLearningCache::class, LocalAiLearningJournal::class,
     LocalReviewContext::class, LocalReviewOperation::class, LocalReviewObservation::class,
     LocalFreshPracticeIntent::class, LocalPreparationWaiter::class, LocalSettingsDraft::class, LocalSource6Record::class,
-    LocalSegmentState::class, LocalSegmentOperation::class, LocalSegmentCompletion::class], version = 4, exportSchema = true)
+    LocalSegmentState::class, LocalSegmentOperation::class, LocalSegmentCompletion::class,
+    LocalPlaybackRequest::class, LocalCatalogViewPage::class], version = 5, exportSchema = true)
 abstract class LearningDatabase : RoomDatabase() {
     abstract fun learning(): LearningDao
     abstract fun progress(): LearningProgressDao
     abstract fun aiLearning(): AiLearningDao
     abstract fun review(): ReviewDao
     abstract fun segments(): SegmentPlaybackDao
+    abstract fun serviceIntents(): ServiceIntentDao
 }
 
 @Singleton
@@ -416,5 +418,5 @@ class LearningStore internal constructor(private val database: LearningDatabase,
 object LearningDataModule {
     @Provides @Singleton
     fun database(@ApplicationContext context: Context): LearningDatabase =
-        Room.databaseBuilder(context, LearningDatabase::class.java, "learning.db").addMigrations(LEARNING_MIGRATION_1_2, LEARNING_MIGRATION_2_3, LEARNING_MIGRATION_3_4).build()
+        Room.databaseBuilder(context, LearningDatabase::class.java, "learning.db").addMigrations(LEARNING_MIGRATION_1_2, LEARNING_MIGRATION_2_3, LEARNING_MIGRATION_3_4, LEARNING_MIGRATION_4_5).build()
 }

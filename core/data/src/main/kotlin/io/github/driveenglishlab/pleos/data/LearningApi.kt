@@ -20,6 +20,8 @@ import kotlinx.serialization.json.*
 
 internal data class LearningHttpResponse(val status: Int, val headers: Map<String, String>, val body: ByteArray)
 internal interface LearningHttpTransport {
+    /** The actual immutable configured origin. Test transports must explicitly identify their synthetic origin. */
+    val configuredOrigin:String? get()=null
     suspend fun exchange(method: String, path: String, query: Map<String, String>, headers: Map<String, String>, body: ByteArray?): LearningHttpResponse
 }
 private class LearningTransportUnavailable : Exception()
@@ -27,6 +29,7 @@ private class LearningTransportUnavailable : Exception()
 /** Fixed configured service origin; no redirects, HTTP cache, logging or server secrets. */
 internal class KtorLearningTransport(origin: String, allowLocalHttp: Boolean = false) : LearningHttpTransport, AutoCloseable {
     private val origin = origin.trim().trimEnd('/').takeIf { it.isNotEmpty() }
+    override val configuredOrigin:String? get()=origin
     private val client = HttpClient(OkHttp) { expectSuccess = false; followRedirects = false }
     init {
         this.origin?.let {
@@ -72,9 +75,10 @@ class LearningApi internal constructor(private val sessions: LearningSessionSour
     private val json: Json = learningJson) {
     constructor(context: Context, origin: String, sessions: LearningSessionSource, allowLocalHttp: Boolean = false) :
         this(sessions, LearningContractJson(context.applicationContext), KtorLearningTransport(origin, allowLocalHttp))
+    private val observationTransportIdentity=NextObservationTransportIdentity(transport.configuredOrigin)
 
     fun incremental(context: Context): IncrementalLearningApi =
-        IncrementalLearningApi(sessions, IncrementalContractJson(context.applicationContext), transport)
+        IncrementalLearningApi(sessions, IncrementalContractJson(context.applicationContext), transport,observationTransportIdentity)
 
     internal fun validateSettings(request: WirePersonalSettingsPatch) {
         contracts.validate("personal-data.openapi.json", contracts.schema("personal-data.openapi.json", "#/components/schemas/SettingsPatch"),

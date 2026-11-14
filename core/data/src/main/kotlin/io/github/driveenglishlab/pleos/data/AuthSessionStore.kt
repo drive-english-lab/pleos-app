@@ -50,15 +50,22 @@ class AuthSessionStore internal constructor(context: Context, name: String = "le
         }.generateKey()
     }
 
+    private fun existingKey():SecretKey = KeyStore.getInstance("AndroidKeyStore").apply{load(null)}
+        .getKey(alias,null) as? SecretKey ?: throw java.security.UnrecoverableKeyException("Protected session key unavailable.")
+
     private fun read(): StoredIdentity {
         if (!file.baseFile.exists() && !File(file.baseFile.path + ".bak").exists()) return StoredIdentity().also(::write)
         val bytes = file.openRead().use { input ->
             require(input.available() <= 128 * 1024)
             input.readBytes().also { require(it.size in 30..128 * 1024) }
         }
+        return decodeIdentity(bytes,::key)
+    }
+
+    private fun decodeIdentity(bytes:ByteArray,keyProvider:()->SecretKey):StoredIdentity {
         require(bytes[0] == 1.toByte())
         val cipher = Cipher.getInstance("AES/GCM/NoPadding")
-        cipher.init(Cipher.DECRYPT_MODE, key(), GCMParameterSpec(128, bytes.copyOfRange(1, 13)))
+        cipher.init(Cipher.DECRYPT_MODE, keyProvider(), GCMParameterSpec(128, bytes.copyOfRange(1, 13)))
         cipher.updateAAD(alias.toByteArray(Charsets.UTF_8))
         return json.decodeFromString<StoredIdentity>(cipher.doFinal(bytes.copyOfRange(13, bytes.size)).toString(Charsets.UTF_8))
     }
@@ -71,6 +78,41 @@ class AuthSessionStore internal constructor(context: Context, name: String = "le
         try { stream.write(bytes); file.finishWrite(stream) }
         catch (error: Exception) { file.failWrite(stream); throw error }
     }
+
+    /** Read-only recovery evidence. Absence never creates a replacement installation. */
+    internal suspend fun protectedEvidence(): io.github.driveenglishlab.pleos.domain.ProtectedIdentityEvidence =
+        withContext(Dispatchers.IO) { mutex.withLock {
+            if (!file.baseFile.exists() && !File(file.baseFile.path + ".bak").exists())
+                return@withLock io.github.driveenglishlab.pleos.domain.ProtectedIdentityEvidence.ABSENT
+            try {
+                if (read().session == null) io.github.driveenglishlab.pleos.domain.ProtectedIdentityEvidence.ABSENT
+                else io.github.driveenglishlab.pleos.domain.ProtectedIdentityEvidence.AVAILABLE
+            } catch (_: java.io.IOException) { io.github.driveenglishlab.pleos.domain.ProtectedIdentityEvidence.READ_RETRYABLE }
+            catch (_: Exception) { io.github.driveenglishlab.pleos.domain.ProtectedIdentityEvidence.UNREADABLE }
+        } }
+
+    /** A missing file stays missing. This probe never creates a key, installation or session. */
+    internal suspend fun diagnosticState():ProtectedIdentityDiagnostic=withContext(Dispatchers.IO) { mutex.withLock {
+        if(!file.baseFile.exists() && !File(file.baseFile.path+".bak").exists())return@withLock ProtectedIdentityDiagnostic(
+            false,null,null,io.github.driveenglishlab.pleos.domain.ProtectedIdentityEvidence.ABSENT)
+        try {
+            // AtomicFile.openRead() can rename its backup. Inspect the same preferred bytes
+            // through FileInputStream instead, without repairing or replacing either file.
+            val backup=File(file.baseFile.path+".bak")
+            val source=if(backup.exists())backup else file.baseFile
+            val bytes=source.inputStream().use { input ->
+                require(input.available()<=128*1024)
+                input.readBytes().also{require(it.size in 30..128*1024)}
+            }
+            val saved=decodeIdentity(bytes,::existingKey)
+            ProtectedIdentityDiagnostic(true,saved.creationStarted,saved.session!=null,
+                if(saved.session==null)io.github.driveenglishlab.pleos.domain.ProtectedIdentityEvidence.ABSENT
+                else io.github.driveenglishlab.pleos.domain.ProtectedIdentityEvidence.AVAILABLE)
+        } catch(error:kotlinx.coroutines.CancellationException) { throw error }
+          catch(error:Exception) { ProtectedIdentityDiagnostic(true,null,null,
+            if(error is java.io.IOException)io.github.driveenglishlab.pleos.domain.ProtectedIdentityEvidence.READ_RETRYABLE
+            else io.github.driveenglishlab.pleos.domain.ProtectedIdentityEvidence.UNREADABLE,profileConnectionFailure(error)) }
+    } }
 
     internal suspend fun identity(): StoredIdentity = withContext(Dispatchers.IO) { mutex.withLock { read() } }
     internal suspend fun beginCreation() = withContext(Dispatchers.IO) { mutex.withLock {

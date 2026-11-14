@@ -1,0 +1,101 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://drive-english.invalid/contracts/next-observation.schema.json",
+  "title": "next-observation1",
+  "x-source-spec-hashes": {
+    "next-observation.md": "d1ff2388fb97050c7d2fcd1db2de7f9d552c7ca736ae8080ca0879fee6c8340a"
+  },
+  "x-frozen-origin-sha256": {
+    "review2.schema.json": "ac31f4dd43a07a41e3e60aaae0a406c1da25e6681622d5cc4e7d2bb91a7a86cd",
+    "review3.schema.json": "e1a5ad75aef1916b9e9a2b06a11b01feec5e957e002d1fc11165baf01b6d68ba"
+  },
+  "$defs": {
+    "NextObservationQuery1": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "profile_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "privacy_epoch": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "review_contract_version": {
+          "type": "integer",
+          "enum": [
+            2,
+            3
+          ]
+        },
+        "request_hash": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$",
+          "minLength": 64,
+          "maxLength": 64
+        }
+      },
+      "required": [
+        "profile_id",
+        "privacy_epoch",
+        "review_contract_version",
+        "request_hash"
+      ]
+    },
+    "ReviewNextResponse2": {
+      "$ref": "review2.schema.json#/$defs/ReviewNextResponse2"
+    },
+    "ReviewNextResponse3": {
+      "$ref": "review3.schema.json#/$defs/ReviewNextResponse3"
+    },
+    "NextObservationResponse1": {
+      "oneOf": [
+        {
+          "$ref": "review2.schema.json#/$defs/ReviewNextResponse2"
+        },
+        {
+          "$ref": "review3.schema.json#/$defs/ReviewNextResponse3"
+        }
+      ]
+    },
+    "ErrorEnvelope": {
+      "$ref": "review2.schema.json#/$defs/ErrorEnvelope"
+    },
+    "ObservationVersion1": {
+      "type": "string",
+      "const": "1"
+    },
+    "ObservationBackendRevision1": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]{1,128}$"
+    },
+    "ObservationResult1": {
+      "type": "string",
+      "enum": [
+        "found",
+        "not_admitted"
+      ]
+    },
+    "NextObservationHeaders1": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "X-Pleos-Observation-Version": {
+          "$ref": "#/$defs/ObservationVersion1"
+        },
+        "X-Pleos-Observation-Backend-Revision": {
+          "$ref": "#/$defs/ObservationBackendRevision1"
+        },
+        "X-Pleos-Observation-Result": {
+          "$ref": "#/$defs/ObservationResult1"
+        }
+      },
+      "required": [
+        "X-Pleos-Observation-Version",
+        "X-Pleos-Observation-Backend-Revision",
+        "X-Pleos-Observation-Result"
+      ]
+    }
+  }
+}

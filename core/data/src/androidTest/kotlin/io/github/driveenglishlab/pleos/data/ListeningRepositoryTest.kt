@@ -41,13 +41,16 @@ class ListeningRepositoryTest {
         val requests = mutableListOf<Pair<String,JsonObject>>()
         var fail: String? = null
         var noCandidate = false
+        var serverResumeVersion=1L
         var loseCommittedReceipt = false
         val committedReceipts = mutableMapOf<Pair<String,String>,JsonObject>()
         var beforeReply: suspend (String) -> Unit = {}
         override suspend fun exchange(method: String, path: String, query: Map<String,String>, headers: Map<String,String>, body: ByteArray?): LearningHttpResponse {
             paths += path
             if (method.equals("get", ignoreCase = true)) {
-                val profile = contractFixture("ProfileView").changed("profile_context" to learningJson.encodeToJsonElement(WireCommonProfileContext.serializer(), scope.owner.profileWire()))
+                val profile = contractFixture("ProfileView").changed("profile_context" to learningJson.encodeToJsonElement(WireCommonProfileContext.serializer(), scope.owner.profileWire()),
+                    "resume_version" to JsonPrimitive(serverResumeVersion))
+                if(path=="/v1/profile")return jsonResponse(profile)
                 return jsonResponse(buildJsonObject {
                     put("schema_version", "5"); put("profile_context", profile.getValue("profile_context")); put("reset_required", false)
                     put("records", JsonArray(checkpoints.values.toList())); put("cursor", "fixture-read-page"); put("profile", profile)
@@ -105,8 +108,12 @@ class ListeningRepositoryTest {
                         put("checkpoint",learningJson.encodeToJsonElement(WirePersonalReadCheckpoint.serializer(),checkpoint.copy(version = checkpoint.version + 1,payload = payload)))
                     }
                 }
-                "/v1/profile/resume" -> contractFixture("ProfileView").changed("profile_context" to request.getValue("profile_context"),
-                    "active_resume" to request.getValue("active_resume"),"resume_version" to JsonPrimitive(request.getValue("expected_resume_version").jsonPrimitive.long + 1))
+                "/v1/profile/resume" -> {
+                    assertEquals(serverResumeVersion,request.getValue("expected_resume_version").jsonPrimitive.long)
+                    serverResumeVersion++
+                    contractFixture("ProfileView").changed("profile_context" to request.getValue("profile_context"),
+                        "active_resume" to request.getValue("active_resume"),"resume_version" to JsonPrimitive(serverResumeVersion))
+                }
                 "/v1/listening/format-changes" -> {
                     val source = requireNotNull(formatSource)
                     val selectionId = UUID.randomUUID().toString()
@@ -153,7 +160,7 @@ class ListeningRepositoryTest {
                     }
                 }
             }
-            if (path in setOf("/v1/playback-runs", "/v1/listening/format-changes")) {
+            if (path in setOf("/v1/playback-runs", "/v1/listening/format-changes","/v1/profile/resume")) {
                 committedReceipts[commandKey] = response
                 if (loseCommittedReceipt) {
                     loseCommittedReceipt = false
@@ -177,7 +184,7 @@ class ListeningRepositoryTest {
         repo.observe(scope,WirePersonalPlaybackObservationInput(observation,frame.checkpoint!!.payload.activeRunId!!,1,"observed",WirePersonalPlaybackObservationInputRange(0,1_000)))
         val result = repo.selectResume(scope)
         assertTrue(result.toString(),result is ListeningResult.Ready)
-        assertEquals(listOf("/v1/profile/sync","/v1/listening/next","/v1/profile/sync","/v1/playback-runs","/v1/profile/sync","/v1/profile/resume"),transport.paths)
+        assertEquals(listOf("/v1/profile/sync","/v1/listening/next","/v1/profile/sync","/v1/playback-runs","/v1/profile/sync","/v1/profile","/v1/profile/resume"),transport.paths)
         assertTrue(db.learning().pendingSync(owner.profileId.toString(),0).isEmpty())
         val cas = transport.requests.last().second
         assertEquals(1L,cas.getValue("expected_resume_version").jsonPrimitive.long)
@@ -298,6 +305,55 @@ class ListeningRepositoryTest {
         assertEquals(request, transport.requests.last().second)
         assertEquals(listOf("/v1/listening/format-changes"), transport.paths.drop(beforeRetry))
         assertEquals(0L, repo.snapshot()!!.checkpoint!!.payload.positionMs)
+    }
+
+    @Test fun appliedFormatAckAndLostResumeRetryKeepOriginalRequestsAndUseFreshResumeCasOnlyOnce()=runBlocking {
+        repo.next(scope,null);val source=requireNotNull(repo.snapshot());val formatOperation=UUID.randomUUID()
+        transport.formatSource=source.selection
+        val changed=repo.changeFormat(scope,source.selection!!,point(source),source.checkpoint!!.version,ListeningMode.BRIEFING,formatOperation) as ListeningResult.Ready
+        val b=changed.frame
+        val bSelection=requireNotNull(b.selection);val bPoint=requireNotNull(b.checkpoint)
+        val formatRequestId=stableRecordId("request:$formatOperation").toString();val formatReceiptId=stableRecordId("receipt:$formatOperation").toString()
+        val originalFormatRequest=requireNotNull(db.learning().record(owner.profileId.toString(),0,formatRequestId))
+        val originalFormatReceipt=requireNotNull(db.learning().record(owner.profileId.toString(),0,formatReceiptId))
+        transport.serverResumeVersion=6 // B's attached frame still carries its old version 1.
+        transport.loseCommittedReceipt=true
+        val resumeOperation=UUID.nameUUIDFromBytes("format-resume:$formatOperation".toByteArray())
+        assertTrue(repo.selectResume(scope,resumeOperation) is ListeningResult.Failed)
+        assertEquals(b,repo.snapshot())
+        val originalResumeRequest=transport.requests.last { it.first=="/v1/profile/resume" }.second
+        assertEquals(6L,originalResumeRequest.getValue("expected_resume_version").jsonPrimitive.long)
+        assertEquals(bPoint.recordId,originalResumeRequest.getValue("active_resume").jsonObject.getValue("record_id").jsonPrimitive.content)
+        val before=transport.paths.size
+        // Host retries with current B, while the frozen format request still correctly names A.
+        assertEquals(ListeningResult.Ready(b),repo.changeFormat(scope,bSelection,point(b),bPoint.version,ListeningMode.BRIEFING,formatOperation))
+        assertEquals(before,transport.paths.size)
+        val resumed=repo.selectResume(scope,resumeOperation) as ListeningResult.Ready
+        assertEquals(7L,resumed.frame.resumeVersion)
+        assertEquals(originalResumeRequest,transport.requests.last().second)
+        assertEquals(listOf("/v1/profile/resume"),transport.paths.drop(before)) // Retry does not re-read/rebase its original CAS.
+        assertEquals(b.selection,resumed.frame.selection);assertEquals(b.checkpoint,resumed.frame.checkpoint)
+        assertEquals(originalFormatRequest,db.learning().record(owner.profileId.toString(),0,formatRequestId))
+        assertEquals(originalFormatReceipt,db.learning().record(owner.profileId.toString(),0,formatReceiptId))
+        assertEquals(1,transport.paths.count{it=="/v1/listening/format-changes"})
+    }
+
+    @Test fun formatReaffirmationRequiresItsOwnStrictAckAndExactCurrentBInsteadOfAnotherHead()=runBlocking {
+        repo.next(scope,null);val source=repo.snapshot()!!;transport.formatSource=source.selection;val operation=UUID.randomUUID()
+        val b=(repo.changeFormat(scope,source.selection!!,point(source),source.checkpoint!!.version,ListeningMode.BRIEFING,operation) as ListeningResult.Ready).frame
+        val bSelection=requireNotNull(b.selection);val bPoint=requireNotNull(b.checkpoint)
+        val cSelection=bSelection.copy(selectionId=UUID.randomUUID().toString(),previousSelectionId=bSelection.selectionId,ordinal=bSelection.ordinal+1)
+        val cPoint=bPoint.copy(recordId=UUID.randomUUID().toString()).let{it.copy(payload=it.payload.copy(checkpointId=it.recordId,selectionId=cSelection.selectionId))}
+        val c=b.copy(streamVersion=b.streamVersion+1,selection=cSelection,checkpoint=cPoint)
+        repo.attach(c);val before=transport.paths.size
+        assertEquals(ListeningResult.Superseded,repo.changeFormat(scope,cSelection,point(c),cPoint.version,ListeningMode.BRIEFING,operation))
+        assertEquals(c,repo.snapshot());assertEquals(before,transport.paths.size)
+        repo.attach(b)
+        // A matching restored B alone is not proof of this operation when its local ACK is absent.
+        db.openHelper.writableDatabase.execSQL("DELETE FROM learning_record WHERE profileId=? AND privacyEpoch=0 AND recordId=?",
+            arrayOf<Any>(owner.profileId.toString(),stableRecordId("receipt:$operation").toString()))
+        assertEquals(ListeningResult.Superseded,repo.changeFormat(scope,bSelection,point(b),bPoint.version,ListeningMode.BRIEFING,operation))
+        assertEquals(b,repo.snapshot());assertEquals(before,transport.paths.size)
     }
 
 }

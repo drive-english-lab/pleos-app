@@ -50,8 +50,12 @@ class Source6ListeningRepository(private val api: IncrementalLearningApi, privat
                         profile = value.profile
                         if (!profileNotOlder(scope, value.profile)) return@withTimeoutOrNull LearningReply.Failed("STALE_RESPONSE", true)
                         for (record in value.records) {
-                            val encoded = codecs.encode("source6", "PersonalReadRecord", record, WireSource6PersonalReadRecord.serializer())
-                            val raw = codecs.parse("source6", encoded).jsonObject
+                            val wire = codecs.encode("source6", "PersonalReadRecord", record, WireSource6PersonalReadRecord.serializer())
+                            val raw = codecs.parse("source6", wire).jsonObject
+                            // ReviewDao stores source6 records in canonical form. Compare
+                            // the same bytes/hash before and after its CAS transaction;
+                            // serializer property order is not a changed server record.
+                            val encoded = incrementalCanonical(raw)
                             val id = raw.getValue("record_id").jsonPrimitive.content
                             val kind = raw.getValue("kind").jsonPrimitive.content
                             val version = raw.getValue("version").jsonPrimitive.long
@@ -213,6 +217,84 @@ class Source6ListeningRepository(private val api: IncrementalLearningApi, privat
                 }
             }
         }
+    }
+
+    /** Freeze resume CAS once, including after a lost ACK. Composition stays outside
+     * lane: snapshot()/resume() each take the same mutex themselves.
+     */
+    suspend fun resumeListening(scope: LearningCallScope, operationId: UUID,
+        checkpointId: UUID): LearningReply<WireSource6PersonalProfileView> = guarded(scope) {
+        if (!api.isCurrent(scope)) return@guarded failedSession()
+        val id = operationId.toString(); val target = checkpointId.toString()
+        val previous = dao.operation(id)
+        val frozen: Pair<WireSource6PersonalResumeSelection, Boolean> = if (previous != null) {
+            originalListeningResume(scope, previous, id, target) to true
+        } else {
+            val fresh = when (val read = snapshot(scope)) {
+                is LearningReply.Failed -> return@guarded read
+                is LearningReply.Stored -> {
+                    if (read.scope != scope || !api.isCurrent(scope)) return@guarded failedSession()
+                    read.value.profile
+                }
+            }
+            // Another same-operation caller may have frozen while the GET was
+            // in flight. Read again under lane before introducing any CAS bytes.
+            lane.withLock {
+                require(api.isCurrent(scope))
+                val raced = dao.operation(id)
+                if (raced != null) originalListeningResume(scope, raced, id, target) to true
+                else {
+                    requireOwner(scope, fresh.profileContext)
+                    val request = WireSource6PersonalResumeSelection("6", id, context(scope), fresh.resumeVersion,
+                        WireSource6PersonalResumeRef("listening", target))
+                    val encoded = codecs.encode("source6", "PersonalResumeSelection", request, WireSource6PersonalResumeSelection.serializer())
+                    val row = freeze(scope, id, "source6_resume", target, encoded)
+                    originalListeningResume(scope, row, id, target) to false
+                }
+            }
+        }
+        if (!api.isCurrent(scope)) return@guarded failedSession()
+        val reply = resume(scope, frozen.first)
+        if (reply is LearningReply.Failed && reply.code != "STALE_RESPONSE") return@guarded reply
+        if (reply is LearningReply.Stored && !frozen.second) return@guarded reply
+        if (!api.isCurrent(scope)) return@guarded failedSession()
+        // Only an actual, strictly matched ACK can justify replacing an old
+        // receipt projection with a fresh GET. A failed CAS/pending row is not proof.
+        val row = dao.operation(id) ?: return@guarded LearningReply.Failed("STALE_RESPONSE", true)
+        val original = originalListeningResume(scope, row, id, target)
+        if (row.status != "acknowledged" || row.receiptJson == null)
+            return@guarded LearningReply.Failed("STALE_RESPONSE", true)
+        val ack = codecs.decodeSource6("PersonalProfileView", row.receiptJson, WireSource6PersonalProfileView.serializer())
+        requireOwner(scope, ack.profileContext)
+        require(original.expectedResumeVersion < Long.MAX_VALUE && ack.activeResume == original.activeResume &&
+            ack.resumeVersion == original.expectedResumeVersion + 1)
+        when (val read = snapshot(scope)) {
+            is LearningReply.Failed -> read
+            is LearningReply.Stored -> {
+                if (read.scope != scope || !api.isCurrent(scope)) return@guarded failedSession()
+                val actual = read.value.profile
+                if (actual.activeResume != original.activeResume || actual.resumeVersion < ack.resumeVersion ||
+                    actual.version < ack.version || actual.settings.version < ack.settings.version ||
+                    actual.historyCoverage.version < ack.historyCoverage.version)
+                    LearningReply.Failed("STALE_RESPONSE", false)
+                else LearningReply.Stored(scope, actual)
+            }
+        }
+    }
+
+    private fun originalListeningResume(scope: LearningCallScope, row: LocalReviewOperation,
+        operationId: String, checkpointId: String): WireSource6PersonalResumeSelection {
+        check(row.operationId == operationId && row.profileId == scope.owner.profileId.toString() &&
+            row.privacyEpoch == scope.owner.privacyEpoch && row.ownerRevision == scope.owner.revision &&
+            row.kind == "source6_resume" && row.targetId == checkpointId && row.status in setOf("pending", "acknowledged") &&
+            row.payloadHash == LearningJson.hash(row.payloadJson)) { "Immutable listening resume changed." }
+        val original = codecs.decodeSource6("PersonalResumeSelection", row.payloadJson, WireSource6PersonalResumeSelection.serializer())
+        requireOwner(scope, original.profileContext)
+        check(original.operationId == operationId && original.activeResume == WireSource6PersonalResumeRef("listening", checkpointId) &&
+            codecs.encode("source6", "PersonalResumeSelection", original, WireSource6PersonalResumeSelection.serializer()) == row.payloadJson) {
+            "Immutable listening resume target changed."
+        }
+        return original
     }
 
     suspend fun resume(scope: LearningCallScope, request: WireSource6PersonalResumeSelection): LearningReply<WireSource6PersonalProfileView> = lane.withLock {

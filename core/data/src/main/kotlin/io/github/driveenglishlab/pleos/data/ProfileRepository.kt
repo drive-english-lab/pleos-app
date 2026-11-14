@@ -22,10 +22,39 @@ class ProfileRepository internal constructor(
         { sessions -> LearningApi(context.applicationContext, serviceOrigin, sessions, allowLocalHttp) })
 
     @Volatile private var transitioning = false
+    @Volatile private var confirmedBinding: ProfileContext? = null
     private val mutex = Mutex()
     private val presentationToken = UUID.randomUUID()
     private val api = apiFactory(this)
     private val dao get() = database.learning()
+    @Volatile internal var lastConnectionDiagnostic=ProfileConnectionTrace()
+        private set
+    private fun connectionStage(stage:ProfileConnectionStage) { lastConnectionDiagnostic=ProfileConnectionTrace(stage) }
+
+    /** Read-only bounded diagnostics; never invokes Auth create/refresh/import or backend traffic. */
+    internal suspend fun inspectRecoveryDiagnostics():ProfileRecoveryDiagnostic {
+        val identity=auth.diagnosticState()
+        val local=dao.currentOwner()
+        val fenced=local?.let{dao.authCreation(it.profileId)!=null}
+        val incomplete=identity.sessionPresent==false && (identity.creationStarted==true || fenced==true)
+        return ProfileRecoveryDiagnostic(
+            if(identity.failure!=ProfileConnectionFailure.NONE)ProfileConnectionStage.PROTECTED_IDENTITY_READ
+            else if(incomplete)ProfileConnectionStage.CREATION_FENCE else ProfileConnectionStage.IDLE,
+            if(incomplete)ProfileConnectionFailure.STATE_OR_CREATION_FENCE else identity.failure,
+            identity,local!=null,fenced,lastConnectionDiagnostic)
+    }
+
+    /** Debug instrumentation bridge: fixed keys, enum values and nullable booleans only. */
+    suspend fun debugRecoveryDiagnostics():Map<String,String> {
+        check(BuildConfig.DEBUG) { "Debug diagnostics unavailable." }
+        val value=inspectRecoveryDiagnostics()
+        return linkedMapOf("stage" to value.stage.name,"failure" to value.failure.name,
+            "protected_evidence" to value.identity.evidence.name,
+            "encrypted_file_present" to value.identity.encryptedFilePresent.toString(),
+            "creation_started" to value.identity.creationStarted.toString(),"session_present" to value.identity.sessionPresent.toString(),
+            "owner_present" to value.ownerPresent.toString(),"auth_creation_fence_present" to value.authCreationFencePresent.toString(),
+            "last_connection_stage" to value.lastConnection.stage.name,"last_connection_failure" to value.lastConnection.failure.name)
+    }
 
     override suspend fun current(): LearningCallScope? = try {
         if (transitioning) return null
@@ -37,32 +66,67 @@ class ProfileRepository internal constructor(
     } catch (error: CancellationException) { throw error }
       catch (_: Exception) { null }
 
+    /** Reports only current binding receipts and retained journals, never a promise of total recovery. */
+    suspend fun recoveryProjection(): IdentityRecoveryProjection {
+        val local = dao.currentOwner()
+        val owner = local?.let { OwnerContext(UUID.fromString(it.profileId), it.privacyEpoch, it.revision, presentationToken) }
+        var evidence = auth.protectedEvidence()
+        val current = current()
+        if (evidence == ProtectedIdentityEvidence.AVAILABLE && current == null && !transitioning && local?.status in setOf("active", "provisional"))
+            evidence = ProtectedIdentityEvidence.READ_RETRYABLE
+        val profile = local?.let { dao.record(it.profileId, it.privacyEpoch, stableRecordId("profile-view").toString()) }
+            ?.let { learningJson.decodeFromString(WirePersonalProfileView.serializer(), it.payloadJson) }
+        val pending = local?.let {
+            dao.pending(it.profileId, it.privacyEpoch).isNotEmpty() || database.progress().pending(it.profileId, it.privacyEpoch).isNotEmpty() ||
+                database.aiLearning().pending(it.profileId, it.privacyEpoch).isNotEmpty() || database.segments().pending(it.profileId, it.privacyEpoch).isNotEmpty() ||
+                database.review().pending(it.profileId, it.privacyEpoch, it.revision).isNotEmpty() || dao.pendingProfileSettings(it.profileId) != null
+        } ?: false
+        return IdentityRecoveryPolicy.project(IdentityRecoveryEvidence(owner, evidence,
+            accountSignInRequired = profile?.profileKind == "linked", verifiedServerBinding = confirmedBinding,
+            currentServerAcknowledgement = current?.owner == owner && confirmedBinding == owner?.let { ProfileContext(it.profileId, it.privacyEpoch) },
+            pendingOutbox = pending, transitionPending = transitioning || local?.status !in setOf("active", "provisional")))
+    }
+
     /** On restoration/network/storage failure retain the same local owner and immutable outbox. */
     suspend fun connect(): LearningReply<WirePersonalProfileView> = mutex.withLock {
         try {
+            connectionStage(ProfileConnectionStage.OWNER_READ)
             val local = dao.provisionalOwner()
             if (local.status !in setOf("provisional", "active")) return@withLock LearningReply.Failed("PROFILE_TRANSITION_PENDING", false)
-            auth.ensureSession(allowCreate = local.status == "provisional" && dao.authCreation(local.profileId) == null) {
+            auth.ensureSessionTraced(allowCreate = local.status == "provisional" && dao.authCreation(local.profileId) == null,beforeCreate = {
                 database.withTransaction {
                     check(dao.currentOwner() == local && dao.authCreation(local.profileId) == null)
                     dao.insertJournal(OwnerJournal(UUID.randomUUID().toString(), local.profileId, local.revision, "auth_creation", "started", null))
                 }
+            },stage=::connectionStage)
+            connectionStage(ProfileConnectionStage.CURRENT_SCOPE)
+            val scope = current() ?: run {
+                lastConnectionDiagnostic=ProfileConnectionTrace(ProfileConnectionStage.CURRENT_SCOPE,ProfileConnectionFailure.SESSION_UNAVAILABLE)
+                return@withLock LearningReply.Failed("SESSION_UNAVAILABLE", true)
             }
-            val scope = current() ?: return@withLock LearningReply.Failed("SESSION_UNAVAILABLE", true)
+            connectionStage(ProfileConnectionStage.BOOTSTRAP_OPERATION)
             val operation = auth.bootstrapOperation(UUID.fromString(local.profileId))
+            connectionStage(ProfileConnectionStage.BOOTSTRAP_HTTP)
             when (val boot = api.bootstrapProfile(scope, WirePersonalBootstrapRequest(operation.toString(), local.profileId, "5"))) {
                 is LearningReply.Failed -> boot
                 is LearningReply.Stored -> {
                     if (boot.value.profileContext.profileId != local.profileId) return@withLock LearningReply.Failed("PROFILE_MERGE_REQUIRED", false)
                     // Bootstrap receipts are immutable; read the current epoch/version separately.
+                    connectionStage(ProfileConnectionStage.PROFILE_HTTP)
                     when (val latest = api.readProfile(scope)) {
                         is LearningReply.Failed -> latest
-                        is LearningReply.Stored -> acceptProfile(scope, latest.value)
+                        is LearningReply.Stored -> {
+                            connectionStage(ProfileConnectionStage.ACCEPT_PROFILE)
+                            acceptProfile(scope, latest.value).also{if(it is LearningReply.Stored)connectionStage(ProfileConnectionStage.COMPLETE)}
+                        }
                     }
                 }
             }
         } catch (error: CancellationException) { throw error }
-        catch (_: Exception) { LearningReply.Failed("SESSION_RECOVERY_REQUIRED", true) }
+        catch (error: Exception) {
+            lastConnectionDiagnostic=lastConnectionDiagnostic.copy(failure=profileConnectionFailure(error))
+            LearningReply.Failed("SESSION_RECOVERY_REQUIRED", true)
+        }
     }
 
     suspend fun refresh(): LearningReply<WirePersonalProfileView> = mutex.withLock {
@@ -255,6 +319,7 @@ class ProfileRepository internal constructor(
             dao.putHistoryCoverage(LocalHistoryCoverage(owner.profileId, epoch, accepted.historyCoverage.origin,
                 accepted.historyCoverage.version, accepted.historyCoverage.historyGap))
             acknowledged?.let { (operation, bytes) -> check(dao.acknowledgeProfileSettings(owner.profileId, operation, bytes) == 1) }
+            confirmedBinding = ProfileContext(newScope.owner.profileId, newScope.owner.privacyEpoch)
             LearningReply.Stored(newScope, accepted)
         }
     }

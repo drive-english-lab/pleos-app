@@ -15,7 +15,9 @@ class IncrementalLearningApi internal constructor(
     private val sessions: LearningSessionSource,
     private val codecs: IncrementalContractJson,
     private val transport: LearningHttpTransport,
+    private val observationTransportIdentity:NextObservationTransportIdentity=NextObservationTransportIdentity(transport.configuredOrigin),
 ) {
+    fun nextObservations():NextObservationReader=NextObservationReader(this,codecs,transport,observationTransportIdentity)
     suspend fun isCurrent(scope: LearningCallScope): Boolean {
         val now = sessions.current() ?: return false
         return now.owner == scope.owner && now.session.subjectId == scope.session.subjectId &&
@@ -27,9 +29,11 @@ class IncrementalLearningApi internal constructor(
 
     suspend fun <T> call(bundle: String, template: String, method: String, scope: LearningCallScope,
         payload: JsonElement?, responseType: DeserializationStrategy<T>,
-        pathArguments: Map<String, String> = emptyMap(), queryArguments: Map<String, String?> = emptyMap()): LearningReply<T> {
+        pathArguments: Map<String, String> = emptyMap(), queryArguments: Map<String, String?> = emptyMap(),
+        responseCapabilities: ((Set<String>) -> Unit)? = null, observationOnly: Boolean = false): LearningReply<T> {
         if (!isCurrent(scope)) return LearningReply.Failed("SESSION_CHANGED", false)
         try {
+            require(!observationOnly || bundle in setOf("review2", "review3") && method.equals("post", true) && template == "/v2/listening/next")
             val file = "$bundle.openapi.json"
             val operation = codecs.operation(bundle, template, method.lowercase())
             val bodySchema = operation["requestBody"]?.jsonObject?.get("content")?.jsonObject?.get("application/json")?.jsonObject?.get("schema")?.jsonObject
@@ -66,6 +70,7 @@ class IncrementalLearningApi internal constructor(
             require(body == null || body.size <= if (template.endsWith("/profile/sync")) 256 * 1024 else 16 * 1024)
             val headers = mutableMapOf("Authorization" to scope.session.authorizationHeader(), "X-Installation-ID" to scope.session.installationId.toString(),
                 "Accept" to "application/json", "Cache-Control" to "no-store")
+            if (observationOnly) headers["X-Pleos-Observation-Only"] = "true"
             val input = payload as? JsonObject
             if (body != null) {
                 headers["Content-Type"] = "application/json; charset=utf-8"
@@ -73,7 +78,13 @@ class IncrementalLearningApi internal constructor(
                     input?.get("operation_id") ?: input?.get("request_id") ?: input?.get("observation_id")
                 headers["Idempotency-Key"] = identity?.jsonPrimitive?.content ?: throw LearningProtocolException()
             }
-            val budget = if (input?.get("interaction_channel") == JsonPrimitive("gleo")) 4_000L else 8_000L
+            val gleo = input?.get("interaction_channel") == JsonPrimitive("gleo") ||
+                input?.get("request_channel") == JsonPrimitive("gleo") || input?.get("entry") == JsonPrimitive("gleo")
+            // Provider budgets remain server-owned. These are the existing end-to-end
+            // admission limits; an observation/retry does not extend a stored intent.
+            val budget = if (bundle in setOf("review2", "review3", "assessment-review", "catalog-views")) {
+                if (gleo) 6_000L else 10_000L
+            } else if (gleo) 4_000L else 8_000L
             val response = withTimeoutOrNull(budget) { transport.exchange(method, path, query, headers, body) }
                 ?: return LearningReply.Failed("DEADLINE_EXCEEDED", true)
             if (!isCurrent(scope)) return LearningReply.Failed("SESSION_CHANGED", false)
@@ -86,7 +97,7 @@ class IncrementalLearningApi internal constructor(
             val schema = operation["responses"]?.jsonObject?.get(status)?.jsonObject?.get("content")?.jsonObject?.get("application/json")?.jsonObject?.get("schema")?.jsonObject
                 ?: throw LearningProtocolException()
             codecs.validate(bundle, file, schema, parsed)
-            if (response.status != 200) {
+            if (response.status !in 200..299) {
                 val error = parsed.jsonObject["error"]!!.jsonObject
                 val retryAfter = response.headers.entries.firstOrNull { it.key.equals("Retry-After", true) }?.value?.toLongOrNull()?.takeIf { it >= 0 }
                 return LearningReply.Failed(error["code"]!!.jsonPrimitive.content, error["retryable"]!!.jsonPrimitive.boolean, retryAfter)
@@ -100,13 +111,22 @@ class IncrementalLearningApi internal constructor(
             for ((key, expected) in pathArguments) result[key]?.let { require(it.jsonPrimitive.content == expected) }
             val responseRef = schema["\$ref"]!!.jsonPrimitive.content.substringAfterLast('/')
             val value = codecs.decode(bundle, responseRef, source, responseType)
+            if (!isCurrent(scope)) return LearningReply.Failed("SESSION_CHANGED", false)
+            if (responseCapabilities != null) {
+                val entries = response.headers.entries.filter { it.key.equals("X-Pleos-Review-Capabilities", true) }
+                val raw = entries.singleOrNull()?.value?.takeIf { it.length <= 512 }
+                val known = setOf("pending_original_v1", "pending_ready_alternative_v1", "pending_continue_v1")
+                val capabilities = if (bundle in setOf("review2", "review3") && raw != null && raw.split(',').all { it.trim().matches(Regex("[a-z0-9_]+")) })
+                    raw.split(',').map(String::trim).filter { it in known }.toSet() else emptySet()
+                responseCapabilities(capabilities)
+            }
             return LearningReply.Stored(scope, value)
         } catch (error: CancellationException) { throw error }
         catch (_: IllegalArgumentException) { return LearningReply.Failed("INVALID_CONTRACT", false) }
         catch (_: Exception) { return LearningReply.Failed("UPSTREAM_UNAVAILABLE", true) }
     }
 
-    private fun requireOwner(element: JsonElement?, scope: LearningCallScope) {
+    internal fun requireOwner(element: JsonElement?, scope: LearningCallScope) {
         when (element) {
             is JsonObject -> {
                 element["profile_id"]?.let { require(it.jsonPrimitive.content == scope.owner.profileId.toString()) }
