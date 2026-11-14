@@ -440,9 +440,20 @@ class ProductSessionHost @Inject constructor(@param:ApplicationContext private v
     }
     private fun accountAccess(view: SessionView, requireFocus: Boolean = true) = accountEntryAllowed(view, requireFocus)
     private fun cancelAccountEntry() {
-        accountGeneration++
+        val cancellation = ++accountGeneration
         accountJob?.cancel(); accountJob = null
         presentation.update { it.copy(accountEntry = AccountEntryState(AccountEntryPhase.CANCELLED, message = "계정 연결을 멈췄어요. 기존 기록은 유지돼요", canRetryTransition = it.accountEntry.canRetryTransition)) }
+        // A process restart can leave an unauthenticated preparation without a live job.
+        // Explicit cancellation may close that preparation; authenticated/fenced work stays journaled.
+        scope.launch {
+            if (cancellation != accountGeneration) return@launch
+            val pending = accounts.pendingLinkedTarget()
+            if (cancellation != accountGeneration) return@launch
+            pending?.let { accounts.cancelLinkedTarget(it.operationId) }
+            val remaining = accounts.pendingLinkedTarget() != null
+            if (cancellation == accountGeneration)
+                presentation.update { it.copy(accountEntry = it.accountEntry.copy(canRetryTransition = remaining)) }
+        }
     }
     private fun accountMessage(code: String) = when (code) {
         "GOOGLE_PROVIDER_DISABLED" -> "로그인 제공자가 아직 활성화되지 않았어요"
@@ -555,6 +566,8 @@ class ProductSessionHost @Inject constructor(@param:ApplicationContext private v
                     val pending = accounts.pendingLinkedTarget() != null
                     if (generation == accountGeneration || presentation.value.accountEntry.phase == AccountEntryPhase.CANCELLED)
                         presentation.update { it.copy(accountEntry = it.accountEntry.copy(canRetryTransition = pending)) }
+                    // Reapply owner/epoch access even when an account attempt ends in failure.
+                    updateAccess()
                 }
                 if (generation == accountGeneration && presentation.value.accountEntry.busy)
                     phase(AccountEntryPhase.CANCELLED, "계정 연결을 멈췄어요. 보이는 주차 화면에서 다시 시도해 주세요")
