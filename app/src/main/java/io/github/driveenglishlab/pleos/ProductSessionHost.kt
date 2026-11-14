@@ -450,7 +450,7 @@ class ProductSessionHost @Inject constructor(@param:ApplicationContext private v
             val pending = accounts.pendingLinkedTarget()
             if (cancellation != accountGeneration) return@launch
             pending?.let { accounts.cancelLinkedTarget(it.operationId) }
-            val remaining = accounts.pendingLinkedTarget() != null
+            val remaining = accounts.hasPendingAccountTransition()
             if (cancellation == accountGeneration)
                 presentation.update { it.copy(accountEntry = it.accountEntry.copy(canRetryTransition = remaining)) }
         }
@@ -458,6 +458,11 @@ class ProductSessionHost @Inject constructor(@param:ApplicationContext private v
     private fun accountMessage(code: String) = when (code) {
         "GOOGLE_PROVIDER_DISABLED" -> "로그인 제공자가 아직 활성화되지 않았어요"
         "GOOGLE_WEB_CLIENT_ID_MISSING", "GOOGLE_WEB_CLIENT_ID_INVALID", "AUTH_PROJECT_NOT_CONFIGURED" -> "차량의 계정 연결 설정을 먼저 확인해 주세요"
+        "MERGE_REPREPARE_REQUIRED", "MERGE_EXPIRED" -> "이전 병합 준비가 만료되거나 기록이 변경됐어요. ‘계정 전환 다시 확인’을 누르면 현재 기록을 확인하고 다시 준비해요"
+        "MERGE_ORIGINAL_REQUEST_UNKNOWN", "MERGE_COMPLETION_UNCERTAIN", "MERGE_RESULT_UNCERTAIN" -> "이전 병합의 접수 여부를 확인하고 있어요. 기록을 보존한 채 같은 요청을 다시 확인해 주세요"
+        "MERGE_ORIGINAL_REQUEST_UNAVAILABLE", "MERGE_TARGET_BINDING_UNAVAILABLE", "MERGE_SOURCE_BINDING_UNAVAILABLE" -> "이전 계정 연결을 확인할 보호 정보가 부족해요. 기존 기록을 보존하고 있어요"
+        "MERGE_SOURCE_AUTH_REQUIRED", "MERGE_PROTECTED_RECOVERY_REQUIRED" -> "기존 계정의 보호된 연결을 확인하지 못했어요. 연결 상태를 확인한 뒤 다시 시도해 주세요"
+        "MERGE_SOURCE_CHANGED", "MERGE_SOURCE_EPOCH_CHANGED", "MERGE_SOURCE_OWNERSHIP_CHANGED", "MERGE_TARGET_CHANGED" -> "계정이나 기록 상태가 바뀌었어요. 기존 기록을 보존한 채 계정 연결을 다시 확인해 주세요"
         "AUTH_SETTINGS_UNAVAILABLE" -> "로그인 제공자 상태를 확인하지 못했어요. 연결을 다시 확인해 주세요"
         "GOOGLE_CREDENTIAL_CLIENT_UNAVAILABLE", "GOOGLE_CREDENTIAL_CLIENT_UNSUPPORTED", "GOOGLE_CREDENTIAL_PROVIDER_UNAVAILABLE" -> "이 차량에서 Google 계정 선택을 사용할 수 없어요"
         else -> "계정 연결을 확인하지 못했어요. 기존 기록을 유지한 채 다시 시도할 수 있어요"
@@ -487,14 +492,14 @@ class ProductSessionHost @Inject constructor(@param:ApplicationContext private v
                         coordinator.suspendForReviewTools(originalOwner)
                     }
                     learning.cancelEffects(); controller?.pause()
-                    val result = accounts.recoverLinkedTarget(::current) ?: accounts.recoverMerge()
+                    val result = accounts.recoverLinkedTarget(::current) ?: accounts.recoverMerge(allowReprepare = true, mayAct = ::current)
                     if (generation != accountGeneration) return@launch
                     if (result == null) phase(AccountEntryPhase.FAILED, "저장된 계정 전환이 없어요")
                     else if (result is LearningReply.Failed) phase(AccountEntryPhase.FAILED, accountMessage(result.code))
                     else { phase(AccountEntryPhase.COMPLETE, "저장된 계정 전환을 확인했어요"); connectProfile() }
                     return@launch
                 }
-                if (accounts.pendingLinkedTarget() != null) {
+                if (accounts.hasPendingAccountTransition()) {
                     phase(AccountEntryPhase.FAILED, "저장된 계정 전환을 먼저 다시 확인해 주세요"); return@launch
                 }
                 phase(AccountEntryPhase.CHECKING_PROVIDER)
@@ -563,7 +568,7 @@ class ProductSessionHost @Inject constructor(@param:ApplicationContext private v
             finally {
                 withContext(NonCancellable) {
                     preparedTarget?.let { id -> accounts.cancelLinkedTarget(id) }
-                    val pending = accounts.pendingLinkedTarget() != null
+                    val pending = accounts.hasPendingAccountTransition()
                     if (generation == accountGeneration || presentation.value.accountEntry.phase == AccountEntryPhase.CANCELLED)
                         presentation.update { it.copy(accountEntry = it.accountEntry.copy(canRetryTransition = pending)) }
                     // Reapply owner/epoch access even when an account attempt ends in failure.
@@ -1113,7 +1118,11 @@ class ProductSessionHost @Inject constructor(@param:ApplicationContext private v
                 presentation.update { it.copy(accountEntry = AccountEntryState(AccountEntryPhase.FAILED, message = "저장된 계정 전환을 다시 확인해 주세요", canRetryTransition = true)) }; return
             }
             val merge = accounts.recoverMerge()
-            if (merge is LearningReply.Failed) { presentation.update { it.copy(recovery = "기존 기록을 보존한 채 계정 연결을 다시 확인하고 있어요") }; return }
+            if (merge is LearningReply.Failed) {
+                presentation.update { it.copy(recovery = "기존 기록을 보존한 채 계정 연결을 다시 확인하고 있어요",
+                    accountEntry = AccountEntryState(AccountEntryPhase.FAILED, message = accountMessage(merge.code), canRetryTransition = true)) }
+                return
+            }
             when (val reply = profiles.connect(allowCreation)) {
                 is LearningReply.Failed -> presentation.update { it.copy(recovery = failure(reply.code)) }
                 is LearningReply.Stored -> {

@@ -332,7 +332,7 @@ abstract class LearningDao {
         return true
     }
 
-    @Query("SELECT * FROM owner_journal WHERE kind IN ('logout','merge','history_deletion') AND status != 'complete' ORDER BY rowid")
+    @Query("SELECT * FROM owner_journal WHERE kind IN ('logout','merge','history_deletion') AND status NOT IN ('complete','reprepared') ORDER BY rowid")
     abstract suspend fun pendingOwnerTransitions(): List<OwnerJournal>
     @Query("UPDATE owner_journal SET status = :status WHERE operationId = :id")
     abstract suspend fun updateOwnerJournal(id: String, status: String)

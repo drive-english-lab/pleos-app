@@ -188,6 +188,10 @@ class LearningApi internal constructor(private val sessions: LearningSessionSour
             val schema = contracts.schema("personal-data.openapi.json", "#/components/schemas/ErrorEnvelope")
             contracts.validate("personal-data.openapi.json", schema, parsed)
             val error = parsed.jsonObject["error"]!!.jsonObject
+            if (template == "/v1/profile/merges/complete") {
+                if (parsed.jsonObject["operation_id"] != content?.get("operation_id")) throw LearningProtocolException()
+                if (error["code"] == JsonPrimitive("MERGE_EXPIRED") && response.status != 409) throw LearningProtocolException()
+            }
             val retryAfter = response.headers.entries.firstOrNull { it.key.equals("Retry-After", true) }?.value?.toLongOrNull()?.takeIf { it >= 0 }
             return LearningReply.Failed(error["code"]!!.jsonPrimitive.content, error["retryable"]!!.jsonPrimitive.boolean, retryAfter)
         } catch (error: CancellationException) { throw error }

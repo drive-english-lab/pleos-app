@@ -40,6 +40,28 @@ class LearningApiTest {
         return fixture.copy(clientContext = fixture.clientContext.copy(presentationToken = scope.owner.presentationToken.toString())) to scope
     }
 
+    @Test fun mergeExpiryNeedsTheExactOriginalOperationAndConflictStatus() = runBlocking {
+        val request = WirePersonalMergeComplete(UUID.randomUUID().toString(), WireCommonProfileContext(UUID.randomUUID().toString(), 0),
+            UUID.randomUUID().toString(), "synthetic-merge-proof-" + "x".repeat(32), "5")
+        val call = scope(learningJson.encodeToJsonElement(WireCommonProfileContext.serializer(), request.profileContext).jsonObject)
+        for ((operation, status, expected) in listOf(
+            Triple(request.operationId, 409, "MERGE_EXPIRED"),
+            Triple(null, 409, "INVALID_CONTRACT"),
+            Triple(UUID.randomUUID().toString(), 409, "INVALID_CONTRACT"),
+            Triple(request.operationId, 503, "INVALID_CONTRACT"),
+        )) {
+            val envelope = buildJsonObject {
+                put("schema_version", "5"); put("operation_id", operation?.let(::JsonPrimitive) ?: JsonNull)
+                put("error", buildJsonObject { put("code", "MERGE_EXPIRED"); put("retryable", false); put("message_ko", "병합 준비를 다시 확인해 주세요") })
+            }
+            val transport = FakeTransport { response(envelope, status) }
+            val api = LearningApi(LearningSessionSource { call }, LearningContractJson(context), transport)
+            val result = api.completeMerge(call, request) as LearningReply.Failed
+            assertEquals(expected, result.code)
+            assertEquals(request.operationId, transport.headers.single()["Idempotency-Key"])
+        }
+    }
+
     @Test fun sharedPositiveAndNegativeVectorsMatchTheServerSchema5Boundaries() {
         val contract = LearningContractJson(context); var positives = 0; var negatives = 0
         for (item in cases()) {

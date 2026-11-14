@@ -202,9 +202,10 @@ class LinkedAccountTargetTest {
             AuthSessionStore(f.context).saveAccountState(learningJson.encodeToString(ProtectedMerge.serializer(),pending))
             f.originalBytes=File(f.directory,"learning-auth-v1.enc").readBytes()
             var provider:suspend(AuthSessionStore)->Unit={throw java.io.IOException("Synthetic Google Auth HTTP failure")}
+            var targetRefresh:suspend(AuthSessionStore)->LearningSession={throw AssertionError("No target profile/merge request authorized")}
             f.accounts.mergeTargetAuthFactory={store->object:LinkedTargetAuth{
                 override suspend fun signInGoogle(idToken:String,nonce:String?){provider(store)}
-                override suspend fun ensureSession(allowCreate:Boolean,beforeCreate:suspend()->Unit):LearningSession=throw AssertionError("No target profile/merge request authorized")
+                override suspend fun ensureSession(allowCreate:Boolean,beforeCreate:suspend()->Unit):LearningSession {check(!allowCreate);return targetRefresh(store)}
                 override suspend fun currentSession():LearningSession?=null
                 override suspend fun bootstrapOperation(profileId:UUID)=throw AssertionError("No target bootstrap authorized")
                 override suspend fun close(){}
@@ -226,7 +227,11 @@ class LinkedAccountTargetTest {
             assertEquals(f.outbox,f.db.learning().outboxEvent(f.outbox.eventId));f.assertSourceFilePreserved()
             f.permitted=true
             val changed=f.source.copy(privacyEpoch=f.source.privacyEpoch+1,revision=f.source.revision+1)
-            provider={f.db.learning().putOwner(changed)}
+            provider={throw AssertionError("Protected target must not require another Google credential")}
+            targetRefresh={store->
+                f.db.learning().putOwner(changed)
+                LearningSession(f.targetSubject,f.targetSession,UUID.fromString(store.identity().installationId),"synthetic-target")
+            }
             assertEquals("SESSION_CHANGED",(f.accounts.signInExistingGoogle("synthetic-provider-token","synthetic-nonce"){true} as LearningReply.Failed).code)
             assertEquals(changed,f.db.learning().currentOwner())
             assertTrue(f.db.learning().pendingOwnerTransitions().isEmpty())

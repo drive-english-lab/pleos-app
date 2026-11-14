@@ -14,6 +14,14 @@ Pleos Connect용 Android 앱이다. 기본 진입은 실제 프로필·catalog·
 
 **실제 Google 제공자는 비활성이고 client ID가 없으며 actualPower는 UNKNOWN이다.** 기존 MainActivity는 복구 안내/비활성 복원 행동을 유지한다. 실제 보호 재확인 후 암호문 hash가 같고 session 없는 creation fence가 유지됨을 확인했다. 실제 계정 로그인·복원 성공, provider 활성화/기기 지원·전원·차량을 검증했다고 표시하지 않는다. T052/T057은 미완료로 유지한다. Sites는 로컬 예시4캡처만 반영했고 배포하지 않았다. [최종 검증·캡처](../docs/verification/learning-review-20261115/README.md).
 
+## T052 병합 실패 복구 보완 · 2026-11-15
+
+원 complete body/hash/operation과 target subject/session/installation/epoch를 보호 저장하며 성공 불명은 같은 요청만 재조정한다. complete의 실제 `MERGE_EXPIRED` 409만 확정 미병합으로 받아 명시적인 ‘계정 전환 다시 확인’에서 source 인증·최신 anonymous profile/epoch·미전송 ACK·같은 target을 검사한 뒤 연결된 새 prepare/complete를 만든다. background는 새 proof를 발급하지 않는다. body는 source fence 전에 고정하고 중단·응답 유실·원/새 intent 계보를 보존한다. 완료한 옛 계보가 다음 계정 전환을 막지 않도록 terminal journal을 pending 조회에서 제외했다.
+
+legacy body 미확인, 일반 conflict·stale epoch·target 변화는 불명/해당 사유의 대기로 보존한다. 기존 SQL의 target epoch 검사가 receipt보다 앞서므로, target 삭제 뒤 원 요청을 확정할 수 없는 경우 자동 새 병합으로 우회하지 않는다. 서버 cb6c904의 좁은 오류 매핑만 연계하며 공개 wire/DB 변경과 실제 Google 인증은 실행하지 않았다.
+
+최종 검증: domain73, AVD data146개(145통과·실연동 opt-in1제외), 새 복구6개 별도 통과, 관련 계정 화면4개 통과. debug/release·test APK·lint(error0/warning37)와 계약 동기화4개를 통과했다. 최초 새 fixture6개 실패는 합성 proof의 최소32자 위반을 수정하고 전체146개를 재확인했다. 실제 계정/차량 조건은 위 T052/T057의 미완료 상태를 유지한다.
+
 ## R8 현재 구현·검증 · 2026-11-15
 
 대기 중인 같은 기사 B에 대해 계속 기다리기·원문 듣기·다른 준비 뉴스를 각각 명시적으로 선택한다. 듣던 A의 실제 위치와 전역 설정은 보존하고, 대안은 준비된 다른 기사만 고른다. 새 읽기 전용 GET은 원 요청/해시/현재 사용자·서버 메타데이터를 확인하며 구형 서버에서 POST로 우회하지 않는다. 앱 재시작·실패·늦은 응답은 저장 상태만 복원하고 자동 재생하지 않는다.
