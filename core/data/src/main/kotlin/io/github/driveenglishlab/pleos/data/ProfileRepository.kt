@@ -15,9 +15,9 @@ class ProfileRepository internal constructor(
     private val auth: ProfileAuth,
     apiFactory: (LearningSessionSource) -> LearningApi,
 ) : LearningSessionSource {
-    constructor(context: Context, database: LearningDatabase, serviceOrigin: String) : this(
+    constructor(context: Context, database: LearningDatabase, serviceOrigin: String, allowLocalHttp: Boolean = false) : this(
         database, SupabaseProfileAuth(AuthSessionStore(context.applicationContext)),
-        { sessions -> LearningApi(context.applicationContext, serviceOrigin, sessions) })
+        { sessions -> LearningApi(context.applicationContext, serviceOrigin, sessions, allowLocalHttp) })
 
     private val mutex = Mutex()
     private val presentationToken = UUID.randomUUID()
@@ -92,6 +92,30 @@ class ProfileRepository internal constructor(
         val command = dao.pendingProfileSettings(scope.owner.profileId.toString())
             ?: return@withLock LearningReply.Failed("NO_PENDING_SETTINGS", false)
         sendSettings(scope, learningJson.decodeFromString(WirePersonalSettingsPatch.serializer(), command.payloadJson), command.payloadJson)
+    }
+
+    suspend fun hasPendingSettings(): Boolean {
+        val owner = current()?.owner ?: return false
+        return dao.pendingProfileSettings(owner.profileId.toString()) != null
+    }
+
+    /** Explicit reconciliation only: retry original bytes first. A confirmed CAS rejection may
+     * retire that rejected command after a current read; no stale edit is automatically rebased.
+     */
+    suspend fun reconcileSettings(): LearningReply<WirePersonalProfileView> = mutex.withLock {
+        val scope = current() ?: return@withLock LearningReply.Failed("SESSION_UNAVAILABLE", true)
+        val command = dao.pendingProfileSettings(scope.owner.profileId.toString())
+            ?: return@withLock when (val latest = api.readProfile(scope)) {
+                is LearningReply.Failed -> latest
+                is LearningReply.Stored -> acceptProfile(scope, latest.value)
+            }
+        val request = learningJson.decodeFromString(WirePersonalSettingsPatch.serializer(), command.payloadJson)
+        val original = sendSettings(scope, request, command.payloadJson)
+        if (original !is LearningReply.Failed || original.code != "VERSION_MISMATCH") return@withLock original
+        when (val latest = api.readProfile(scope)) {
+            is LearningReply.Failed -> latest
+            is LearningReply.Stored -> acceptProfile(scope, latest.value, request.operationId to command.payloadJson)
+        }
     }
 
     private suspend fun sendSettings(scope: LearningCallScope, request: WirePersonalSettingsPatch, payload: String): LearningReply<WirePersonalProfileView> =

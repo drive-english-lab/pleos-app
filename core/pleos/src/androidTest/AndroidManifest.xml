@@ -1,0 +1,13 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-sdk android:targetSdkVersion="35" />
+    <application>
+        <activity android:name="io.github.driveenglishlab.pleos.platform.MediaTestActivity" android:exported="false" />
+        <service android:name="io.github.driveenglishlab.pleos.platform.MediaTestService"
+            android:exported="false" android:foregroundServiceType="mediaPlayback">
+            <intent-filter>
+                <action android:name="androidx.media3.session.MediaLibraryService" />
+                <action android:name="android.media.browse.MediaBrowserService" />
+            </intent-filter>
+        </service>
+    </application>
+</manifest>

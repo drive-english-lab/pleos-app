@@ -13,6 +13,7 @@ android {
     useLibrary("android.car", false)
     defaultConfig {
         minSdk = 28
+        testOptions.targetSdk = 35
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 

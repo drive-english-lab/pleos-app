@@ -1,6 +1,6 @@
 {
   "packageName": "io.github.driveenglishlab.pleos",
-  "appDescription": "A developer build for checking the Pleos application environment.",
+  "appDescription": "A manual diagnostic schema that is not registered as the product App Schema.",
   "invokeWord": "드라이브 잉글리시",
   "version": "0.1.0",
   "actionCalls": [

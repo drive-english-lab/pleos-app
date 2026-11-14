@@ -5,6 +5,8 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.withContext
 import java.util.UUID
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
 
 enum class OutputRoute { GLEO, PARKED_TTS }
 enum class VoiceInputActivity { IDLE, CAPTURING, PROCESSING }
@@ -33,6 +35,14 @@ data class SessionView(
     val preparedSupports: List<PracticePresentationTicket> = emptyList(),
     val voiceInput: VoiceInputActivity = VoiceInputActivity.IDLE,
     val lastCapture: Capture? = null,
+    val ownerBinding: OwnerBindingStatus = OwnerBindingStatus.UNRESOLVED,
+    val listening: ListeningWorkRef? = null,
+    val mediaPositionMs: Long? = null,
+    val mediaPlaying: Boolean = false,
+    val mediaConnected: Boolean = false,
+    val navigationGeneration: Long = 0,
+    val intentGeneration: Long = 0,
+    val activeOperations: Set<SessionOperationKind> = emptySet(),
 )
 
 /** Process-scoped reducer. All callbacks use the same serialized lane. */
@@ -43,7 +53,12 @@ class SessionCoordinator {
     private val issuedOutputs = linkedMapOf<UUID, OutputExpectation>()
     private var gleoCapabilities = VoiceCapabilities()
     private var waitRoute: OutputRoute? = null
+    private val observable = MutableStateFlow(SessionView())
+    val state = observable.asStateFlow()
+    private val operations = mutableMapOf<SessionOperationKind, SessionOperationTicket>()
+    private var restrictedReturn: SessionScreen? = null
     private var view = SessionView()
+        set(value) { field = value; observable.value = value }
 
     suspend fun snapshot(): SessionView = mutex.withLock { view }
 
@@ -54,9 +69,11 @@ class SessionCoordinator {
             clock.cancel(); waitRoute = null
             view = view.copy(expectedOutput = null)
         }
+        if (!access.detailsOpen && view.screen !in setOf(SessionScreen.RESTRICTED, SessionScreen.RECOVERY, SessionScreen.CONNECTING))
+            restrictedReturn = if (view.screen == SessionScreen.CAPTURE) SessionScreen.QUESTION else view.screen
         view = view.copy(access = access, inputPhase = if (view.pendingAnswer != null) InputPhase.ACCEPTED else input.phase, screen = when {
             !access.detailsOpen -> SessionScreen.RESTRICTED
-            view.screen == SessionScreen.RESTRICTED -> SessionScreen.SAVED
+            view.screen == SessionScreen.RESTRICTED -> restrictedReturn ?: SessionScreen.SAVED
             else -> view.screen
         })
         view
@@ -66,13 +83,127 @@ class SessionCoordinator {
                          dialogueProgress: DialogueProgress? = null): SessionView = mutex.withLock {
         input.invalidate()
         val previous = view.owner
+        operations.clear()
+        restrictedReturn = null
         if (previous == null || previous.profileId != owner.profileId || previous.privacyEpoch != owner.privacyEpoch || previous.revision != owner.revision) issuedOutputs.clear()
         require(dialogueProgress == null || lessonId != null)
         clock.restore(dialogueProgress ?: DialogueProgress.newLesson())
         waitRoute = null
         // A transition never imports old real-time grants, capture, or playback intent.
-        view = SessionView(owner = owner, task = task, lessonId = lessonId, dialogueProgress = dialogueProgress)
+        view = SessionView(owner = owner, task = task, lessonId = lessonId, dialogueProgress = dialogueProgress,
+            ownerBinding = OwnerBindingStatus.VERIFIED, mediaConnected = view.mediaConnected)
         view
+    }
+
+    suspend fun navigate(context: OwnerContext?, destination: SessionScreen): Boolean = mutex.withLock {
+        if (context != view.owner || destination !in setOf(SessionScreen.ONBOARDING, SessionScreen.NEWS, SessionScreen.PLAYER,
+                SessionScreen.ARTICLE_INFO, SessionScreen.HISTORY, SessionScreen.SETTINGS, SessionScreen.RECOVERY)) return@withLock false
+        if (destination in setOf(SessionScreen.PLAYER, SessionScreen.ARTICLE_INFO) && view.listening == null) return@withLock false
+        val target = if (destination != SessionScreen.RECOVERY && !view.access.detailsOpen) SessionScreen.RESTRICTED else destination
+        if (target == SessionScreen.RESTRICTED) restrictedReturn = destination
+        if (target != view.screen) {
+            input.invalidate(); clock.cancel(); waitRoute = null
+            view = view.copy(screen = target, navigationGeneration = view.navigationGeneration + 1,
+                inputPhase = if (view.pendingAnswer != null) InputPhase.ACCEPTED else InputPhase.IDLE, expectedOutput = null)
+        }
+        true
+    }
+
+    suspend fun beginOperation(kind: SessionOperationKind, owner: OwnerContext?, id: UUID = UUID.randomUUID()): SessionOperationTicket? = mutex.withLock {
+        if (owner != view.owner || operations[kind] != null) return@withLock null
+        SessionOperationTicket(id, kind, owner, view.listening, view.task, view.lessonId, view.navigationGeneration,
+            view.intentGeneration).also { operations[kind] = it; view = view.copy(activeOperations = operations.keys.toSet()) }
+    }
+
+    private fun matches(ticket: SessionOperationTicket, workSensitive: Boolean): Boolean = operations[ticket.kind] == ticket &&
+        view.owner == ticket.owner && (!workSensitive || (view.listening == null && ticket.work == null ||
+            view.listening?.sameWork(ticket.work) == true) && view.task == ticket.task && view.lessonId == ticket.lessonId)
+
+    suspend fun finishOperation(ticket: SessionOperationTicket, workSensitive: Boolean = false): Boolean = mutex.withLock {
+        val accepted = matches(ticket, workSensitive)
+        if (operations[ticket.kind] == ticket) operations.remove(ticket.kind)
+        view = view.copy(activeOperations = operations.keys.toSet())
+        accepted
+    }
+
+    /** Only the verified profile repository calls this; navigation never re-activates an owner. */
+    suspend fun bindVerifiedOwner(ticket: SessionOperationTicket, owner: OwnerContext, onboarding: Boolean): Boolean = mutex.withLock {
+        if (ticket.kind != SessionOperationKind.PROFILE || !matches(ticket, false)) return@withLock false
+        operations.remove(ticket.kind)
+        if (view.owner != owner) {
+            input.invalidate(); clock.cancel(); issuedOutputs.clear(); operations.clear(); waitRoute = null
+            val access = view.access.copy(ownerValid = true)
+            view = SessionView(owner = owner, ownerBinding = OwnerBindingStatus.VERIFIED, access = access,
+                mediaConnected = view.mediaConnected, screen = if (access.detailsOpen) {
+                    if (onboarding) SessionScreen.NEWS else SessionScreen.ONBOARDING
+                } else SessionScreen.RESTRICTED)
+            restrictedReturn = if (onboarding) SessionScreen.NEWS else SessionScreen.ONBOARDING
+        } else view = view.copy(ownerBinding = OwnerBindingStatus.VERIFIED, dataState = SessionDataState.SERVER_ACKNOWLEDGED,
+            activeOperations = operations.keys.toSet())
+        true
+    }
+
+    suspend fun admitListening(completion: RepositoryCompletion<ListeningWorkRef>, positionMs: Long, showPlayer: Boolean): Boolean = mutex.withLock {
+        val ticket = completion.ticket
+        if (ticket.kind !in setOf(SessionOperationKind.SELECTION, SessionOperationKind.RESTORE) ||
+            !matches(ticket, true) || ticket.owner == null) return@withLock false
+        operations.remove(ticket.kind)
+        val work = completion.value
+        require(positionMs >= 0 && (work.durationMs == null && positionMs == 0L || work.durationMs != null && positionMs <= work.durationMs))
+        input.invalidate(); clock.cancel(); waitRoute = null
+        val target = if (work.stage == ListeningStage.ARTICLE_OFFER) SessionScreen.ARTICLE_OFFER else SessionScreen.PLAYER
+        val sameNavigation = ticket.navigationGeneration == view.navigationGeneration
+        view = view.copy(listening = work, mediaPositionMs = positionMs, mediaPlaying = false,
+            task = null, lessonId = null, pendingAnswer = null, inputPhase = InputPhase.IDLE, expectedOutput = null,
+            dialogueProgress = null, preparedSupports = emptyList(), helpReceived = HelpSnapshot(),
+            activeOperations = operations.keys.toSet(),
+            screen = if (showPlayer && sameNavigation) { if (view.access.detailsOpen) target else SessionScreen.RESTRICTED } else view.screen,
+            dataState = SessionDataState.SERVER_ACKNOWLEDGED)
+        restrictedReturn = target
+        true
+    }
+
+    suspend fun setMediaConnected(connected: Boolean) = mutex.withLock {
+        view = view.copy(mediaConnected = connected, mediaPlaying = if (connected) view.mediaPlaying else false)
+    }
+
+    suspend fun mediaPermission(key: NewsPlaybackKey): Boolean = mutex.withLock {
+        key.owner == view.owner && view.listening?.accepts(key) == true && view.mediaConnected &&
+            view.access.ownerValid && view.access.power == PowerAvailability.ALLOWED &&
+            view.inputPhase == InputPhase.IDLE && view.pendingAnswer == null && view.voiceInput == VoiceInputActivity.IDLE
+    }
+
+    suspend fun bindMediaRun(key: NewsPlaybackKey, expectedPreviousRun: UUID?): Boolean = mutex.withLock {
+        val work = view.listening ?: return@withLock false
+        if (key.owner != view.owner || !work.accepts(key) || work.runId !in setOf(expectedPreviousRun, key.mainRunId)) return@withLock false
+        view = view.copy(listening = work.copy(runId = key.mainRunId))
+        true
+    }
+
+    suspend fun requestMediaIntent(owner: OwnerContext, intent: PlaybackIntent): Boolean = mutex.withLock {
+        if (owner != view.owner) return@withLock false
+        if (intent == PlaybackIntent.PLAY && (!view.mediaConnected || !view.access.ownerValid ||
+                view.access.power != PowerAvailability.ALLOWED || view.listening == null || view.listening?.stage == ListeningStage.ARTICLE_OFFER)) return@withLock false
+        view = view.copy(intent = intent, intentGeneration = view.intentGeneration + 1)
+        true
+    }
+
+    suspend fun observeMedia(key: NewsPlaybackKey, positionMs: Long, playIntent: Boolean, playing: Boolean, pauseReason: String): Boolean = mutex.withLock {
+        val work = view.listening ?: return@withLock false
+        if (key.owner != view.owner) return@withLock false
+        if (!work.accepts(key) || work.runId != key.mainRunId) {
+            // A user STOP/pause queued at EOS still cancels continuation of the same article.
+            if (!playIntent && pauseReason !in setOf("none", "transition") && work.checkpointId == key.checkpointId &&
+                work.selectionId == key.selectionId && work.content == key.content)
+                view = view.copy(intent = PlaybackIntent.USER_PAUSED, intentGeneration = view.intentGeneration + 1)
+            return@withLock false
+        }
+        require(positionMs in 0..key.durationMs)
+        view = view.copy(mediaPositionMs = positionMs, mediaPlaying = playing,
+            intentGeneration = view.intentGeneration + if (!playIntent && pauseReason !in setOf("none", "transition")) 1 else 0,
+            intent = if (pauseReason == "transition") view.intent else if (playIntent) PlaybackIntent.PLAY
+                else if (view.intent == PlaybackIntent.STOPPED) PlaybackIntent.STOPPED else PlaybackIntent.USER_PAUSED)
+        true
     }
 
     suspend fun startAnswer(): CaptureLease? = mutex.withLock {

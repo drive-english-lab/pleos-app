@@ -1,6 +1,18 @@
 # Pleos Android app
 
-Pleos Connect용 Android 앱이다. 현재 실행 화면은 개발 환경·연결 점검이다. schema5 계약, Room 보존 이행과 청취·기사 질문·연습의 저장/API port를 구현했다. 실제 익명 Auth/프로필·기본 설정 서버 연결을 추가했으며 제품 화면·미디어/음성과 나머지 업무 서버 연결은 계속 구현 중이다.
+Pleos Connect용 Android 앱이다. 기본 진입은 실제 프로필·catalog·대본·단일 기사 미디어 port에 연결한 제품 화면이다. 차량 전원·owner·입력 권한을 확인하지 못하면 준비/제한 상태를 표시한다. 연결 점검은 별도 destination으로 보존한다. schema5·Room 기반은 구현했으며 기사 질문·연습의 제품 결합과 외부 음성 승인은 계속 진행 중이다.
+
+## 미디어 연결 진행 · 2026-11-14
+
+`NewsMediaService`에 단일 기사 MediaLibraryService/legacy browse·MediaSession, 명시 재생/일시정지/탐색/STOP과 오디오 focus를 구현했다. Media3가 실제로 진행한 구간만 기록하고, 탐색·버퍼링·긴 scheduler 공백으로 생긴 구간은 완청으로 보충하지 않는다. 새 HTTP/range 요청은 같은 고정 자산의 접근 주소만 갱신한다. EOS가 다음 기사나 Gleo 대기 타이머를 만들지 않는다.
+
+`NewsPlaybackRepository`와 `MediaPlaybackJournal`은 개인 세션·원래 콘텐츠/자산/run을 고정하며 Room에 관찰 sequence와 마지막 위치를 원자 저장한다. 관찰이 서버 체크포인트 버전을 바꿀 수 있어, 전환 시 관찰 flush→서버 CAS 확인→위치 저장 순서를 사용한다. 재시도는 저장한 원본 run/형식 변경 요청을 보낸다.
+
+제품 Gleo3함수는 `app/src/main/assets/schema.json`에 있다. 디버그 점검 스키마는 `assets/diagnostics/schema.json`으로 옮겨 제품 스키마를 덮지 않는다. 제품 receiver는 실제 sender identity·프로젝트 adapter/인자 형태·콜백 승인이 없으면 실행하지 않는다. 추가 Pleos 특권 권한을 추측해 선언하지 않았다.
+
+`ProductSessionHost`/`ProductViewModel`은 하나의 `SessionCoordinator`를 사용한다. S01~S04/S10/S12와 설정 초안·기기 theme, 대응 대본 언어별 scroll, 기사별 MediaBrowser 조작을 연결했다. 완료 응답은 시작 owner/work/operation으로 검증하며 늦은 응답이 이동한 화면을 다시 열지 않는다. 형식 변경 결과 재확인은 같은 원본 operation을 재전송한다. 전환 시 FREEZE가 media writer를 drain한 최종 커서를 저장하며 사용자 재생 의도와 내부 정지를 구분한다.
+
+실제 power adapter는 UNKNOWN을 유지한다. Activity resume/component policy나 테스트 fixture로 ALLOWED를 만들지 않으므로 실제 앱에서 대기 화면이 나오는 것이 현재 경계다. 실제 Gleo 제품 승인·주행 음성·물리 미디어 버튼·실차 검증은 남아 있어 T021 전체를 완료로 표시하지 않는다. 기존 UI PR7/004 워크트리는 병합하지 않았다. 제품 화면의 visible diff는004 담당의 후속 갱신 대상이며 이 묶음에서 Sites 소스/배포는 변경하지 않았다.
 
 ## 환경과 실행
 
@@ -25,7 +37,7 @@ scripts/start-pleos-emulator.sh
 | `:app` | Compose, Navigation, ViewModel, Hilt 앱 진입점 |
 | `:core:domain` | 고정 콘텐츠/설정, canonical 질문·언어 증거·노출 타입, 듣기·질문·도움·대기·입력 lease/직렬 상태 정책 |
 | `:core:data` | schema5 typed API, 청취·QA·연습 repository, owner·epoch별 Room record/outbox·ticket/관찰·전환 journal |
-| `:core:pleos` | API34 public car/window source, 기본 비활성 Gleo 전송·미디어 command port. Media3 service는 미연결 |
+| `:core:pleos` | API34 public car/window source, 기본 비활성 Gleo 전송, 단일 자산 Media3 service/legacy browse와 제품 runtime port. 실제 Gleo/전원 gate 별도 |
 
 ## Supabase
 
@@ -36,19 +48,33 @@ SUPABASE_URL=https://your-project.supabase.co
 SUPABASE_PUBLISHABLE_KEY=sb_publishable_...
 ```
 
-승인된 공개 콘텐츠는 Supabase 직접 읽기, 개인 기록·추론은 사용자 세션을 검증하는 별도 LearningApi 경로다. 현재 진단은 SDK로 프로젝트 게이트웨이에 응답을 요청하고 DataStore에 마지막 점검 시각을 저장한다. 개인 Auth 세션 생성/복원과 실제 업무 backend는 미연결이다. 사용자 세션 port에 서버용 secret/model key를 넣지 않는다.
+승인된 공개 콘텐츠는 Supabase 직접 읽기, 개인 기록·추론은 사용자 세션을 검증하는 별도 LearningApi 경로다. 현재 진단은 SDK로 프로젝트 게이트웨이에 응답을 요청하고 DataStore에 마지막 점검 시각을 저장한다. 익명 Auth 세션 생성/복원과 프로필·기본 설정은 실제 검증했다. 나머지 업무 adapter와 제품 화면 결합은 구현 중이다. 사용자 세션 port에 서버용 secret/model key를 넣지 않는다.
+
+## 제품 API 연결과 진단 진입
+
+`local.properties`의 `LEARNING_API_ORIGIN`은 개인 LearningApi의 HTTPS origin이다. 비어 있으면 제품 연결 준비 상태를 표시하며 새 익명 사용자를 임의 생성하지 않는다. `LEARNING_API_DEBUG_ORIGIN`은 debug 전용 override다. HTTPS 또는 정확히 `localhost`/`127.0.0.1`/`10.0.2.2`의 HTTP만 허용한다. HTTP 예외는 debug network-security 파일의 해당 host에만 적용되며 release는 HTTPS만 사용한다. 경로·query·사용자 정보가 붙은 origin은 거부한다. 실제 서버·공개 자료·승인된 음원은 별도 준비가 필요하다.
+
+`MainActivity.diagnosticsIntent(context)` 또는 `io.github.driveenglishlab.pleos.DESTINATION=diagnostics` extra로 기존 연결 점검을 연다. extra 없는 시작은 제품 진입이다. UI004의 기존 debug launcher는 이 인터페이스로 갱신해야 한다. 제품 서비스는 `io.github.driveenglishlab.pleos.platform.NewsMediaService`이며003 샘플의 `platform.media.NewsMediaService`와 다르다. 향후 통합에서 두 browse authority를 동시에 제품 원본으로 등록하지 않는다.
+
+## 제품 화면 묶음 검증
+
+앱의 Compose instrumentation harness는 `app/src/androidTest/java/io/github/driveenglishlab/pleos/ProductScreensTest.kt`다. renderer/typed intent fixture이며 실제 Auth·오디오·차량 전원·Gleo 성공을 뜻하지 않는다. `:app:assembleDebugAndroidTest`로 test APK를 만든다. 실제 기기 실행은 배정된 serial과 AVD 이름/user를 확인하고 `adb -s <serial> shell am instrument --user <user> -w -r io.github.driveenglishlab.pleos.test/androidx.test.runner.AndroidJUnitRunner`를 사용한다. 다른 담당의 AVD에 설치하지 않는다.
+
+2026-11-14 기능 묶음 결과: domain55개, AVD data67개+opt-in1개 제외, platform12개, 제품 Compose4개 통과. debug/release/lint는 error0/warning37이다. 플랫폼 검증은 자체 무음 WAV와 실제 Media3/focus/browser를 사용했고, 화면 검증은 합성 renderer 상태다. 실제 뉴스→전체 US1·Gleo·차량 power/실차 성공과 구분한다. 기본 Pleos AVD를 read-only5556/user10으로 사용했으며 UI 담당5554는 변경하지 않았다.
+
+기능 묶음을 구현한 뒤 domain/data/platform/제품 화면 검증과 debug/release/lint를 모아서 실행한다. 최신 결과와 미확인 사항은 [통합 구현 기록](../docs/news-speaking-implementation.md)의2026-11-14 절이 기준이다. 아래 개별 기반 검증은 당시 기록이다.
 
 ## Pleos SDK와 Gleo
 
 - Vehicle 점검은 차량 서비스의 Door 읽기 capability를 확인한다. NaviHelper는 초기 연결 콜백, FusedLocation은 `isSupported()`로 확인한다.
-- Gleo Interface에는 디버그 빌드의 `assets/schema.json`과 `GleoProbeReceiver`가 연결돼 있다. 설정 점검 액션을 받으면 고정 콜백을 브로드캐스트한다.
+- 제품 App Schema는 main의3함수다. `GleoProbeReceiver`와 `assets/diagnostics/schema.json`은 디버그 수동 점검 전용이며 제품 함수 승인/활성화를 대신하지 않는다. 설정 점검 액션을 받으면 고정 콜백을 브로드캐스트한다.
 
 ```sh
 adb shell am broadcast -a DRIVE_ENGLISH_CHECK_SETUP -p io.github.driveenglishlab.pleos
 adb logcat -d -s GleoProbe:I
 ```
 
-ADB 확인과 Gleo 음성 호출 검증은 별도다. 실제 Gleo 통합에는 Pleos의 App Schema 검토가 필요하다. FusedLocation 권한과 지원 여부는 Playground 프로젝트와 대상 기기에서 각각 확인한다. 앱 ID나 버전을 바꿀 때는 디버그 스키마의 `packageName`과 `version`도 맞춘다.
+ADB 확인과 Gleo 음성 호출 검증은 별도다. 실제 Gleo 통합에는 Pleos의 App Schema 검토가 필요하다. FusedLocation 권한과 지원 여부는 Playground 프로젝트와 대상 기기에서 각각 확인한다. 앱 ID나 버전을 바꿀 때는 main 제품 스키마의 `packageName`과 `version`도 맞춘다.
 
 [기여 규칙](CONTRIBUTING.md)
 

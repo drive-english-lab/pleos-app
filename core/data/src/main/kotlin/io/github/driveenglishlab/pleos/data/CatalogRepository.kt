@@ -66,9 +66,10 @@ class CatalogRepository internal constructor(private val contracts: LearningCont
     private val bundleColumns = listOf("bundle_id", "article_id", "source_snapshot_id", "schema_version", "status", "published_at", "access_until")
     private val scriptColumns = listOf("listening_script_id", "bundle_id", "role", "base_script_id", "language", "text", "text_hash", "audio_asset_id", "duration_ms")
 
-    suspend fun catalogPage(offset: Int = 0, limit: Int = 20): CatalogRead<List<CatalogArticle>> = read {
+    suspend fun catalogPage(offset: Int = 0, limit: Int = 20, articleId: UUID? = null): CatalogRead<List<CatalogArticle>> = read {
         require(offset >= 0 && limit in 1..50)
-        rows("news_catalog", catalogColumns, mapOf("status" to "eq.published", "order" to "published_at.desc,article_id.asc", "offset" to "$offset", "limit" to "$limit"))
+        rows("news_catalog", catalogColumns, mapOf("status" to "eq.published", "order" to "published_at.desc,article_id.asc", "offset" to "$offset", "limit" to "$limit") +
+            (articleId?.let { mapOf("article_id" to "eq.$it") } ?: emptyMap()))
             .also { require(it.size <= limit) }.map { item ->
                 val verified = when (item.text("timezone_status", 20)) { "verified" -> true; "unknown" -> false; else -> throw IllegalArgumentException() }
                 val original = item["published_at_utc"]!!.let { if (it is JsonNull) null else timestamp(item.text("published_at_utc", 120)) }
@@ -88,6 +89,14 @@ class CatalogRepository internal constructor(private val contracts: LearningCont
         val role = if (ref.listeningMode == ListeningMode.ORIGINAL_FULL) CatalogScriptRole.ORIGINAL_FULL else CatalogScriptRole.BRIEFING
         val row = single("news_scripts", scriptColumns, mapOf("bundle_id" to "eq.${ref.bundleId}", "listening_script_id" to "eq.${ref.listeningScriptId}"))
         parseScript(row).also { require(it.scriptId == ref.listeningScriptId && it.bundleId == ref.bundleId && it.role == role && it.baseScriptId == null) }
+    }
+
+    suspend fun readTitle(ref: ContentRef): CatalogRead<String> = read {
+        pinnedBundle(ref)
+        val row = single("news_catalog", listOf("article_id", "bundle_id", "title", "status"),
+            mapOf("article_id" to "eq.${ref.articleId}", "bundle_id" to "eq.${ref.bundleId}", "status" to "eq.published"))
+        require(row.id("article_id") == ref.articleId && row.id("bundle_id") == ref.bundleId && row.text("status", 20) == "published")
+        row.text("title", 500)
     }
 
     suspend fun readFollowup(ref: ContentRef, role: CatalogScriptRole): CatalogRead<PublishedScript> = read {

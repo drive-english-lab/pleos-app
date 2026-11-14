@@ -1,0 +1,115 @@
+{
+  "packageName": "io.github.driveenglishlab.pleos",
+  "appDescription": "Listen to English news and practise speaking about the same story with Drive English.",
+  "invokeWord": "드라이브 잉글리시",
+  "version": "0.1.0",
+  "actionCalls": [
+    {
+      "type": "function",
+      "function": {
+        "name": "DRIVE_ENGLISH_PLAYBACK",
+        "description": "Control English news listening, change the current article format, or choose listening-only interaction for today.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "command": {
+              "type": "string",
+              "description": "The explicit listening action requested by the user.",
+              "enum": [
+                "start",
+                "pause",
+                "resume",
+                "next",
+                "stop",
+                "change_format",
+                "listen_only_today",
+                "default_interaction"
+              ]
+            },
+            "articleTitle": {
+              "type": "string",
+              "description": "The exact title of the article requested by the user, when specified."
+            },
+            "mode": {
+              "type": "string",
+              "description": "The requested listening format.",
+              "enum": [
+                "original_full",
+                "briefing"
+              ]
+            }
+          },
+          "required": [
+            "command"
+          ]
+        },
+        "component": "service"
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "DRIVE_ENGLISH_ARTICLE_QUESTION",
+        "description": "Ask a question about the current or explicitly named news article, using the stored source as evidence.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "questionText": {
+              "type": "string",
+              "description": "The question asked by the user. Preserve the language used."
+            },
+            "articleTitle": {
+              "type": "string",
+              "description": "The exact title of the article requested by the user, when specified."
+            }
+          },
+          "required": [
+            "questionText"
+          ]
+        },
+        "component": "service"
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "DRIVE_ENGLISH_PRACTICE",
+        "description": "Start or continue English speaking practice about a news article, submit an answer, request help, retry, or finish.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "command": {
+              "type": "string",
+              "description": "The explicit speaking practice action requested by the user.",
+              "enum": [
+                "start",
+                "answer",
+                "hint",
+                "explain_question",
+                "explain_facts",
+                "sentence_starter",
+                "partial_correction",
+                "complete_example",
+                "retry",
+                "finish",
+                "resume"
+              ]
+            },
+            "utteranceText": {
+              "type": "string",
+              "description": "The answer supplied by the user. This parameter alone does not verify original speech language or literal fidelity."
+            },
+            "articleTitle": {
+              "type": "string",
+              "description": "The exact title of the article requested by the user, when specified."
+            }
+          },
+          "required": [
+            "command"
+          ]
+        },
+        "component": "service"
+      }
+    }
+  ]
+}

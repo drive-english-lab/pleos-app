@@ -4,6 +4,7 @@ import io.github.driveenglishlab.pleos.data.wire.*
 import io.github.driveenglishlab.pleos.domain.*
 import java.util.UUID
 import kotlinx.serialization.json.*
+import kotlinx.coroutines.withTimeoutOrNull
 
 /** Foreground scoped flush only; reconnect, deletion priority and merge belong to ProfileSyncWorker. */
 internal class SessionJournal(private val dao: LearningDao, private val api: LearningApi,
@@ -21,6 +22,33 @@ internal class SessionJournal(private val dao: LearningDao, private val api: Lea
 
     suspend fun serverVersion(owner: OwnerContext, recordId: UUID): Long? =
         dao.record(owner.profileId.toString(), owner.privacyEpoch, stableRecordId("server-record:" + recordId).toString())?.version
+
+    /** Coverage observations independently update the checkpoint version. Never predict that CAS
+     * from a client position or an observation receipt, whose record_id is the observation itself.
+     */
+    suspend fun latestCheckpoint(scope: LearningCallScope, id: String): LearningReply<WirePersonalReadCheckpoint> =
+        withTimeoutOrNull(8_000) {
+            var cursor: String? = null
+            repeat(100) {
+                when (val page = api.readSyncPage(scope, scope.owner.privacyEpoch, cursor, 50)) {
+                    is LearningReply.Failed -> return@withTimeoutOrNull page
+                    is LearningReply.Stored -> {
+                        val value = page.value
+                        if (value.resetRequired) return@withTimeoutOrNull LearningReply.Failed("SESSION_CHANGED", false)
+                        val checkpoint = value.records.filterIsInstance<WirePersonalReadCheckpoint>().filter { it.recordId == id }.maxByOrNull { it.version }
+                        if (checkpoint != null) {
+                            val payload = buildJsonObject { put("record_id", id); put("version", checkpoint.version) }.toString()
+                            dao.saveRead(scope.owner, readRecord(scope.owner, stableRecordId("server-record:$id"), "server_record_version", payload, checkpoint.version))
+                            return@withTimeoutOrNull LearningReply.Stored(scope, checkpoint)
+                        }
+                        if (value.records.size < 50 || value.cursor == null || value.cursor == cursor)
+                            return@withTimeoutOrNull LearningReply.Failed("CHECKPOINT_NOT_FOUND", false)
+                        cursor = value.cursor
+                    }
+                }
+            }
+            LearningReply.Failed("SYNC_NOT_READY", true)
+        } ?: LearningReply.Failed("SYNC_NOT_READY", true)
 
     suspend fun queue(owner: OwnerContext, recordId: UUID, event: WirePersonalSyncEvent, preserveInputSnapshot: Boolean = false) {
         val value = learningJson.encodeToJsonElement(WirePersonalSyncEvent.serializer(), event)

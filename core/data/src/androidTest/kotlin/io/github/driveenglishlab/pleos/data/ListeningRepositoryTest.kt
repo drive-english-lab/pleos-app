@@ -20,6 +20,7 @@ class ListeningRepositoryTest {
     private lateinit var db: LearningDatabase
     private lateinit var repo: ListeningRepository
     private lateinit var transport: Transport
+    private var onFreeze: suspend () -> Unit = {}
     private val owner = OwnerContext(UUID.randomUUID(),0,1,UUID.randomUUID())
     private val scope = LearningCallScope(owner,LearningSession(UUID.randomUUID(),UUID.randomUUID(),UUID.randomUUID(),"test-user-session"))
     @Before fun setup() = runBlocking {
@@ -27,7 +28,7 @@ class ListeningRepositoryTest {
         db = Room.inMemoryDatabaseBuilder(context,LearningDatabase::class.java).build()
         db.learning().putOwner(LocalOwner(profileId = owner.profileId.toString(),privacyEpoch = 0,revision = 1,status = "active"))
         val contracts = LearningContractJson(context); transport = Transport()
-        repo = ListeningRepository(LearningApi(LearningSessionSource { scope },contracts,transport),db.learning(),contracts,{ it == owner },ListeningTransitionPort { true })
+        repo = ListeningRepository(LearningApi(LearningSessionSource { scope },contracts,transport),db.learning(),contracts,{ it == owner },ListeningTransitionPort { onFreeze(); true })
         assertTrue(repo.createStream(scope,1,1,startedAt = Instant.EPOCH) is ListeningResult.Ready)
     }
     @After fun close() { db.close() }
@@ -40,11 +41,22 @@ class ListeningRepositoryTest {
         val requests = mutableListOf<Pair<String,JsonObject>>()
         var fail: String? = null
         var noCandidate = false
+        var loseCommittedReceipt = false
+        val committedReceipts = mutableMapOf<Pair<String,String>,JsonObject>()
         var beforeReply: suspend (String) -> Unit = {}
         override suspend fun exchange(method: String, path: String, query: Map<String,String>, headers: Map<String,String>, body: ByteArray?): LearningHttpResponse {
             paths += path
+            if (method.equals("get", ignoreCase = true)) {
+                val profile = contractFixture("ProfileView").changed("profile_context" to learningJson.encodeToJsonElement(WireCommonProfileContext.serializer(), scope.owner.profileWire()))
+                return jsonResponse(buildJsonObject {
+                    put("schema_version", "5"); put("profile_context", profile.getValue("profile_context")); put("reset_required", false)
+                    put("records", JsonArray(checkpoints.values.toList())); put("cursor", "fixture-read-page"); put("profile", profile)
+                })
+            }
             val request = learningJson.parseToJsonElement(body!!.toString(Charsets.UTF_8)).jsonObject
             requests += path to request
+            val commandKey = path to request.getValue("operation_id").jsonPrimitive.content
+            committedReceipts[commandKey]?.let { return jsonResponse(it) }
             if (path == fail) return jsonResponse(buildJsonObject {
                 put("schema_version","5"); put("operation_id",request.getValue("operation_id"))
                 putJsonObject("error") { put("code","UPSTREAM_UNAVAILABLE"); put("message_ko","저장한 위치를 유지합니다."); put("retryable",true) }
@@ -73,7 +85,8 @@ class ListeningRepositoryTest {
                         "selection" to JsonNull,"checkpoint" to JsonNull,"no_candidate_reason" to JsonPrimitive("all_listened"))
                     else {
                         val selection = base.getValue("selection").jsonObject.changed("selection_id" to JsonPrimitive(UUID.randomUUID().toString()),
-                            "stream_id" to request.getValue("stream_id"),"previous_selection_id" to request.getValue("previous_selection_id"))
+                            "stream_id" to request.getValue("stream_id"),"previous_selection_id" to request.getValue("previous_selection_id"),
+                            "ordinal" to JsonPrimitive((repo.snapshot()?.selection?.ordinal ?: 0) + 1))
                         val checkpoint = base.getValue("checkpoint").jsonObject
                         val payload = checkpoint.getValue("payload").jsonObject.changed("checkpoint_id" to request.getValue("checkpoint_id"),
                             "stream_id" to request.getValue("stream_id"),"selection_id" to selection.getValue("selection_id"),"active_run_id" to JsonNull)
@@ -83,7 +96,7 @@ class ListeningRepositoryTest {
                     }
                 }
                 "/v1/playback-runs" -> {
-                    val checkpoint = repo.snapshot()!!.checkpoint!!; val runId = UUID.randomUUID().toString()
+                    val checkpoint = learningJson.decodeFromJsonElement(WirePersonalReadCheckpoint.serializer(), checkpoints.getValue(request.getValue("checkpoint_id").jsonPrimitive.content)); val runId = UUID.randomUUID().toString()
                     val payload = checkpoint.payload.copy(activeRunId = runId)
                     buildJsonObject {
                         put("schema_version","5"); put("operation_id",request.getValue("operation_id")); put("profile_context",request.getValue("profile_context"))
@@ -116,9 +129,44 @@ class ListeningRepositoryTest {
                 }
                 else -> error("Unexpected listening request.")
             }
+            response["checkpoint"]?.takeUnless { it is JsonNull }?.jsonObject?.let { checkpoints[it.getValue("record_id").jsonPrimitive.content] = it }
+            if (path == "/v1/profile/sync") {
+                for (event in request.getValue("events").jsonArray.map { it.jsonObject }) {
+                    val payload = event.getValue("payload").jsonObject
+                    when (event.getValue("kind").jsonPrimitive.content) {
+                        "checkpoint" -> {
+                            val id = payload.getValue("checkpoint_id").jsonPrimitive.content
+                            val old = checkpoints.getValue(id)
+                            assertEquals(old.getValue("version"), event.getValue("expected_record_version"))
+                            val merged = payload.changed("active_run_id" to old.getValue("payload").jsonObject.getValue("active_run_id"),
+                                "main_coverage_status" to old.getValue("payload").jsonObject.getValue("main_coverage_status"))
+                            checkpoints[id] = old.changed("version" to JsonPrimitive(old.getValue("version").jsonPrimitive.long + 1), "payload" to merged)
+                        }
+                        "playback_observation" -> {
+                            val entry = checkpoints.entries.firstOrNull { it.value.getValue("payload").jsonObject["active_run_id"] == payload["run_id"] }
+                            if (entry != null && entry.value.getValue("payload").jsonObject["main_coverage_status"] == JsonPrimitive("unknown")) {
+                                // Actual SQL independently advances checkpoint CAS when coverage changes.
+                                checkpoints[entry.key] = entry.value.changed("version" to JsonPrimitive(entry.value.getValue("version").jsonPrimitive.long + 1),
+                                    "payload" to entry.value.getValue("payload").jsonObject.changed("main_coverage_status" to JsonPrimitive("partial")))
+                            }
+                        }
+                    }
+                }
+            }
+            if (path in setOf("/v1/playback-runs", "/v1/listening/format-changes")) {
+                committedReceipts[commandKey] = response
+                if (loseCommittedReceipt) {
+                    loseCommittedReceipt = false
+                    return jsonResponse(buildJsonObject {
+                        put("schema_version", "5"); put("operation_id", request.getValue("operation_id"))
+                        putJsonObject("error") { put("code", "UPSTREAM_UNAVAILABLE"); put("retryable", true); put("message_ko", "잠시 후 다시 시도해 주세요.") }
+                    }, 503)
+                }
+            }
             beforeReply(path)
             return jsonResponse(response)
         }
+        val checkpoints = linkedMapOf<String,JsonObject>()
         var formatSource: WirePersonalSelectionRecord? = null
     }
 
@@ -129,11 +177,55 @@ class ListeningRepositoryTest {
         repo.observe(scope,WirePersonalPlaybackObservationInput(observation,frame.checkpoint!!.payload.activeRunId!!,1,"observed",WirePersonalPlaybackObservationInputRange(0,1_000)))
         val result = repo.selectResume(scope)
         assertTrue(result.toString(),result is ListeningResult.Ready)
-        assertEquals(listOf("/v1/profile/sync","/v1/listening/next","/v1/playback-runs","/v1/profile/sync","/v1/profile/resume"),transport.paths)
+        assertEquals(listOf("/v1/profile/sync","/v1/listening/next","/v1/profile/sync","/v1/playback-runs","/v1/profile/sync","/v1/profile/resume"),transport.paths)
         assertTrue(db.learning().pendingSync(owner.profileId.toString(),0).isEmpty())
         val cas = transport.requests.last().second
         assertEquals(1L,cas.getValue("expected_resume_version").jsonPrimitive.long)
         assertEquals("listening",cas.getValue("active_resume").jsonObject.getValue("kind").jsonPrimitive.content)
+    }
+
+    @Test fun transitionUsesDrainedMediaCursorWithoutReplacingTheCallersIntent() = runBlocking {
+        repo.next(scope, null)
+        val original = repo.snapshot()!!
+        val source = point(original).copy(positionMs = 100, playIntent = true, pauseReason = "none")
+        onFreeze = {
+            val frozen = source.copy(positionMs = 900, playIntent = false, pauseReason = "transition")
+            db.learning().saveRead(owner, readRecord(owner, stableRecordId("media-point:${source.checkpointId}"),
+                "media_checkpoint_position", learningJson.encodeToString(WirePersonalCheckpointInput.serializer(), frozen), 1))
+        }
+        assertTrue(repo.next(scope, source) is ListeningResult.Ready)
+        val event = transport.requests.filter { it.first == "/v1/profile/sync" }.flatMap {
+            it.second.getValue("events").jsonArray.map { event -> event.jsonObject }
+        }.last { it["kind"] == JsonPrimitive("checkpoint") }.getValue("payload").jsonObject
+        assertEquals(900L, event.getValue("position_ms").jsonPrimitive.long)
+        assertTrue(event.getValue("play_intent").jsonPrimitive.boolean)
+        assertEquals("none", event.getValue("pause_reason").jsonPrimitive.content)
+    }
+
+    @Test fun cachedWorkRestoresItsIdentityAndAClosedStreamDoesNotReturn() = runBlocking {
+        repo.next(scope, null)
+        val original = repo.snapshot()!!
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val restored = ListeningRepository(LearningApi(LearningSessionSource { scope }, LearningContractJson(context), transport),
+            db.learning(), LearningContractJson(context), { it == owner }, ListeningTransitionPort { true })
+        assertEquals(original, (restored.restoreCached(scope) as ListeningResult.Ready).frame)
+        assertTrue(restored.closeStream(scope, point(original)) is ListeningResult.Closed)
+        assertEquals(ListeningResult.Closed, repo.restoreCached(scope))
+    }
+
+    @Test fun observationsAreFlushedAndServerCheckpointCasIsReadBeforeNextSelection() = runBlocking {
+        repo.next(scope, null)
+        repo.startRun(scope)
+        val original = repo.snapshot()!!
+        val id = UUID.randomUUID().toString()
+        repo.observe(scope, WirePersonalPlaybackObservationInput(id, original.checkpoint!!.payload.activeRunId!!,
+            1, "observed", WirePersonalPlaybackObservationInputRange(0, 500)))
+        val result = repo.next(scope, point(original).copy(positionMs = 500, playIntent = false, pauseReason = "user"))
+        assertTrue(result.toString(), result is ListeningResult.Ready)
+        val request = transport.requests.last { it.first == "/v1/profile/sync" }.second
+        val checkpoint = request.getValue("events").jsonArray.map { it.jsonObject }.single { it["kind"] == JsonPrimitive("checkpoint") }
+        assertEquals(original.checkpoint.version + 1, checkpoint.getValue("expected_record_version").jsonPrimitive.long)
+        assertEquals(500L, checkpoint.getValue("payload").jsonObject.getValue("position_ms").jsonPrimitive.long)
     }
 
     @Test fun olderSourceFormatUsesCurrentHeadFenceAndPinnedSourceFollowupAtZero() = runBlocking {
@@ -181,4 +273,31 @@ class ListeningRepositoryTest {
         assertEquals(0,transport.paths.count { it == "/v1/playback-runs" })
         assertTrue(repo.createStream(scope,1,1) is ListeningResult.Failed)
     }
+    @Test fun committedRunWithLostReplyReplaysOriginalRequestWithoutRecheckingItsChangedCas() = runBlocking {
+        repo.next(scope, null)
+        transport.loseCommittedReceipt = true
+        val failed = repo.startRun(scope) as ListeningResult.Failed
+        val originalRequest = transport.requests.last().second
+        val beforeRetry = transport.paths.size
+        assertTrue(repo.startRun(scope, failed.operationId) is ListeningResult.Ready)
+        assertEquals(originalRequest, transport.requests.last().second)
+        assertEquals(listOf("/v1/playback-runs"), transport.paths.drop(beforeRetry))
+        assertNotNull(repo.snapshot()!!.checkpoint!!.payload.activeRunId)
+    }
+
+    @Test fun committedFormatWithLostReplyDoesNotWriteTheSourceCheckpointAgain() = runBlocking {
+        repo.next(scope, null)
+        val original = repo.snapshot()!!
+        transport.formatSource = original.selection
+        transport.loseCommittedReceipt = true
+        val failed = repo.changeFormat(scope, original.selection!!, point(original), original.checkpoint!!.version, ListeningMode.BRIEFING) as ListeningResult.Failed
+        val request = transport.requests.last().second
+        val beforeRetry = transport.paths.size
+        assertTrue(repo.changeFormat(scope, original.selection, point(original), original.checkpoint.version,
+            ListeningMode.BRIEFING, failed.operationId) is ListeningResult.Ready)
+        assertEquals(request, transport.requests.last().second)
+        assertEquals(listOf("/v1/listening/format-changes"), transport.paths.drop(beforeRetry))
+        assertEquals(0L, repo.snapshot()!!.checkpoint!!.payload.positionMs)
+    }
+
 }

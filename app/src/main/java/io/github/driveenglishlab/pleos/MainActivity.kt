@@ -1,6 +1,18 @@
 package io.github.driveenglishlab.pleos
 
 import android.os.Bundle
+import android.content.Context
+import android.content.Intent
+import android.net.Uri
+import java.util.UUID
+import androidx.activity.enableEdgeToEdge
+import androidx.compose.runtime.DisposableEffect
+import androidx.media3.common.util.UnstableApi
+import androidx.lifecycle.lifecycleScope
+import io.github.driveenglishlab.pleos.platform.WindowAccessSource
+import io.github.driveenglishlab.pleos.ui.theme.DriveEnglishTheme
+import javax.inject.Inject
+import kotlinx.coroutines.launch
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.Arrangement
@@ -30,41 +42,81 @@ import java.util.Date
 import kotlinx.serialization.Serializable
 
 @AndroidEntryPoint
+@UnstableApi
 class MainActivity : ComponentActivity() {
+    @Inject lateinit var host: ProductSessionHost
+    private val windowToken = UUID.randomUUID()
+    private lateinit var windowAccess: WindowAccessSource
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        enableEdgeToEdge()
+        windowAccess = WindowAccessSource(this)
+        lifecycleScope.launch { host.attachWindow(windowToken) }
         setContent {
-            MaterialTheme {
+            val theme by host.appearances.state.collectAsStateWithLifecycle()
+            DriveEnglishTheme(theme) {
                 Surface(Modifier.fillMaxSize()) {
-                    SetupNavigation()
+                    AppNavigation(host, windowToken, intent.getStringExtra(EXTRA_DESTINATION) == DIAGNOSTICS) { origin, uri ->
+                        lifecycleScope.launch {
+                            if (host.canOpenSource(origin, uri)) try {
+                                startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(uri.toString())))
+                            } catch (_: Exception) { host.sourceUnavailable() }
+                        }
+                    }
                 }
             }
         }
     }
+
+    private fun refreshWindow() {
+        if (!::windowAccess.isInitialized) return
+        windowAccess.refresh()
+        val value = windowAccess.state.value
+        lifecycleScope.launch { host.updateWindow(windowToken, value) }
+    }
+    override fun onStart() { super.onStart(); refreshWindow() }
+    override fun onResume() { super.onResume(); refreshWindow() }
+    override fun onWindowFocusChanged(hasFocus: Boolean) { super.onWindowFocusChanged(hasFocus); refreshWindow() }
+    override fun onStop() {
+        if (::windowAccess.isInitialized) {
+            windowAccess.closed()
+            val value = windowAccess.state.value
+            lifecycleScope.launch { host.updateWindow(windowToken, value) }
+        }
+        super.onStop()
+    }
+    companion object {
+        const val EXTRA_DESTINATION = "io.github.driveenglishlab.pleos.DESTINATION"
+        const val DIAGNOSTICS = "diagnostics"
+        fun diagnosticsIntent(context: Context) = Intent(context, MainActivity::class.java).putExtra(EXTRA_DESTINATION, DIAGNOSTICS)
+    }
 }
 
-@Serializable
-private object Overview
+@Serializable private object ProductDestination
+@Serializable private object DiagnosticsDestination
 
-@Serializable
-private object Diagnostics
-
+@UnstableApi
 @Composable
-private fun SetupNavigation() {
-    val navController = rememberNavController()
-    NavHost(navController, startDestination = Overview) {
-        composable<Overview> {
-            Column(
-                modifier = Modifier.padding(32.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp),
-            ) {
-                Text("Pleos 개발 환경", style = MaterialTheme.typography.headlineMedium)
-                Text("이 기기에서 Supabase와 Pleos SDK 연결 상태를 확인할 수 있습니다.")
-                Button(onClick = { navController.navigate(Diagnostics) }) { Text("연결 점검 열기") }
+private fun AppNavigation(host: ProductSessionHost, windowToken: UUID, diagnostics: Boolean,
+    openSource: (io.github.driveenglishlab.pleos.ui.UiOrigin, java.net.URI) -> Unit) {
+    val navigation = rememberNavController()
+    NavHost(navigation, startDestination = if (diagnostics) DiagnosticsDestination else ProductDestination) {
+        composable<ProductDestination> {
+            val model: ProductViewModel = hiltViewModel()
+            val state by model.state.collectAsStateWithLifecycle()
+            DisposableEffect(host, windowToken) {
+                host.surfaceVisible(windowToken, true)
+                onDispose { host.surfaceVisible(windowToken, false) }
             }
+            NewsScreens(state, model::send, onDiagnostics = { navigation.navigate(DiagnosticsDestination) }, onOpenSource = openSource)
         }
-        composable<Diagnostics> {
-            DiagnosticsScreen(onBack = { navController.popBackStack() })
+        composable<DiagnosticsDestination> {
+            DisposableEffect(host, windowToken) {
+                host.surfaceVisible(windowToken, false)
+                onDispose { }
+            }
+            DiagnosticsScreen(onBack = { if (!navigation.popBackStack()) navigation.navigate(ProductDestination) })
         }
     }
 }

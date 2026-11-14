@@ -8,9 +8,19 @@
     <application
         android:name=".PleosApplication"
         android:allowBackup="false"
-        android:label="Pleos App Dev"
+        android:label="Drive English"
         android:supportsRtl="true"
         android:theme="@style/AppTheme">
+        <receiver android:name=".GleoActionReceiver" android:exported="true">
+            <intent-filter>
+                <action android:name="DRIVE_ENGLISH_PLAYBACK" />
+                <action android:name="DRIVE_ENGLISH_ARTICLE_QUESTION" />
+                <action android:name="DRIVE_ENGLISH_PRACTICE" />
+                <action android:name="io.github.driveenglishlab.pleos.DRIVE_ENGLISH_PLAYBACK" />
+                <action android:name="io.github.driveenglishlab.pleos.DRIVE_ENGLISH_ARTICLE_QUESTION" />
+                <action android:name="io.github.driveenglishlab.pleos.DRIVE_ENGLISH_PRACTICE" />
+            </intent-filter>
+        </receiver>
         <activity
             android:name=".MainActivity"
             android:exported="true">
