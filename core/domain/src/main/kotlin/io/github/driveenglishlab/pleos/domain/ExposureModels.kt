@@ -105,7 +105,7 @@ data class PracticePresentationPrepare(
 }
 
 data class PracticePresentationRecord(
-    val presentationId: UUID, val contentRef: PracticeContentRef, val lessonId: UUID?,
+    val presentationId: UUID, val contentRef: PracticeRef, val lessonId: UUID?,
     val interactionChannel: InteractionChannel, val artifacts: List<SupportArtifact>,
     val issuedSequence: Long, val preparedAt: Instant, val status: PresentationStatus, val lastObservationId: UUID?,
 ) {

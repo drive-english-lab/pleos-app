@@ -39,7 +39,7 @@ class QuestionRepositoryTest {
     @Test fun anotherArticleQuestionReturnsToTheOriginalPracticeWithoutCreatingAttempt() = runBlocking {
         val original = PracticeContentRef(content(),UUID.randomUUID(),UUID.randomUUID()); val lesson = UUID.randomUUID()
         val origin = QuestionOrigin.Practice(lesson,original); val transport = ReplyTransport()
-        val repository = QuestionRepository(api(transport)) { context, frame -> context == owner && frame == origin }
+        val repository = QuestionRepository(api(transport), isCurrent = { context, frame -> context == owner && frame == origin })
         val result = repository.ask(scope,content(),origin,"Why did the city open it?",InteractionChannel.GLEO)
         assertTrue(result is ArticleQuestionResult.Answer)
         assertEquals(ConversationReturn.SameQuestion(lesson,original),(result as ArticleQuestionResult.Answer).returnPlan)
@@ -49,7 +49,7 @@ class QuestionRepositoryTest {
     @Test fun failedQaKeepsSameAssetStagePauseAndFiveSecondReturnWithoutAutomaticRetry() = runBlocking {
         val point = ReturnPoint(PlaybackPosition(UUID.randomUUID(),ListeningStage.FOLLOWUP,12_000,30_000),PlaybackIntent.USER_PAUSED)
         val origin = QuestionOrigin.Listening(point); val transport = ReplyTransport(fail = true)
-        val result = QuestionRepository(api(transport)) { _, _ -> true }.ask(scope,content(),origin,"What changed?",InteractionChannel.PARKED)
+        val result = QuestionRepository(api(transport), isCurrent = { _, _ -> true }).ask(scope,content(),origin,"What changed?",InteractionChannel.PARKED)
         assertTrue(result is ArticleQuestionResult.Failed)
         val plan = (result as ArticleQuestionResult.Failed).returnPlan as ConversationReturn.Listening
         assertEquals(point.playback.assetId,plan.point.playback.assetId); assertEquals(7_000L,plan.point.playback.positionMs)
@@ -59,7 +59,7 @@ class QuestionRepositoryTest {
     @Test fun interruptionDuringRequestSuppressesLateAnswerAndReturnPlan() = runBlocking {
         lateinit var repository: QuestionRepository
         val transport = ReplyTransport(beforeReply = { repository.interrupt() })
-        repository = QuestionRepository(api(transport)) { _, _ -> true }
+        repository = QuestionRepository(api(transport), isCurrent = { _, _ -> true })
         assertEquals(ArticleQuestionResult.Superseded,repository.ask(scope,content(),QuestionOrigin.ArticleOffer(content()),"What happened?",InteractionChannel.PARKED))
     }
 }

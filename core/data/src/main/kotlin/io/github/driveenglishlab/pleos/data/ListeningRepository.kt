@@ -79,6 +79,21 @@ class ListeningRepository internal constructor(private val api: LearningApi, pri
             lane.withLock { if (frame != original || pending != operationId) ListeningResult.Superseded else { saveFrame(original.owner, null); frame = null; ListeningResult.Closed } }
         }
 
+    suspend fun saveCurrent(scope: LearningCallScope, point: WirePersonalCheckpointInput,
+        operationId: UUID = UUID.randomUUID()): ListeningResult = mutate(scope, operationId) { original ->
+        val checkpoint = original.checkpoint ?: return@mutate ListeningResult.Failed(operationId, "NO_CHECKPOINT")
+        if (point.checkpointId != checkpoint.recordId || point.contentRef != checkpoint.payload.contentRef)
+            return@mutate ListeningResult.Superseded
+        val saved = freezeAndSavePoint(scope, point)
+        if (saved is LearningReply.Failed) return@mutate ListeningResult.Failed(operationId, saved.code)
+        val flushed = journal.flushAll(scope)
+        if (flushed is LearningReply.Failed) return@mutate ListeningResult.Failed(operationId, flushed.code)
+        when (val live = journal.latestCheckpoint(scope, point.checkpointId)) {
+            is LearningReply.Failed -> ListeningResult.Failed(operationId, live.code)
+            is LearningReply.Stored -> apply(original, original.copy(checkpoint = live.value), operationId)
+        }
+    }
+
     suspend fun updateSettingsVersion(owner: OwnerContext, version: Long) = lane.withLock {
         require(version >= 1 && frame?.owner == owner)
         frame?.copy(settingsVersion = version)?.let { saveFrame(owner, it); frame = it }

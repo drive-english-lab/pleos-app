@@ -30,6 +30,10 @@ abstract class LearningProgressDao {
     abstract suspend fun preference(profile: String): LocalProgressPreference?
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     protected abstract suspend fun putPreference(value: LocalProgressPreference)
+    @Query("SELECT COALESCE(MAX(localSequence), 0) FROM daily_preference_journal")
+    abstract suspend fun lastInstallationSequence(): Long
+    @Query("SELECT * FROM daily_preference_journal WHERE profileId = :profile ORDER BY localSequence DESC LIMIT 1")
+    abstract suspend fun latestPreference(profile: String): LocalProgressPreferenceJournal?
     @Query("SELECT * FROM daily_preference_journal WHERE operationId = :id")
     abstract suspend fun preferenceOperation(id: String): LocalProgressPreferenceJournal?
     @Insert(onConflict = OnConflictStrategy.ABORT)
@@ -42,6 +46,8 @@ abstract class LearningProgressDao {
     abstract suspend fun cache(profile: String, epoch: Long, kind: String, key: String): LocalProgressCache?
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     protected abstract suspend fun putCache(value: LocalProgressCache)
+    @Query("SELECT * FROM speaking_records_journal WHERE profileId = :profile AND privacyEpoch = :epoch AND isolated = 0 AND state != 'acknowledged' ORDER BY rowid")
+    abstract suspend fun unsettled(profile: String, epoch: Long): List<LocalProgressJournal>
     @Query("SELECT * FROM speaking_records_journal WHERE operationId = :id")
     abstract suspend fun operation(id: String): LocalProgressJournal?
     @Insert(onConflict = OnConflictStrategy.ABORT)
@@ -116,7 +122,7 @@ abstract class LearningProgressDao {
             (expected == "sending" && next in setOf("acknowledged", "conflict", "pending")))
         if (setting) {
             val row = requireNotNull(preferenceOperation(id))
-            require(row.profileId == scope.profileId.toString() && row.ownerRevision == scope.revision && !row.isolated)
+            require(row.profileId == scope.profileId.toString() && row.ownerRevision <= scope.revision && !row.isolated)
             return updatePreferenceState(id, expected, next) == 1
         }
         val row = requireNotNull(operation(id))

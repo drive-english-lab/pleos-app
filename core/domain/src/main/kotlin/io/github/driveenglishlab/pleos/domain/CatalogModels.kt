@@ -28,3 +28,6 @@ sealed interface CatalogRead<out T> {
     class Stored<T>(val value: T) : CatalogRead<T> { override fun toString() = "CatalogRead.Stored(content=redacted)" }
     data class Unavailable(val code: String, val retryable: Boolean) : CatalogRead<Nothing>
 }
+
+/** Reviewed task data; reading it does not start a lesson or expose an example. */
+data class PublishedPracticeTask(val ref: PracticeContentRef, val questionEn: String, val manifest: PracticeSupportManifest)

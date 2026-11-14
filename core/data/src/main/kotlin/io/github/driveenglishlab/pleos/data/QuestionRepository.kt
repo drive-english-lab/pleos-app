@@ -16,9 +16,12 @@ sealed interface ArticleQuestionResult {
 
 /** Ephemeral QA, independent of attempts. Returns plans/data; never moves playback itself. */
 class QuestionRepository(private val api: LearningApi,
-    private val isCurrent: suspend (OwnerContext, QuestionOrigin) -> Boolean) {
+    private val isCurrent: suspend (OwnerContext, QuestionOrigin) -> Boolean,
+    private val elapsedMs: () -> Long = { System.nanoTime() / 1_000_000 }) {
     private val lane = Mutex()
     private var pending: UUID? = null
+    private data class Saved(val scope: LearningCallScope, val origin: QuestionOrigin, val request: WireInferenceQARequest, val beganAt: Long)
+    private var saved: Saved? = null
 
     fun resolveTitle(title: String, catalog: List<ArticleIdentity>, confirmationUsed: Boolean,
         publisher: String? = null, publishedAtText: String? = null): TitleResolution =
@@ -41,16 +44,37 @@ class QuestionRepository(private val api: LearningApi,
                     contextRevision = scope.owner.revision, presentationToken = scope.owner.presentationToken.toString()),
                 contentRef = learningJson.decodeFromString(WireCommonContentRef.serializer(), LearningJson.content(askedArticle).toString()),
                 questionText = questionText, responseLanguage = responseLanguage)
-            val reply = api.answerArticleQuestion(scope, request)
-            if (!clear(operation) || !isCurrent(scope.owner, origin)) return ArticleQuestionResult.Superseded
-            val plan = ConversationPolicy.returnTo(origin)
-            return when (reply) {
-                is LearningReply.Stored -> ArticleQuestionResult.Answer(operation, reply.value, plan)
-                is LearningReply.Failed -> if (reply.code == "SESSION_CHANGED") ArticleQuestionResult.Superseded
-                    else ArticleQuestionResult.Failed(operation, reply.code, plan)
-            }
+            val original = Saved(scope, origin, request, elapsedMs())
+            lane.withLock { saved = original }
+            return perform(original)
         } catch (error: CancellationException) { clear(operation); throw error }
         catch (error: Exception) { clear(operation); throw error }
+    }
+
+    /** Explicit retry keeps the original operation/body and its absolute 60-second lifetime. */
+    suspend fun retry(scope: LearningCallScope): ArticleQuestionResult {
+        val value = lane.withLock {
+            val original = saved ?: return@withLock null
+            if (pending != null || scope.owner != original.scope.owner || scope.session.sessionId != original.scope.session.sessionId || scope.session.installationId != original.scope.session.installationId || elapsedMs() - original.beganAt >= 60_000) return@withLock null
+            pending = UUID.fromString(original.request.operationId)
+            original
+        } ?: return ArticleQuestionResult.Superseded
+        return try { perform(value) }
+        catch (error: CancellationException) { clear(UUID.fromString(value.request.operationId)); throw error }
+        catch (error: Exception) { clear(UUID.fromString(value.request.operationId)); throw error }
+    }
+
+    private suspend fun perform(value: Saved): ArticleQuestionResult {
+        val operation = UUID.fromString(value.request.operationId)
+        if (!isCurrent(value.scope.owner, value.origin)) { clear(operation); return ArticleQuestionResult.Superseded }
+        val reply = api.answerArticleQuestion(value.scope, value.request)
+        if (!clear(operation) || !isCurrent(value.scope.owner, value.origin)) return ArticleQuestionResult.Superseded
+        val plan = ConversationPolicy.returnTo(value.origin)
+        return when (reply) {
+            is LearningReply.Stored -> ArticleQuestionResult.Answer(operation, reply.value, plan)
+            is LearningReply.Failed -> if (reply.code == "SESSION_CHANGED") ArticleQuestionResult.Superseded
+                else ArticleQuestionResult.Failed(operation, reply.code, plan)
+        }
     }
 
     private suspend fun clear(operation: UUID): Boolean = lane.withLock {

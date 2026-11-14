@@ -5,7 +5,7 @@ import java.security.MessageDigest
 enum class HelpRequest { FACT, HINT, EXAMPLE, QUESTION_MEANING, SIMPLE_ENGLISH }
 enum class SupportAction { FACT_EXPLANATION, SENTENCE_STARTER, COMPLETE_EXAMPLE, QUESTION_MEANING, SIMPLE_ENGLISH }
 
-data class PreparedSupport(val task: PracticeContentRef, val artifact: SupportArtifact)
+data class PreparedSupport(val task: PracticeRef, val artifact: SupportArtifact)
 sealed interface SupportPreparation {
     data class Ready(val prepared: PreparedSupport) : SupportPreparation
     data class Unavailable(val reason: String) : SupportPreparation
@@ -29,9 +29,9 @@ object PracticePolicy {
         verifiedRoute && fidelity != CaptureFidelity.UNKNOWN && uncertainSpans.isEmpty()
 
     /** Exact reviewed artifact selection only. Preparation never changes help or attempts. */
-    fun provide(request: HelpRequest, manifest: PracticeSupportManifest, task: PracticeContentRef,
+    fun provide(request: HelpRequest, manifest: PracticeSupportManifest, task: PracticeRef,
         received: HelpSnapshot, requestedLanguage: SupportLanguage? = null): SupportPreparation {
-        require(manifest.taskId == task.taskId && manifest.questionRef == task.questionRef)
+        require(manifest.taskId == task.supportTaskIdentity && manifest.questionRef == task.questionRef)
         val role = when (help(request, received)) {
             SupportAction.FACT_EXPLANATION -> SupportRole.CORE_EXPLANATION
             SupportAction.SENTENCE_STARTER -> SupportRole.SENTENCE_STARTER
@@ -61,7 +61,7 @@ object PracticePolicy {
         return received.union(HelpSnapshot(setOfNotNull(prepared.artifact.kind), setOf(prepared.artifact.supportRef)))
     }
 
-    fun partialListeningSupport(manifest: PracticeSupportManifest, task: PracticeContentRef, received: HelpSnapshot): SupportPreparation =
+    fun partialListeningSupport(manifest: PracticeSupportManifest, task: PracticeRef, received: HelpSnapshot): SupportPreparation =
         provide(HelpRequest.SIMPLE_ENGLISH, manifest, task, received)
 
     fun mayOfferExampleAfterRetry(validRetryUsed: Boolean, stillStuck: Boolean): Boolean = validRetryUsed && stillStuck

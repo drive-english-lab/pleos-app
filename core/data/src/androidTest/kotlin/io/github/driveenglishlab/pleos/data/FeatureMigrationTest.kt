@@ -17,7 +17,7 @@ import org.junit.runner.RunWith
 class FeatureMigrationTest {
     private val context get() = InstrumentationRegistry.getInstrumentation().targetContext
     private fun open(name: String) = Room.databaseBuilder(context, LearningDatabase::class.java, name)
-        .addMigrations(LEARNING_MIGRATION_1_2, LEARNING_MIGRATION_2_3).build()
+        .addMigrations(LEARNING_MIGRATION_1_2, LEARNING_MIGRATION_2_3, LEARNING_MIGRATION_3_4).build()
     private fun scope(owner: LocalOwner) = OwnerContext(UUID.fromString(owner.profileId), owner.privacyEpoch, owner.revision, UUID.randomUUID())
 
     @Test fun versionTwoPreservesPendingAnswerAndPauseAndExposureWithoutBackfillingFeatureEvidence() = runBlocking {
@@ -48,6 +48,9 @@ class FeatureMigrationTest {
         val db = open(name)
         try {
             val owner = db.learning().currentOwner()!!
+            assertEquals(4, db.openHelper.readableDatabase.version)
+            db.openHelper.readableDatabase.query("SELECT COUNT(*) FROM segment_state").use { it.moveToFirst(); assertEquals(0, it.getInt(0)) }
+            db.openHelper.readableDatabase.query("SELECT COUNT(*) FROM review_context").use { it.moveToFirst(); assertEquals(0, it.getInt(0)) }
             assertEquals(3L, owner.revision)
             assertEquals(payload, db.learning().record(profile, 0, lesson)!!.payloadJson)
             assertEquals(hash, db.learning().pending(profile, 0).single().payloadHash)
@@ -105,7 +108,7 @@ class FeatureMigrationTest {
                 io.github.driveenglishlab.pleos.domain.LearningReply.Stored(call, "late-response")
             }
             assertEquals(io.github.driveenglishlab.pleos.domain.LearningReply.Failed("SESSION_CHANGED", false), result)
-            assertEquals("history_deletion_pending", db.learning().currentOwner()!!.status)
+            assertEquals("delete_pending", db.learning().currentOwner()!!.status)
             assertFalse(lifecycle.isCurrent(scope))
             assertNotNull(db.progress().preference(profile))
             assertNull(db.progress().cache(profile, 0, "page", "visible"))

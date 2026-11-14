@@ -2,6 +2,14 @@
 
 Pleos Connect용 Android 앱이다. 기본 진입은 실제 프로필·catalog·대본·단일 기사 미디어 port에 연결한 제품 화면이다. 차량 전원·owner·입력 권한을 확인하지 못하면 준비/제한 상태를 표시한다. 연결 점검은 별도 destination으로 보존한다. schema5·Room 기반은 구현했으며 기사 질문·연습의 제품 결합과 외부 음성 승인은 계속 진행 중이다.
 
+## R6 기능 묶음 · 2026-11-15
+
+독립 review/preparation/source6 계약, Room4 보존 이행, 구간 TTS·공통 출력 lease, 주차 말하기 모달, 실제 노출·도움 관찰, 듣기만 설정·난이도·추천·말/표현 기록과 계정 전환·삭제를 연결했다. 실제 원문·작업·권한을 확인할 수 없는 경로는 unavailable을 유지한다. Gleo는 전달/음성 경로이며 영어 평가와 난이도 판단은 검증된 서버 추론 경계에서 처리한다.
+
+기능 묶음 검증: domain64개, AVD data70개 통과·실제 연동 opt-in1개 제외, platform12개, Compose7개 통과. debug/release 빌드와 lint 통과(error0/warning37). Compose2개와 data1개의 오래된 기대값을 현행 동작에 맞춰 수정한 뒤 관련 범위를 재검증했다. Gradle lock의 기존 의존성 버전은 유지하고 누락 configuration을 기록했다.
+
+AVD는 Pleos_Connect_v2_1, emulator-5556/user10이다. 화면 캡처는 합성 renderer와 실제 창에서 검증했으며 실제 뉴스·Auth·Gleo·차량 흐름 전체의 성공을 뜻하지 않는다. 실제 전원/음성 승인, 콘텐츠 권리, 서버 migration 영구 적용과 실차 확인은 남아 있다. R7 평가 재검토·공통 자동 진행·뉴스 보기 확장은 이 기준 묶음 이후 별도로 구현한다. [검증 기록](../docs/verification/learning-review-20261115/README.md)
+
 ## 미디어 연결 진행 · 2026-11-14
 
 `NewsMediaService`에 단일 기사 MediaLibraryService/legacy browse·MediaSession, 명시 재생/일시정지/탐색/STOP과 오디오 focus를 구현했다. Media3가 실제로 진행한 구간만 기록하고, 탐색·버퍼링·긴 scheduler 공백으로 생긴 구간은 완청으로 보충하지 않는다. 새 HTTP/range 요청은 같은 고정 자산의 접근 주소만 갱신한다. EOS가 다음 기사나 Gleo 대기 타이머를 만들지 않는다.

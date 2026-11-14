@@ -17,7 +17,7 @@ import org.junit.runner.RunWith
 class LearningMigrationTest {
     private val context get() = InstrumentationRegistry.getInstrumentation().targetContext
     private fun open(name: String) = Room.databaseBuilder(context, LearningDatabase::class.java, name)
-        .addMigrations(LEARNING_MIGRATION_1_2, LEARNING_MIGRATION_2_3).build()
+        .addMigrations(LEARNING_MIGRATION_1_2, LEARNING_MIGRATION_2_3, LEARNING_MIGRATION_3_4).build()
     private fun scope(owner: LocalOwner) = OwnerContext(UUID.fromString(owner.profileId), owner.privacyEpoch, owner.revision, UUID.randomUUID())
     private fun practice() = PracticeContentRef(ContentRef(UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(),
         ListeningMode.ORIGINAL_FULL), UUID.randomUUID(), UUID.randomUUID())
@@ -49,6 +49,9 @@ class LearningMigrationTest {
         val database = open(name)
         try {
             val owner = database.learning().currentOwner()!!
+            assertEquals(4, database.openHelper.readableDatabase.version)
+            database.openHelper.readableDatabase.query("SELECT COUNT(*) FROM segment_state").use { it.moveToFirst(); assertEquals(0, it.getInt(0)) }
+            database.openHelper.readableDatabase.query("SELECT COUNT(*) FROM review_context").use { it.moveToFirst(); assertEquals(0, it.getInt(0)) }
             assertEquals(profile, owner.profileId); assertEquals(7L, owner.revision)
             val record = database.learning().record(profile, 0, lesson.toString())!!
             assertEquals(payload, record.payloadJson); assertEquals(3, record.payloadSchemaVersion)

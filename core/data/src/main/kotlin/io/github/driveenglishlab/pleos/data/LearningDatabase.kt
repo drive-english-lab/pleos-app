@@ -1,6 +1,7 @@
 package io.github.driveenglishlab.pleos.data
 
 import android.content.Context
+import androidx.room.withTransaction
 import androidx.room.Dao
 import androidx.room.ColumnInfo
 import androidx.room.Database
@@ -102,6 +103,10 @@ abstract class LearningDao {
     @Query("DELETE FROM learning_record WHERE profileId = :profile AND recordId = :id AND kind = 'profile_settings_command' AND payloadJson = :payload")
     abstract suspend fun acknowledgeProfileSettings(profile: String, id: String, payload: String): Int
     @Insert(onConflict = OnConflictStrategy.ABORT) abstract suspend fun insertBinding(binding: PracticeBinding)
+    @Query("DELETE FROM learning_record WHERE profileId = :profile AND privacyEpoch = :epoch AND recordId = :id AND kind = 'lesson_command' AND payloadJson = :payload")
+    abstract suspend fun acknowledgeLocalCommand(profile: String, epoch: Long, id: String, payload: String): Int
+    @Query("SELECT * FROM learning_record WHERE profileId = :profile AND kind = 'lesson_command' LIMIT 1")
+    abstract suspend fun pendingLocalCommand(profile: String): LearningRecord?
     @Query("SELECT * FROM practice_binding WHERE profileId = :profile AND privacyEpoch = :epoch AND lessonId = :lesson")
     abstract suspend fun binding(profile: String, epoch: Long, lesson: String): PracticeBinding?
     @Query("UPDATE practice_binding SET hintMethodAnnounced = 1 WHERE profileId = :profile AND privacyEpoch = :epoch AND lessonId = :lesson")
@@ -207,8 +212,8 @@ abstract class LearningDao {
         // An imported true needs the append-only witnessed journal first, never a bare create flag.
         require(!lesson.dialogueProgress.hintMethodAnnounced)
         insertRecord(LearningRecord(profile, owner.privacyEpoch, id, "lesson", payload, 1))
-        insertBinding(PracticeBinding(profile, owner.privacyEpoch, id, lesson.contentRef.content.articleId.toString(),
-            lesson.contentRef.basicQuestionVersionId.toString(), lesson.contentRef.taskId.toString(), false))
+        insertBinding(PracticeBinding(profile, owner.privacyEpoch, id, lesson.contentRef.articleId.toString(),
+            lesson.contentRef.basicQuestionVersionId.toString(), lesson.contentRef.taskIdentity.toString(), false))
         return true
     }
 
@@ -276,6 +281,16 @@ abstract class LearningDao {
     }
 
     @Transaction
+    open suspend fun acknowledgePresentation(owner: OwnerContext, observationId: UUID, value: PracticePresentationReceipt) {
+        requireOwner(owner)
+        persistObservationReceipt(owner, observationId, value)
+        val pending = outboxEvent(value.operationId.toString()) ?: return
+        require(pending.profileId == owner.profileId.toString() && pending.privacyEpoch == owner.privacyEpoch &&
+            pending.transport == "presentation_observation" && pending.ownerRevision == owner.revision)
+        require(deleteAcknowledged(pending.eventId, pending.payloadHash) == 1)
+    }
+
+    @Transaction
     open suspend fun persistHintCompletion(owner: OwnerContext, event: DialogueProgressEvent): Boolean {
         requireOwner(owner)
         val profile = owner.profileId.toString(); val fact = event.observation
@@ -317,6 +332,22 @@ abstract class LearningDao {
         return true
     }
 
+    @Query("SELECT * FROM owner_journal WHERE kind IN ('logout','merge','history_deletion') AND status != 'complete' ORDER BY rowid")
+    abstract suspend fun pendingOwnerTransitions(): List<OwnerJournal>
+    @Query("UPDATE owner_journal SET status = :status WHERE operationId = :id")
+    abstract suspend fun updateOwnerJournal(id: String, status: String)
+
+    @Transaction
+    open suspend fun fenceOwner(expected: OwnerContext, operation: UUID, kind: String, reference: String?): LocalOwner {
+        require(kind in setOf("logout", "merge", "history_deletion"))
+        requireOwner(expected)
+        val previous = requireNotNull(currentOwner())
+        insertJournal(OwnerJournal(operation.toString(), previous.profileId, previous.revision, kind, "pending", reference))
+        isolate(previous.profileId)
+        return previous.copy(revision = previous.revision + 1, status = if (kind == "history_deletion") "delete_pending" else "transition")
+            .also { putOwner(it) }
+    }
+
     @Transaction
     open suspend fun detachForLogout(expectedRevision: Long, operationId: String,
                                      isolatedSessionReference: String?): LocalOwner {
@@ -334,29 +365,40 @@ abstract class LearningDao {
     LocalHistoryCoverage::class, PracticeBinding::class, LocalPresentationTicket::class, LocalPresentationObservation::class,
     LocalPresentationReceipt::class, LocalDialogueCompletion::class,
     LocalProgressPreference::class, LocalProgressPreferenceJournal::class, LocalProgressCache::class, LocalProgressJournal::class,
-    LocalAiLearningPreference::class, LocalAiLearningPreferenceJournal::class, LocalAiLearningCache::class, LocalAiLearningJournal::class], version = 3, exportSchema = true)
+    LocalAiLearningPreference::class, LocalAiLearningPreferenceJournal::class, LocalAiLearningCache::class, LocalAiLearningJournal::class,
+    LocalReviewContext::class, LocalReviewOperation::class, LocalReviewObservation::class,
+    LocalFreshPracticeIntent::class, LocalPreparationWaiter::class, LocalSettingsDraft::class, LocalSource6Record::class,
+    LocalSegmentState::class, LocalSegmentOperation::class, LocalSegmentCompletion::class], version = 4, exportSchema = true)
 abstract class LearningDatabase : RoomDatabase() {
     abstract fun learning(): LearningDao
     abstract fun progress(): LearningProgressDao
     abstract fun aiLearning(): AiLearningDao
+    abstract fun review(): ReviewDao
+    abstract fun segments(): SegmentPlaybackDao
 }
 
 @Singleton
-class LearningStore @Inject constructor(private val database: LearningDatabase) {
+class LearningStore internal constructor(private val database: LearningDatabase, private val practiceClock: OriginalAttemptClock) {
+    @Inject constructor(database: LearningDatabase) : this(database, OriginalAttemptClock { OriginalPracticeTime.Unknown })
     suspend fun provisionalOwner(): LocalOwner = database.learning().provisionalOwner()
 
     /** Device-only acceptance. This does not claim a server ACK or bootstrap identity. */
     suspend fun acceptAnswer(answer: AcceptedAnswer, turn: String, previousAttemptId: UUID?): Boolean {
         require(turn in setOf("first", "retry") && (turn == "first") == (previousAttemptId == null))
         val lease = answer.lease
-        val payload = LearningJson.attempt(AttemptInput(lease.attemptId, lease.lessonId, lease.task,
+        val fixed = lease.task as? PracticeContentRef ?: error("Prepared answer requires source6 acceptance adapter")
+        val payload = LearningJson.attempt(AttemptInput(lease.attemptId, lease.lessonId, fixed,
             AttemptTurn.valueOf(turn.uppercase(java.util.Locale.ROOT)), previousAttemptId, answer.text, answer.capture, answer.helpReceived)).toString()
         val hash = LearningJson.hash(payload)
         val owner = lease.owner
-        return database.learning().accept(owner,
+        return database.withTransaction {
+            val accepted = database.learning().accept(owner,
             LearningRecord(owner.profileId.toString(), owner.privacyEpoch, lease.attemptId.toString(), "attempt", payload, 1),
             OutboxRecord(lease.attemptId.toString(), owner.profileId.toString(), owner.privacyEpoch,
                          owner.revision, lease.attemptId.toString(), payload, hash))
+            if (accepted) journalPracticeTime(database, answer, practiceClock.atAcceptance(answer))
+            accepted
+        }
     }
 
     suspend fun restoreDialogue(owner: OwnerContext, lessonId: UUID): DialogueProgress? = database.learning().restoreDialogue(owner, lessonId)
@@ -374,5 +416,5 @@ class LearningStore @Inject constructor(private val database: LearningDatabase) 
 object LearningDataModule {
     @Provides @Singleton
     fun database(@ApplicationContext context: Context): LearningDatabase =
-        Room.databaseBuilder(context, LearningDatabase::class.java, "learning.db").addMigrations(LEARNING_MIGRATION_1_2, LEARNING_MIGRATION_2_3).build()
+        Room.databaseBuilder(context, LearningDatabase::class.java, "learning.db").addMigrations(LEARNING_MIGRATION_1_2, LEARNING_MIGRATION_2_3, LEARNING_MIGRATION_3_4).build()
 }

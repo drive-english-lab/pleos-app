@@ -42,3 +42,11 @@ val LEARNING_MIGRATION_2_3 = object : Migration(2, 3) {
         db.execSQL("CREATE INDEX index_ai_learning_journal_profileId_privacyEpoch_isolated ON ai_learning_journal(profileId, privacyEpoch, isolated)")
     }
 }
+
+/** Additive review/segment state; legacy records and byte-identical outbox remain intact. */
+val LEARNING_MIGRATION_3_4 = object : Migration(3, 4) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        ReviewRoomRegistration.createSql.forEach(db::execSQL)
+        createSegmentPlaybackTables(db)
+    }
+}

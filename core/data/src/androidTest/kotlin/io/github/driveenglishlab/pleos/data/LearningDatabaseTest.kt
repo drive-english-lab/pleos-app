@@ -18,7 +18,7 @@ class LearningDatabaseTest {
         val content = ContentRef(UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), ListeningMode.ORIGINAL_FULL)
         val lease = CaptureLease(UUID.randomUUID(), UUID.randomUUID(),
             OwnerContext(UUID.fromString(owner.profileId), owner.privacyEpoch, owner.revision, UUID.randomUUID()),
-            PracticeRef(content, UUID.randomUUID(), UUID.randomUUID()), UUID.randomUUID(), 1, 1)
+            PracticeContentRef(content, UUID.randomUUID(), UUID.randomUUID()), UUID.randomUUID(), 1, 1)
         return AcceptedAnswer(lease, "The city opened a public library.", Capture.unverified(CapturePath.PARKED_STT), HelpSnapshot(refs = setOf("meaning-actually-delivered")))
     }
 

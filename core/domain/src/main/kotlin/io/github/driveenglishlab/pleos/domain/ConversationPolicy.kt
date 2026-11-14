@@ -17,12 +17,16 @@ sealed interface QuestionOrigin {
     data class Listening(val point: ReturnPoint) : QuestionOrigin
     data class Practice(val lessonId: UUID, val task: PracticeRef) : QuestionOrigin
     data class ArticleOffer(val content: ContentRef) : QuestionOrigin
+    data class PreparedListening(val point: PreparedReturnPoint) : QuestionOrigin
+    data class PreparedArticleOffer(val content: SegmentContentRef) : QuestionOrigin
 }
 
 sealed interface ConversationReturn {
     data class Listening(val point: ReturnPoint) : ConversationReturn
     data class SameQuestion(val lessonId: UUID, val task: PracticeRef) : ConversationReturn
     data class ReannounceOffer(val content: ContentRef) : ConversationReturn
+    data class PreparedListening(val point: PreparedReturnPoint) : ConversationReturn
+    data class ReannouncePreparedOffer(val content: SegmentContentRef) : ConversationReturn
 }
 
 object ConversationPolicy {
@@ -43,6 +47,19 @@ object ConversationPolicy {
         is QuestionOrigin.Listening -> ConversationReturn.Listening(origin.point.afterConversation())
         is QuestionOrigin.Practice -> ConversationReturn.SameQuestion(origin.lessonId, origin.task)
         is QuestionOrigin.ArticleOffer -> ConversationReturn.ReannounceOffer(origin.content)
+        is QuestionOrigin.PreparedListening -> ConversationReturn.PreparedListening(origin.point.afterConversation())
+        is QuestionOrigin.PreparedArticleOffer -> ConversationReturn.ReannouncePreparedOffer(origin.content)
+    }
+
+    /** Parked modal/explicit stop/manual offer overrides ordinary modal-less Gleo return. */
+    fun returnTo(origin: QuestionOrigin, policy: ReviewPolicyState, explicitlyStopped: Boolean,
+        parkedModal: Boolean): ConversationReturn? {
+        if (explicitlyStopped || parkedModal || policy.explicitResumeRequired || policy.auxiliary != null) return null
+        if (origin is QuestionOrigin.ArticleOffer || origin is QuestionOrigin.PreparedArticleOffer) {
+            if (policy.context != null && !policy.canAutoOffer) return null
+            if (origin is QuestionOrigin.PreparedArticleOffer && policy.context == null) return null
+        }
+        return returnTo(origin)
     }
 
     /** Matching title beats a fuzzy mention; ambiguity never silently switches work. */

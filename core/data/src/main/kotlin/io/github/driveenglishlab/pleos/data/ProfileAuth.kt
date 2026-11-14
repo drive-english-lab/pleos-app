@@ -3,6 +3,9 @@ package io.github.driveenglishlab.pleos.data
 import io.github.driveenglishlab.pleos.domain.LearningSession
 import io.github.jan.supabase.auth.Auth
 import io.github.jan.supabase.auth.auth
+import io.github.jan.supabase.auth.SignOutScope
+import io.github.jan.supabase.auth.providers.Google
+import io.github.jan.supabase.auth.providers.builtin.IDToken
 import io.github.jan.supabase.createSupabaseClient
 import io.github.jan.supabase.logging.LogLevel
 import java.util.UUID
@@ -62,5 +65,18 @@ internal class SupabaseProfileAuth(private val store: AuthSessionStore) : Profil
             UUID.fromString(store.identity().installationId), session.accessToken)
     }
     override suspend fun bootstrapOperation(profileId: UUID) = store.bootstrapOperation(profileId)
+    internal suspend fun signInGoogle(idToken: String, verifiedNonce: String?) {
+        require(idToken.isNotBlank())
+        client.auth.signInWith(IDToken) { this.idToken = idToken; provider = Google; nonce = verifiedNonce }
+    }
+    internal suspend fun linkGoogle(idToken: String, verifiedNonce: String?) {
+        require(idToken.isNotBlank())
+        client.auth.linkIdentityWithIdToken(Google, idToken) { nonce = verifiedNonce }
+    }
+    /** Recovery of this isolated session only; never refreshes or creates an identity. */
+    internal suspend fun importCapturedSession(session: io.github.jan.supabase.auth.user.UserSession) {
+        client.auth.importSession(session, autoRefresh = false)
+    }
+    internal suspend fun signOutLocal() { client.auth.signOut(SignOutScope.LOCAL) }
     internal suspend fun close() { client.close() }
 }

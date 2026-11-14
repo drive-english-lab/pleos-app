@@ -1,0 +1,224 @@
+package io.github.driveenglishlab.pleos
+
+import android.graphics.Bitmap
+import androidx.activity.ComponentActivity
+import androidx.compose.foundation.layout.requiredSize
+import androidx.compose.material3.Surface
+import androidx.compose.runtime.*
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.asAndroidBitmap
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.test.*
+import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.dp
+import androidx.test.platform.app.InstrumentationRegistry
+import io.github.driveenglishlab.pleos.data.IncrementalContractJson
+import io.github.driveenglishlab.pleos.data.SourcePublicScript
+import io.github.driveenglishlab.pleos.data.wire.*
+import io.github.driveenglishlab.pleos.domain.*
+import io.github.driveenglishlab.pleos.platform.SegmentRuntimeState
+import io.github.driveenglishlab.pleos.platform.SegmentRuntimeStatus
+import io.github.driveenglishlab.pleos.ui.*
+import io.github.driveenglishlab.pleos.ui.theme.DriveEnglishTheme
+import java.io.File
+import java.net.URI
+import java.time.Instant
+import java.util.UUID
+import org.junit.After
+import org.junit.Assert.*
+import org.junit.Rule
+import org.junit.Test
+
+/** Synthetic renderer/typed-intent regressions only. No Auth, actual news approval,
+ * model, Gleo, microphone, speech completion or vehicle-power capability is exercised.
+ * Source6 values and script partitions are real typed/validated fixture structures;
+ * their visible learning outcomes remain synthetic, never live quality evidence.
+ */
+class PreparedProductScreensTest {
+    @get:Rule val rule = createAndroidComposeRule<ComponentActivity>()
+    private val owner = OwnerContext(UUID.randomUUID(), 0, 1, UUID.randomUUID())
+    private val fragments = listOf("A city plans a bridge. ", "It will connect two districts. ", "Work is planned for next year.")
+    private val script = fragments.joinToString("")
+    private val scriptId = UUID.randomUUID()
+    private val scriptHash = segmentSha256(script)
+    private val manifest = run {
+        var frontier = 0
+        val segments = fragments.mapIndexed { index, text ->
+            val start = frontier; frontier += text.codePointCount(0, text.length)
+            SpeechSegment(UUID.randomUUID(), index, UUID.randomUUID(), start, frontier, segmentSha256(text))
+        }
+        val initial = SegmentManifest(UUID.randomUUID(), scriptId, scriptHash, 1, "0".repeat(64), SegmentLanguage.EN, segments)
+        initial.copy(manifestHash = segmentSha256(initial.canonicalPayload())).also { it.validate(script) }
+    }
+    private val content = PreparedContentRef(UUID.randomUUID(), UUID.randomUUID(), scriptHash, UUID.randomUUID(),
+        UUID.randomUUID(), scriptId, scriptHash, ListeningMode.ORIGINAL_FULL)
+    private val cursor = PlaybackCursor6.Segment(scriptId, scriptHash, manifest.manifestId, 1, manifest.manifestHash,
+        SegmentPhase.MAIN, manifest.segments[1].segmentId, 1, false, PauseReason.USER)
+    private val work = PreparedListeningWorkRef(UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), content, cursor, 1)
+    private val wireRef = WireSource6PreparedContentRef6("prepared_components", content.articleId.toString(), content.sourceSnapshotId.toString(),
+        content.sourceHash, content.materialGenerationId.toString(), content.mainComponentId.toString(), scriptId.toString(), scriptHash, "original_full")
+    private val wireManifest = WireSource6SegmentManifest(manifest.manifestId.toString(), scriptId.toString(), scriptHash, 1, manifest.manifestHash, "en",
+        manifest.segments.map { WireSource6Segment(it.segmentId.toString(), it.order.toLong(), it.sentenceId.toString(),
+            it.startCodePoint.toLong(), it.endCodePoint.toLong(), it.textHash) })
+    private val published = SourcePublicScript(wireRef, content.mainComponentId, scriptId, script, scriptHash, "en", wireManifest)
+    private val discovery = WirePreparationDiscovery(content.articleId.toString(), content.sourceSnapshotId.toString(), content.sourceHash,
+        "Synthetic renderer bridge story", listOf("technology"),
+        WirePreparationDiscoverySource("Synthetic renderer fixture", "https://example.invalid/synthetic-bridge", "2026-11-14 00:00 UTC",
+            "2026-11-14T00:00:00Z", "verified", "news"), "synthetic-renderer-no-real-rights", emptyList(), 3, null, null, null)
+    private val allowed = AccessState(SafetyState(VehiclePosition.PARKED, true, true, true), WindowState(true, true),
+        PowerAvailability.ALLOWED, true, true, true, true, true)
+    private val categoryNames = linkedMapOf("technology" to "기술", "science" to "과학", "business" to "경제", "world" to "세계", "environment" to "환경", "culture" to "문화")
+    private val categories = WirePreparationCategoryPublicProjection(1, "2026-11-14T00:00:00Z", categoryNames.entries.mapIndexed { index, item ->
+        WirePreparationCategory(item.key, item.value, "${item.value} 분야의 합성 설정 검증", true, index.toLong(), "synthetic-supply", "synthetic-freshness")
+    })
+    private val settings = WireCommonSettings(listOf("technology"), "original_full", "none", emptyList(), true, 1)
+    private val lessonId = UUID.randomUUID()
+    private val task = PreparedPracticeRef(content, UUID.randomUUID(), UUID.randomUUID(), "synthetic-task-r1")
+    private val question = "What will the bridge connect?"
+    private val questionProgress = PracticeProgress(1, null, null, null, null, "question_wait", null, null, null)
+    private val practice = PracticeSession(owner, LessonInput(lessonId, task, LessonInputPhase.QUESTION_WAIT,
+        HelpSnapshot(), work.checkpointId, DialogueProgress(false)), question, questionProgress)
+    private val original = ReviewReturnSnapshot(ProfileContext(owner.profileId, owner.privacyEpoch), work.selectionId, work.checkpointId,
+        1, lessonId, SegmentPhase.MAIN, cursor, false, PauseReason.USER, 0)
+    private val token = PracticeModalToken(owner, work.selectionId, lessonId, UUID.randomUUID(), 1)
+
+    private fun player(): ProductScreenState {
+        val program = SegmentProgram(owner, work.selectionId, content.segmentSourceKey(), manifest, script, SegmentPhase.MAIN, SegmentPurpose.MAIN)
+        val run = UUID.randomUUID()
+        val snapshot = SegmentPlaybackSnapshot(program, cursor, run, 1, SequentialCompletion.start(program, run, 1), bindingAcknowledged = true)
+        return ProductScreenState(session = SessionView(screen = SessionScreen.PLAYER, owner = owner, ownerBinding = OwnerBindingStatus.VERIFIED,
+            access = allowed, preparedListening = work, mediaConnected = true, intent = PlaybackIntent.USER_PAUSED),
+            catalogStatus = LoadStatus.READY, preparedCatalog = listOf(discovery), categoryConfig = categories, preparedSource = discovery,
+            preparedScript = published, readerStatus = LoadStatus.READY, segmentPlayback = SegmentRuntimeState(snapshot, SegmentRuntimeStatus.READY))
+    }
+    private fun modal(base: ProductScreenState = player(), feedback: Boolean = false): ProductScreenState {
+        val attempt = UUID.randomUUID()
+        val progress = if (feedback) PracticeProgress(2, attempt, null, null, attempt, "retry_offer", true, null, null) else questionProgress
+        val projected = if (feedback) practice.copy(progress = progress, requestState = PracticeRequestState.STORED,
+            feedback = PracticeFeedback(attempt, Judgement.SUFFICIENT, "none", "합성 피드백: 두 지역을 연결한다는 내용을 담았어요", null,
+                EnglishAttemptStatus.VERIFIED_ENGLISH, progress)) else practice
+        val phase = if (feedback) PracticeModalPhase.FEEDBACK else PracticeModalPhase.QUESTION
+        return base.copy(session = base.session.copy(screen = SessionScreen.PLAYER, task = task, lessonId = lessonId,
+            practiceModal = PracticeModalSession(token, phase, PracticeModalVisibility.VISIBLE, original, ReviewEntryOrigin.NEWS,
+                PracticeModalLesson(phase, progress.version, if (feedback) attempt else null))),
+            learning = LearningPresentation(owner = owner, articleTitle = discovery.title, practice = projected))
+    }
+    private fun validateTypedSources() {
+        val codec = IncrementalContractJson(rule.activity)
+        codec.encode("source6", "PreparedContentRef6", wireRef, WireSource6PreparedContentRef6.serializer())
+        codec.encode("source6", "SegmentManifest", wireManifest, WireSource6SegmentManifest.serializer())
+        codec.encode("preparation", "Discovery", discovery, WirePreparationDiscovery.serializer())
+        codec.encode("preparation", "CategoryPublicProjection", categories, WirePreparationCategoryPublicProjection.serializer())
+    }
+    private fun render(frame: State<ProductScreenState>, intents: MutableList<UiIntent>) {
+        rule.setContent {
+            CompositionLocalProvider(LocalDensity provides Density(1f, 1f)) {
+                DriveEnglishTheme(frame.value.appearance) {
+                    Surface(Modifier.requiredSize(1600.dp, 1100.dp).testTag("prepared-test-frame")) {
+                        NewsScreens(frame.value, { intents.add(it) }, {}, { _, _ -> })
+                    }
+                }
+            }
+        }
+    }
+    private fun capture(name: String, dialog: Boolean = false) {
+        rule.waitForIdle()
+        val bitmap = if (dialog) requireNotNull(InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot())
+            else rule.onNodeWithTag("prepared-test-frame").captureToImage().asAndroidBitmap()
+        val directory = File(requireNotNull(rule.activity.getExternalFilesDir(null)), "ui-captures").apply { mkdirs() }
+        File(directory, "$name.png").outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
+    }
+    @After fun exportSyntheticCaptures() {
+        val source = File(requireNotNull(rule.activity.getExternalFilesDir(null)), "ui-captures")
+        val target = File(rule.activity.filesDir, "ui-captures").apply { mkdirs() }
+        source.listFiles()?.filter { it.isFile && it.name.startsWith("prepared-") && it.extension == "png" }
+            ?.forEach { it.copyTo(File(target, it.name), overwrite = true) }
+    }
+
+    @Test fun samePlayerModalRendersQuestionThenFeedbackAndCloseOnlyFinishesPractice() {
+        validateTypedSources()
+        val frame = mutableStateOf(modal()); val intents = mutableListOf<UiIntent>()
+        render(frame, intents)
+        rule.onNodeWithTag("prepared-test-frame").assertExists()
+        rule.onNodeWithText("같은 기사로 말하기").assertIsDisplayed()
+        rule.onNodeWithText(question).assertIsDisplayed()
+        rule.onNodeWithText("답변 시작").assertIsDisplayed()
+        assertEquals(SessionScreen.PLAYER, frame.value.session.screen)
+        assertTrue(intents.isEmpty())
+        capture("prepared-modal-question", dialog = true)
+        rule.runOnIdle { frame.value = modal(frame.value, feedback = true) }
+        rule.onNodeWithText(question).assertIsDisplayed()
+        rule.onNodeWithText("내 답변 피드백").assertIsDisplayed()
+        rule.onNodeWithText("합성 피드백: 두 지역을 연결한다는 내용을 담았어요").assertIsDisplayed()
+        assertEquals(SessionScreen.PLAYER, frame.value.session.screen)
+        capture("prepared-modal-feedback", dialog = true)
+        rule.onNodeWithText("닫기").performClick()
+        assertEquals(1, intents.size)
+        assertTrue(intents.single() is UiIntent.FinishPractice)
+        assertEquals(lessonId, intents.single().origin.lessonId)
+        assertFalse(intents.any { it is UiIntent.Navigate || it is UiIntent.ReadHistory })
+    }
+
+    @Test fun segmentControlsKeepVehicleTargetsAndRestrictionsHideStaleDetails() {
+        validateTypedSources()
+        val frame = mutableStateOf(player()); val intents = mutableListOf<UiIntent>()
+        render(frame, intents)
+        rule.onNodeWithText(fragments[0]).assertIsDisplayed()
+        listOf("이전 구간", "재생", "다음 구간").forEach { label ->
+            val node = rule.onNodeWithContentDescription(label).assertIsEnabled()
+            val bounds = node.fetchSemanticsNode().boundsInRoot
+            assertTrue("$label touch width", bounds.width >= 76f)
+            assertTrue("$label touch height", bounds.height >= 76f)
+        }
+        rule.onNodeWithContentDescription("이전 구간").performClick()
+        rule.onNodeWithContentDescription("다음 구간").performClick()
+        assertEquals(listOf(-1L, 1L), intents.filterIsInstance<UiIntent.Seek>().map { it.offsetMs })
+        assertFalse(intents.any { it is UiIntent.StartPractice || it is UiIntent.StartAnswer })
+        capture("prepared-segment-reader")
+        rule.runOnIdle { frame.value = modal(frame.value) }
+        rule.onNodeWithText(question).assertIsDisplayed()
+        val driving = allowed.copy(safety = SafetyState(VehiclePosition.MOVING_OR_REVERSE_NEUTRAL, true, false, false))
+        rule.runOnIdle { frame.value = frame.value.copy(session = frame.value.session.copy(screen = SessionScreen.SETTINGS, access = driving), draft = SettingsDraft(settings)) }
+        rule.onNodeWithText(question).assertDoesNotExist()
+        rule.onNodeWithText(fragments[0]).assertDoesNotExist()
+        rule.onNodeWithText("설정 적용").assertDoesNotExist()
+        rule.onNodeWithContentDescription("듣기 설정").assertDoesNotExist()
+        rule.onNodeWithContentDescription("재생").assertIsNotEnabled()
+        rule.runOnIdle { frame.value = frame.value.copy(session = frame.value.session.copy(access = allowed.copy(power = PowerAvailability.UNKNOWN))) }
+        rule.onNodeWithText(question).assertDoesNotExist()
+        rule.onNodeWithText(fragments[0]).assertDoesNotExist()
+        rule.onNodeWithText("설정 적용").assertDoesNotExist()
+        assertEquals(2, intents.size)
+        capture("prepared-restricted-details")
+    }
+
+    @Test fun emptyPreparedCatalogStillUsesSixConfiguredTopicsWithoutLegacyTagUnion() {
+        validateTypedSources()
+        val irrelevantLegacy = CatalogArticle(UUID.randomUUID(), UUID.randomUUID(), "Unrelated legacy fixture", "Synthetic renderer fixture",
+            URI("https://example.invalid/legacy"), "unknown", null, false, setOf("injected-legacy-tag"), 60_000, 60_000,
+            Instant.parse("2026-11-14T00:00:00Z"), Instant.parse("2026-11-16T00:00:00Z"))
+        val initial = player().let { it.copy(session = it.session.copy(screen = SessionScreen.SETTINGS), preparedCatalog = emptyList(),
+            catalog = listOf(irrelevantLegacy), draft = SettingsDraft(settings)) }
+        val frame = mutableStateOf(initial); val intents = mutableListOf<UiIntent>()
+        render(frame, intents)
+        categories.categories.forEach { category ->
+            rule.onNode(hasScrollAction()).performScrollToNode(hasText(category.displayName))
+            rule.onNodeWithText(category.displayName).assertIsDisplayed().performClick()
+        }
+        assertEquals(categories.categories.map { it.id }.toSet(), intents.filterIsInstance<UiIntent.Topic>().map { it.topic }.toSet())
+        assertEquals(6, intents.size)
+        rule.onNodeWithText("injected-legacy-tag").assertDoesNotExist()
+        assertTrue(frame.value.preparedCatalog.isEmpty())
+        // The same server projection may disable a topic already selected by this owner.
+        rule.runOnIdle { frame.value = initial.copy(categoryConfig = categories.copy(categories = categories.categories.map {
+            if (it.id == "culture") it.copy(active = false) else it }), draft = SettingsDraft(settings.copy(topics = listOf("technology", "culture")))) }
+        rule.onNode(hasScrollAction()).performScrollToNode(hasText("문화"))
+        rule.onNodeWithText("문화").assertIsDisplayed().assertIsNotEnabled()
+        rule.onNodeWithText("injected-legacy-tag").assertDoesNotExist()
+        assertEquals(setOf("technology", "culture"), frame.value.draft?.topics)
+        assertEquals(6, intents.size)
+        capture("prepared-settings-configured-topics")
+    }
+}

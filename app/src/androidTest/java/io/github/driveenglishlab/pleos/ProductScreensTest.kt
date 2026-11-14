@@ -93,7 +93,15 @@ class ProductScreensTest {
         assertEquals(ReaderLanguage.KOREAN, (intents[0] as UiIntent.ReaderView).language)
         assertEquals(10_000L, (intents[1] as UiIntent.Seek).offsetMs)
         assertEquals(owner, intents[1].origin.owner)
-        rule.onNodeWithText("말하기 연습").assertIsNotEnabled()
+        assertFalse(intents.any { it is UiIntent.StartPractice || it is UiIntent.StartAnswer || it is UiIntent.FinishAnswer })
+        // This is now an implemented action. A deliberate tap requests the existing
+        // practice flow, without implicitly starting capture or submitting an answer.
+        rule.onNodeWithText("말하기 연습").assertIsEnabled().performClick()
+        assertEquals(3, intents.size)
+        assertTrue(intents[2] is UiIntent.StartPractice)
+        assertEquals(owner, intents[2].origin.owner)
+        assertEquals(work, intents[2].origin.work)
+        assertFalse(intents.any { it is UiIntent.StartAnswer || it is UiIntent.FinishAnswer })
         capture("reader-wide-light")
         rule.runOnIdle { rule.activity.onBackPressedDispatcher.onBackPressed() }
         assertEquals(SessionScreen.NEWS, (intents.last() as UiIntent.Navigate).screen)
@@ -124,8 +132,15 @@ class ProductScreensTest {
         rule.onNodeWithContentDescription("10초 전").assertIsDisplayed()
         capture("reader-narrow-dark-large-text", fullDisplay = true)
         rule.runOnIdle { frame.value = Frame(player().copy(session = player().session.copy(screen = SessionScreen.NEWS),
-            catalogStatus = LoadStatus.READY), width = 900, height = 1100) }
-        rule.onNodeWithText("뉴스를 준비하고 있어요").assertIsDisplayed()
+            appearance = DeviceAppearance.DARK, catalogStatus = LoadStatus.READY), width = 900, height = 1100, scale = 1.3f) }
+        // Keep the failure evidence even if a future layout change clips the state.
+        // The old title no longer exists in the production APK; distinguish absent
+        // copy from an existing-but-clipped node before verifying visibility.
+        capture("news-empty-narrow-before-assert", fullDisplay = true)
+        rule.onNodeWithText("이 분야에 이용할 뉴스가 없어요").assertExists().assertIsDisplayed()
+        rule.onNodeWithText("관심 분야를 확인하거나 나중에 새 뉴스를 확인해 주세요").assertIsDisplayed()
+        rule.onNodeWithText("새 뉴스 듣기").assertIsDisplayed()
+        rule.onNodeWithText("이어서 듣기").assertIsDisplayed()
         capture("news-empty-narrow", fullDisplay = true)
     }
 }

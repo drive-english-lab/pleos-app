@@ -6,6 +6,7 @@ import android.content.Intent
 import android.net.Uri
 import java.util.UUID
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.DisposableEffect
 import androidx.media3.common.util.UnstableApi
 import androidx.lifecycle.lifecycleScope
@@ -46,6 +47,9 @@ import kotlinx.serialization.Serializable
 class MainActivity : ComponentActivity() {
     @Inject lateinit var host: ProductSessionHost
     private val windowToken = UUID.randomUUID()
+    private val microphonePermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) {
+        lifecycleScope.launch { host.microphonePermissionResult() }
+    }
     private lateinit var windowAccess: WindowAccessSource
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -57,7 +61,7 @@ class MainActivity : ComponentActivity() {
             val theme by host.appearances.state.collectAsStateWithLifecycle()
             DriveEnglishTheme(theme) {
                 Surface(Modifier.fillMaxSize()) {
-                    AppNavigation(host, windowToken, intent.getStringExtra(EXTRA_DESTINATION) == DIAGNOSTICS) { origin, uri ->
+                    AppNavigation(host, windowToken, intent.getStringExtra(EXTRA_DESTINATION) == DIAGNOSTICS, requestMicrophone = { microphonePermission.launch(android.Manifest.permission.RECORD_AUDIO) }) { origin, uri ->
                         lifecycleScope.launch {
                             if (host.canOpenSource(origin, uri)) try {
                                 startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(uri.toString())))
@@ -98,7 +102,7 @@ class MainActivity : ComponentActivity() {
 
 @UnstableApi
 @Composable
-private fun AppNavigation(host: ProductSessionHost, windowToken: UUID, diagnostics: Boolean,
+private fun AppNavigation(host: ProductSessionHost, windowToken: UUID, diagnostics: Boolean, requestMicrophone: () -> Unit,
     openSource: (io.github.driveenglishlab.pleos.ui.UiOrigin, java.net.URI) -> Unit) {
     val navigation = rememberNavController()
     NavHost(navigation, startDestination = if (diagnostics) DiagnosticsDestination else ProductDestination) {
@@ -109,7 +113,7 @@ private fun AppNavigation(host: ProductSessionHost, windowToken: UUID, diagnosti
                 host.surfaceVisible(windowToken, true)
                 onDispose { host.surfaceVisible(windowToken, false) }
             }
-            NewsScreens(state, model::send, onDiagnostics = { navigation.navigate(DiagnosticsDestination) }, onOpenSource = openSource)
+            NewsScreens(state, model::send, onDiagnostics = { navigation.navigate(DiagnosticsDestination) }, onOpenSource = openSource, onMicrophonePermission = requestMicrophone)
         }
         composable<DiagnosticsDestination> {
             DisposableEffect(host, windowToken) {

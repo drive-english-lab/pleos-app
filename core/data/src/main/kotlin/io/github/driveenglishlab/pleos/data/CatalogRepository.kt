@@ -20,12 +20,15 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.*
 
-internal interface CatalogHttpTransport { suspend fun get(table: String, query: Map<String, String>): LearningHttpResponse }
+internal interface CatalogHttpTransport {
+    suspend fun get(table: String, query: Map<String, String>): LearningHttpResponse
+    suspend fun getAuthenticated(table:String,query:Map<String,String>,authorization:String):LearningHttpResponse = throw CatalogNotConfigured()
+}
 private class CatalogNotConfigured : Exception()
 private class CatalogContentUnavailable : Exception()
 private class CatalogHttpFailure(val retryable: Boolean) : Exception()
 
-/** Publishable-key GET only. No personal JWT, server secret, arbitrary table or redirect. */
+/** Publishable-key GET only. Personal bindings additionally require the live user's JWT. */
 internal class PublicCatalogTransport(origin: String, private val publishableKey: String,
     allowLocalHttp: Boolean = false) : CatalogHttpTransport {
     private val origin = origin.trim().trimEnd('/').takeIf(String::isNotEmpty)
@@ -39,11 +42,19 @@ internal class PublicCatalogTransport(origin: String, private val publishableKey
         }
     }
     override suspend fun get(table: String, query: Map<String, String>): LearningHttpResponse {
-        require(table in setOf("news_catalog", "news_bundles", "news_scripts"))
+        require(table in setOf("news_catalog", "news_bundles", "news_scripts", "news_practice_tasks", "news_material_components"))
+        return request(table,query,null)
+    }
+    override suspend fun getAuthenticated(table:String,query:Map<String,String>,authorization:String):LearningHttpResponse {
+        require(table=="profile_material_bindings" && authorization.startsWith("Bearer ") && !authorization.contains('\r') && !authorization.contains('\n'))
+        return request(table,query,authorization)
+    }
+    private suspend fun request(table:String,query:Map<String,String>,authorization:String?):LearningHttpResponse {
         val base = origin ?: throw CatalogNotConfigured()
         val response = client.get("$base/rest/v1/$table") {
             url { query.forEach { (key, value) -> parameters.append(key, value) } }
-            headers { append("apikey", publishableKey); append("Accept", "application/json"); append("Cache-Control", "no-store") }
+            headers { append("apikey", publishableKey); append("Accept", "application/json"); append("Cache-Control", "no-store")
+                if(authorization!=null)append("Authorization",authorization) }
         }
         val channel = response.bodyAsChannel(); val output = ByteArrayOutputStream(); val buffer = ByteArray(8192)
         while (!channel.isClosedForRead) {
@@ -60,6 +71,14 @@ class CatalogRepository internal constructor(private val contracts: LearningCont
     private val transport: CatalogHttpTransport, private val supabaseOrigin: String) {
     constructor(context: Context, allowLocalHttp: Boolean = false) : this(LearningContractJson(context.applicationContext),
         PublicCatalogTransport(BuildConfig.SUPABASE_URL, BuildConfig.SUPABASE_PUBLISHABLE_KEY, allowLocalHttp), BuildConfig.SUPABASE_URL)
+
+    /** Shares the existing publishable-key transport; no separate HTTP engine or server key. */
+    fun prepared(context:Context,api:IncrementalLearningApi,dao:ReviewDao):PreparedCatalogRepository =
+        PreparedCatalogRepository(IncrementalContractJson(context.applicationContext),this,api,dao)
+
+    internal suspend fun publicRows(table:String,columns:List<String>,query:Map<String,String>):List<JsonObject> = rows(table,columns,query)
+    internal suspend fun bindingRows(scope:LearningCallScope,columns:List<String>,query:Map<String,String>):List<JsonObject> =
+        decodeRows(transport.getAuthenticated("profile_material_bindings",query+("select" to columns.joinToString(",")),scope.session.authorizationHeader()),columns)
 
     private val catalogColumns = listOf("article_id", "bundle_id", "title", "publisher", "original_url", "published_at_raw", "published_at_utc", "timezone_status",
         "topic_ids", "original_duration_ms", "briefing_duration_ms", "published_at", "access_until", "status")
@@ -91,12 +110,32 @@ class CatalogRepository internal constructor(private val contracts: LearningCont
         parseScript(row).also { require(it.scriptId == ref.listeningScriptId && it.bundleId == ref.bundleId && it.role == role && it.baseScriptId == null) }
     }
 
+    suspend fun readArticleRef(article: CatalogArticle, mode: ListeningMode): CatalogRead<ContentRef> = read {
+        val bundle = single("news_bundles", bundleColumns, mapOf("bundle_id" to "eq.${article.bundleId}", "article_id" to "eq.${article.articleId}"))
+        require(bundle.text("status", 20) == "published")
+        val row = single("news_scripts", scriptColumns, mapOf("bundle_id" to "eq.${article.bundleId}", "role" to "eq.${if (mode == ListeningMode.ORIGINAL_FULL) "original_full" else "briefing"}"))
+        val script = parseScript(row)
+        ContentRef(article.articleId, article.bundleId, bundle.id("source_snapshot_id"), script.scriptId, mode)
+    }
+
+    suspend fun readPractice(ref: ContentRef): CatalogRead<PublishedPracticeTask> = read {
+        pinnedBundle(ref)
+        val columns = listOf("task_id", "bundle_id", "listening_script_id", "article_id", "basic_question_version_id", "question_en", "support_manifest")
+        val row = single("news_practice_tasks", columns, mapOf("bundle_id" to "eq.${ref.bundleId}", "listening_script_id" to "eq.${ref.listeningScriptId}"))
+        require(row.id("bundle_id") == ref.bundleId && row.id("listening_script_id") == ref.listeningScriptId && row.id("article_id") == ref.articleId)
+        val value = row.getValue("support_manifest")
+        contracts.validate("common.schema.json", contracts.schema("common.schema.json", "#/\$defs/PracticeSupportManifest"), value)
+        val manifest = learningJson.decodeFromJsonElement(io.github.driveenglishlab.pleos.data.wire.WireCommonPracticeSupportManifest.serializer(), value).domain()
+        val fixed = PracticeContentRef(ref, row.id("task_id"), row.id("basic_question_version_id"))
+        require(manifest.taskId == fixed.taskId && manifest.questionRef == fixed.questionRef)
+        PublishedPracticeTask(fixed, row.text("question_en", 500), manifest)
+    }
+
     suspend fun readTitle(ref: ContentRef): CatalogRead<String> = read {
         pinnedBundle(ref)
-        val row = single("news_catalog", listOf("article_id", "bundle_id", "title", "status"),
-            mapOf("article_id" to "eq.${ref.articleId}", "bundle_id" to "eq.${ref.bundleId}", "status" to "eq.published"))
-        require(row.id("article_id") == ref.articleId && row.id("bundle_id") == ref.bundleId && row.text("status", 20) == "published")
-        row.text("title", 500)
+        val row = single("news_bundles", listOf("bundle_id", "article_id", "source_snapshot_id", "public_payload"), mapOf("bundle_id" to "eq.${ref.bundleId}"))
+        require(row.id("bundle_id") == ref.bundleId && row.id("article_id") == ref.articleId && row.id("source_snapshot_id") == ref.sourceSnapshotId)
+        row.getValue("public_payload").jsonObject.getValue("source").jsonObject.text("title", 500)
     }
 
     suspend fun readFollowup(ref: ContentRef, role: CatalogScriptRole): CatalogRead<PublishedScript> = read {
@@ -142,6 +181,9 @@ class CatalogRepository internal constructor(private val contracts: LearningCont
     }
     private suspend fun rows(table: String, columns: List<String>, query: Map<String, String>): List<JsonObject> {
         val response = transport.get(table, query + ("select" to columns.joinToString(",")))
+        return decodeRows(response,columns)
+    }
+    private fun decodeRows(response:LearningHttpResponse,columns:List<String>):List<JsonObject> {
         if (response.status != 200) throw CatalogHttpFailure(response.status >= 500)
         require(response.body.size <= 1024*1024 && response.headers.entries.any { it.key.equals("Content-Type", true) && it.value.substringBefore(';').trim() == "application/json" })
         val text = try { Charsets.UTF_8.newDecoder().onMalformedInput(CodingErrorAction.REPORT).onUnmappableCharacter(CodingErrorAction.REPORT).decode(ByteBuffer.wrap(response.body)).toString() }

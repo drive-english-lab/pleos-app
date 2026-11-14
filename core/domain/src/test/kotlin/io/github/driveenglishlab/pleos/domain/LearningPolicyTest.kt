@@ -7,7 +7,7 @@ import org.junit.Test
 
 class LearningPolicyTest {
     private fun owner() = OwnerContext(UUID.randomUUID(), 0, 1, UUID.randomUUID())
-    private fun task() = PracticeRef(ContentRef(UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), ListeningMode.ORIGINAL_FULL), UUID.randomUUID(), UUID.randomUUID())
+    private fun task() = PracticeContentRef(ContentRef(UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), ListeningMode.ORIGINAL_FULL), UUID.randomUUID(), UUID.randomUUID())
     private fun allowed() = AccessState(
         SafetyState(VehiclePosition.PARKED, true, true, true, false, 3),
         WindowState(true, true, 4), PowerAvailability.ALLOWED,

@@ -1,0 +1,2680 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Drive English learning source6",
+    "version": "6.0.0",
+    "description": "Additive 008 contract. Runtime activation and external verification are separate."
+  },
+  "paths": {
+    "/v2/article-questions": {
+      "post": {
+        "operationId": "answerArticleQuestionV6",
+        "summary": "Answer from the pinned source snapshot",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Feedback uses attempt_id; article QA uses operation_id. Canonical profile + endpoint + key. A transport retry may use fresh operation/presentation correlation without changing the submitted answer/capture/help."
+          },
+          {
+            "name": "X-Installation-ID",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Random installation context bound to verified session_id. Not identity/authorization on its own."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "source6.schema.json#/$defs/InferenceQARequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Validated result.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/InferenceQAResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid/expired JWT, revoked session, or retired source ownership.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/InferenceErrorEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Verified owner/session does not match the expected request context or permitted content.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/InferenceErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Content ref does not exist.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/InferenceErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Stale privacy epoch/record version, pinned ref mismatch, or idempotency payload conflict.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/InferenceErrorEnvelope"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Content/rights withdrawn or submitted history no longer available after deletion.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/InferenceErrorEnvelope"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "JSON body exceeds 16 KiB, including retry context.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/InferenceErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Sanitized contract error; no input echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/InferenceErrorEnvelope"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Quota exhausted; no model call is made.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/InferenceErrorEnvelope"
+                }
+              }
+            },
+            "headers": {
+              "Retry-After": {
+                "description": "Seconds until retry may be attempted.",
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Upstream or validated output unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/InferenceErrorEnvelope"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "Channel-specific processing budget exceeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/InferenceErrorEnvelope"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Invalid upstream or backend result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/InferenceErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "description": "Verify JWT and active subject/session owner, compare expected profile/epoch, validate frozen content/script, enforce bounded processing, and recheck owner/epoch/session before committing or returning a personal result.",
+        "x-source-adapter": true,
+        "x-legacy-optional": false
+      }
+    },
+    "/v2/attempt-feedback": {
+      "post": {
+        "operationId": "evaluateSpeakingAttemptV6",
+        "summary": "Evaluate a submitted answer with the pinned rubric",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Feedback uses attempt_id; article QA uses operation_id. Canonical profile + endpoint + key. A transport retry may use fresh operation/presentation correlation without changing the submitted answer/capture/help."
+          },
+          {
+            "name": "X-Installation-ID",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Random installation context bound to verified session_id. Not identity/authorization on its own."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "source6.schema.json#/$defs/InferenceFeedbackRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Validated result.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/InferenceFeedbackResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid/expired JWT, revoked session, or retired source ownership.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/InferenceErrorEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Verified owner/session does not match the expected request context or permitted content.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/InferenceErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Content ref does not exist.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/InferenceErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Stale privacy epoch/record version, pinned ref mismatch, or idempotency payload conflict.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/InferenceErrorEnvelope"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Content/rights withdrawn or submitted history no longer available after deletion.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/InferenceErrorEnvelope"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "JSON body exceeds 16 KiB, including retry context.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/InferenceErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Sanitized contract error; no input echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/InferenceErrorEnvelope"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Quota exhausted; no model call is made.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/InferenceErrorEnvelope"
+                }
+              }
+            },
+            "headers": {
+              "Retry-After": {
+                "description": "Seconds until retry may be attempted.",
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Upstream or validated output unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/InferenceErrorEnvelope"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "Channel-specific processing budget exceeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/InferenceErrorEnvelope"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Invalid upstream or backend result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/InferenceErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "description": "Verify JWT and active subject/session owner, compare expected profile/epoch, validate frozen content/script, enforce bounded processing, and recheck owner/epoch/session before committing or returning a personal result.",
+        "x-source-adapter": true,
+        "x-legacy-optional": false
+      }
+    },
+    "/v2/attempts/{attempt_id}": {
+      "get": {
+        "operationId": "readAttemptResultV6",
+        "description": "Fetch the authenticated owner current-generation attempt/validated feedback for resume. Pending/failure status is preserved; this read does not start another model call. Deleted/stale ownership never recreates a row.",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "attempt_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-Installation-ID",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Random installation context bound to verified session_id. Not identity/authorization on its own."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Validated result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/InferenceAttemptResult"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/InferenceErrorEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/InferenceErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/InferenceErrorEnvelope"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/InferenceErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid request or path/query parameter",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/InferenceErrorEnvelope"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Invalid upstream or backend result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/InferenceErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Required runtime or upstream unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/InferenceErrorEnvelope"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "Request processing deadline exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/InferenceErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "x-source-adapter": true,
+        "x-legacy-optional": false
+      }
+    },
+    "/v2/profile/sync": {
+      "post": {
+        "operationId": "applySyncBatchV6",
+        "description": "Atomic typed stream/checkpoint/observation/lesson/attempt batch; no client selection/completion/feedback/success writes. Stale history epoch rejects all events. Observe transport50/256KiB without capping articles or observations over time. Record arrival does not select resume.",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "X-Installation-ID",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Random installation context bound to verified session_id. Not identity/authorization on its own."
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Equals operation_id. Owner + session/endpoint + key scopes receipts; same key with different immutable payload is a conflict."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Validated result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/PersonalSyncReceipt"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/PersonalErrorEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/PersonalErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/PersonalErrorEnvelope"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/PersonalErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/PersonalErrorEnvelope"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/PersonalErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/PersonalErrorEnvelope"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Invalid upstream or backend result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/PersonalErrorEnvelope"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "Request processing deadline exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/PersonalErrorEnvelope"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "UTF-8 request body exceeds the transport limit",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/PersonalErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "source6.schema.json#/$defs/PersonalSyncRequest"
+              }
+            }
+          }
+        },
+        "x-source-adapter": true,
+        "x-legacy-optional": false
+      },
+      "get": {
+        "operationId": "readSyncPageV6",
+        "description": "",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "X-Installation-ID",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Random installation context bound to verified session_id. Not identity/authorization on its own."
+          },
+          {
+            "name": "client_privacy_epoch",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 512
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50,
+              "default": 50
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Validated result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/PersonalSyncPage"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/PersonalErrorEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/PersonalErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/PersonalErrorEnvelope"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/PersonalErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/PersonalErrorEnvelope"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/PersonalErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/PersonalErrorEnvelope"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Invalid upstream or backend result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/PersonalErrorEnvelope"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "Request processing deadline exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/PersonalErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "x-source-adapter": true,
+        "x-legacy-optional": false
+      }
+    },
+    "/v2/profile/resume": {
+      "patch": {
+        "operationId": "selectActiveResumeV6",
+        "description": "Explicit resume selection after referenced-record ACK; independent resume version. Semantic completion does not clear pending feedback. Presentation ACK/explicit retry decline or actual article-work end conditionally clears only the pointer still targeting that record. Delete/merge update the pointer atomically; remote change does not move current audio.",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "X-Installation-ID",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Random installation context bound to verified session_id. Not identity/authorization on its own."
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Equals operation_id. Owner + session/endpoint + key scopes receipts; same key with different immutable payload is a conflict."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Validated result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/PersonalProfileView"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/PersonalErrorEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/PersonalErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/PersonalErrorEnvelope"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/PersonalErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/PersonalErrorEnvelope"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/PersonalErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/PersonalErrorEnvelope"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Invalid upstream or backend result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/PersonalErrorEnvelope"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "Request processing deadline exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/PersonalErrorEnvelope"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "UTF-8 request body exceeds the transport limit",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/PersonalErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "source6.schema.json#/$defs/PersonalResumeSelection"
+              }
+            }
+          }
+        },
+        "x-source-adapter": true,
+        "x-legacy-optional": false
+      }
+    },
+    "/v2/listening/next": {
+      "post": {
+        "operationId": "selectNextArticleV6",
+        "description": "Select exactly one next article; persistent receipt + stream head fence; no fixed item count.",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "X-Installation-ID",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Random installation context bound to verified session_id. Not identity/authorization on its own."
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Equals operation_id. Owner + session/endpoint + key scopes receipts; same key with different immutable payload is a conflict."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Validated result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/PersonalNextArticleResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/PersonalErrorEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/PersonalErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/PersonalErrorEnvelope"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/PersonalErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/PersonalErrorEnvelope"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/PersonalErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/PersonalErrorEnvelope"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Invalid upstream or backend result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/PersonalErrorEnvelope"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "Request processing deadline exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/PersonalErrorEnvelope"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "UTF-8 request body exceeds the transport limit",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/PersonalErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "source6.schema.json#/$defs/PersonalNextArticleRequest"
+              }
+            }
+          }
+        },
+        "x-source-adapter": true,
+        "x-legacy-optional": false
+      }
+    },
+    "/v2/playback-runs": {
+      "post": {
+        "operationId": "startPlaybackRunV6",
+        "description": "Bind actual playback observation writer and immutable prefix snapshot to one run.",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "X-Installation-ID",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Random installation context bound to verified session_id. Not identity/authorization on its own."
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Equals operation_id. Owner + session/endpoint + key scopes receipts; same key with different immutable payload is a conflict."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Validated result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/PersonalPlaybackRunReceipt"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/PersonalErrorEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/PersonalErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/PersonalErrorEnvelope"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/PersonalErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/PersonalErrorEnvelope"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/PersonalErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/PersonalErrorEnvelope"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Invalid upstream or backend result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/PersonalErrorEnvelope"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "Request processing deadline exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/PersonalErrorEnvelope"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "UTF-8 request body exceeds the transport limit",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/PersonalErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "source6.schema.json#/$defs/PersonalPlaybackRunStart"
+              }
+            }
+          }
+        },
+        "x-source-adapter": true,
+        "x-legacy-optional": false
+      }
+    },
+    "/v2/lessons/{lesson_id}/finish": {
+      "post": {
+        "operationId": "declineLessonRetryV6",
+        "description": "Server validated explicit retry decline; terminal reason distinct from success.",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "X-Installation-ID",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Random installation context bound to verified session_id. Not identity/authorization on its own."
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Equals operation_id. Owner + session/endpoint + key scopes receipts; same key with different immutable payload is a conflict."
+          },
+          {
+            "name": "lesson_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Validated result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/PersonalLessonCommandReceipt"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/PersonalErrorEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/PersonalErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/PersonalErrorEnvelope"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/PersonalErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/PersonalErrorEnvelope"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/PersonalErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/PersonalErrorEnvelope"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Invalid upstream or backend result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/PersonalErrorEnvelope"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "Request processing deadline exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/PersonalErrorEnvelope"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "UTF-8 request body exceeds the transport limit",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/PersonalErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "source6.schema.json#/$defs/PersonalLessonFinishRequest"
+              }
+            }
+          }
+        },
+        "x-source-adapter": true,
+        "x-legacy-optional": false
+      }
+    },
+    "/v2/lessons/{lesson_id}/feedback-presentations": {
+      "post": {
+        "operationId": "acknowledgeFeedbackPresentationV6",
+        "description": "Actual feedback delivery acknowledgement; preserve undisplayed completed results for resume.",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "X-Installation-ID",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Random installation context bound to verified session_id. Not identity/authorization on its own."
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Equals operation_id. Owner + session/endpoint + key scopes receipts; same key with different immutable payload is a conflict."
+          },
+          {
+            "name": "lesson_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Validated result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/PersonalLessonCommandReceipt"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/PersonalErrorEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/PersonalErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/PersonalErrorEnvelope"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/PersonalErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/PersonalErrorEnvelope"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/PersonalErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/PersonalErrorEnvelope"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Invalid upstream or backend result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/PersonalErrorEnvelope"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "Request processing deadline exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/PersonalErrorEnvelope"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "UTF-8 request body exceeds the transport limit",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/PersonalErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "source6.schema.json#/$defs/PersonalLessonPresentationRequest"
+              }
+            }
+          }
+        },
+        "x-source-adapter": true,
+        "x-legacy-optional": false
+      }
+    },
+    "/v2/listening/format-changes": {
+      "post": {
+        "operationId": "changeCurrentArticleFormatV6",
+        "description": "Explicit same-source one-time mode replay; new selection/checkpoint at0 without changing saved preferences.",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "X-Installation-ID",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Random installation context bound to verified session_id. Not identity/authorization on its own."
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Equals operation_id. Owner + session/endpoint + key scopes receipts; same key with different immutable payload is a conflict."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Validated result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/PersonalFormatChangeResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/PersonalErrorEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/PersonalErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/PersonalErrorEnvelope"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/PersonalErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/PersonalErrorEnvelope"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/PersonalErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/PersonalErrorEnvelope"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Invalid upstream or backend result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/PersonalErrorEnvelope"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "Request processing deadline exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/PersonalErrorEnvelope"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "UTF-8 request body exceeds the transport limit",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/PersonalErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Referenced owned record/approved counterpart not found; preserve original work.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/PersonalErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "source6.schema.json#/$defs/PersonalFormatChangeRequest"
+              }
+            }
+          }
+        },
+        "x-source-adapter": true,
+        "x-legacy-optional": false
+      }
+    },
+    "/v2/practice-presentations": {
+      "post": {
+        "operationId": "preparePracticePresentationV6",
+        "description": "Register exact support before potential output; preparation never proves actual exposure.",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "X-Installation-ID",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Random installation context bound to verified session_id. Not identity/authorization on its own."
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Equals operation_id. Owner + session/endpoint + key scopes receipts; same key with different immutable payload is a conflict."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Validated result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/PersonalPracticePresentationTicket"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/PersonalErrorEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/PersonalErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/PersonalErrorEnvelope"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/PersonalErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/PersonalErrorEnvelope"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/PersonalErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/PersonalErrorEnvelope"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Invalid upstream or backend result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/PersonalErrorEnvelope"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "Request processing deadline exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/PersonalErrorEnvelope"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "UTF-8 request body exceeds the transport limit",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/PersonalErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Referenced owned record/approved counterpart not found; preserve original work.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/PersonalErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "source6.schema.json#/$defs/PersonalPracticePresentationPrepare"
+              }
+            }
+          }
+        },
+        "x-source-adapter": true,
+        "x-legacy-optional": false
+      }
+    },
+    "/v2/practice-presentations/{presentation_id}/observations": {
+      "post": {
+        "operationId": "observePracticePresentationV6",
+        "description": "Record actual exact-component delivery/uncertainty without clearing feedback or resume.",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "X-Installation-ID",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Random installation context bound to verified session_id. Not identity/authorization on its own."
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Equals operation_id. Owner + session/endpoint + key scopes receipts; same key with different immutable payload is a conflict."
+          },
+          {
+            "name": "presentation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Validated result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/PersonalPracticePresentationReceipt"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/PersonalErrorEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/PersonalErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/PersonalErrorEnvelope"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/PersonalErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/PersonalErrorEnvelope"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/PersonalErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/PersonalErrorEnvelope"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Invalid upstream or backend result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/PersonalErrorEnvelope"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "Request processing deadline exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/PersonalErrorEnvelope"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "UTF-8 request body exceeds the transport limit",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/PersonalErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Referenced owned record/approved counterpart not found; preserve original work.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/PersonalErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "source6.schema.json#/$defs/PersonalPracticePresentationObservation"
+              }
+            }
+          }
+        },
+        "x-source-adapter": true,
+        "x-legacy-optional": false
+      }
+    },
+    "/v2/content/audio-access": {
+      "post": {
+        "operationId": "issueAudioAccessV6",
+        "description": "Read-only credential issuance, not a personal-history mutation. Check active session, current published bundle/asset link and rights. Reissue using fresh operation_id; never reuse an expired URL from an idempotency receipt.",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "X-Installation-ID",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Random installation context bound to verified session_id. Not identity/authorization on its own."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "source6.schema.json#/$defs/PersonalAudioAccessRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Validated result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/PersonalAudioAccessResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sanitized error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/PersonalErrorEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sanitized error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/PersonalErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Sanitized error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/PersonalErrorEnvelope"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Sanitized error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/PersonalErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Sanitized error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/PersonalErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Sanitized error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/PersonalErrorEnvelope"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Invalid upstream or backend result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/PersonalErrorEnvelope"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "Request processing deadline exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/PersonalErrorEnvelope"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "UTF-8 request body exceeds the transport limit",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/PersonalErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "x-source-adapter": true,
+        "x-legacy-optional": true
+      }
+    },
+    "/v2/profile/speaking-records": {
+      "get": {
+        "operationId": "listSpeakingRecordsV6",
+        "summary": "Read automatic cards with separate snapshot cursor.",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "X-Installation-ID",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Random installation context bound to verified session_id. Not identity/authorization on its own."
+          },
+          {
+            "name": "client_privacy_epoch",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "description": "Expected history epoch; verified binding remains the access authority."
+          },
+          {
+            "name": "visibility",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "visible",
+                "hidden"
+              ],
+              "default": "visible"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 512
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50,
+              "default": 20
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Validated feature1 result, not presentation evidence.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/ProgressSpeakingRecordPage"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Access JWT missing/invalid.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/PersonalErrorEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Inactive session/binding or wrong expected profile.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/PersonalErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Feature/record/attempt unavailable; no private-owner disclosure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/PersonalErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "CAS, epoch, immutable payload or snapshot conflict. Read current state; no silent rebase.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/PersonalErrorEnvelope"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "UTF-8 mutation body exceeds16 KiB.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/PersonalErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid schema5/feature1 shape or evidence.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/PersonalErrorEnvelope"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited; preserve pending state.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/PersonalErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Actual business/source/clock adapter unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/PersonalErrorEnvelope"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "Deadline exceeded; preserve operation and accepted answer.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/PersonalErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "x-source-adapter": true,
+        "x-legacy-optional": false
+      }
+    },
+    "/v2/profile/speaking-records/{lesson_id}": {
+      "get": {
+        "operationId": "readSpeakingRecordV6",
+        "summary": "Read original evidence/own sentence without presentation ACK.",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "X-Installation-ID",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Random installation context bound to verified session_id. Not identity/authorization on its own."
+          },
+          {
+            "name": "lesson_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "client_privacy_epoch",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "description": "Expected history epoch; verified binding remains the access authority."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Validated feature1 result, not presentation evidence.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/ProgressSpeakingRecordView"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Access JWT missing/invalid.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/PersonalErrorEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Inactive session/binding or wrong expected profile.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/PersonalErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Feature/record/attempt unavailable; no private-owner disclosure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/PersonalErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "CAS, epoch, immutable payload or snapshot conflict. Read current state; no silent rebase.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/PersonalErrorEnvelope"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "UTF-8 mutation body exceeds16 KiB.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/PersonalErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid schema5/feature1 shape or evidence.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/PersonalErrorEnvelope"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited; preserve pending state.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/PersonalErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Actual business/source/clock adapter unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/PersonalErrorEnvelope"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "Deadline exceeded; preserve operation and accepted answer.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/PersonalErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "x-source-adapter": true,
+        "x-legacy-optional": false
+      }
+    },
+    "/v2/article-explanations/{operation_id}/observations": {
+      "post": {
+        "operationId": "observeArticleExplanation",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "operation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Stored data only; no output/completion grant.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/ExplanationObservationResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Typed failure; original operation is preserved.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Typed failure; original operation is preserved.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Typed failure; original operation is preserved.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Typed failure; original operation is preserved.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Typed failure; original operation is preserved.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Typed failure; original operation is preserved.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "source6.schema.json#/$defs/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "source6.schema.json#/$defs/ExplanationObservationRequest"
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "BearerAuth": {
+        "type": "http",
+        "scheme": "bearer"
+      }
+    }
+  }
+}

@@ -3,7 +3,7 @@
   "info": {
     "title": "Drive English AI Learning S4",
     "version": "1.0.0",
-    "description": "Design only. Six protected operations, not deployed. JWT/session/installation/owner, epoch for learning objects, CAS/immutable receipts and data lifecycle require server validation. No public model proxy. Same original JSON5 unchanged."
+    "description": "Six protected design operations. Actual registration, handler wiring and external availability are tracked per operation in implementation records. JWT/session/installation/owner, epoch for learning objects, CAS/immutable receipts and data lifecycle require server validation. No public model proxy. Same original JSON5 unchanged."
   },
   "paths": {
     "/v1/profile/learning-preference": {

@@ -6,28 +6,33 @@ import io.github.driveenglishlab.pleos.data.wire.*
 import io.github.driveenglishlab.pleos.domain.*
 import java.util.UUID
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
 /** Stable guest identity and settings. No implicit login, merge, resume selection or playback. */
 class ProfileRepository internal constructor(
     private val database: LearningDatabase,
-    private val auth: ProfileAuth,
+    private var auth: ProfileAuth,
     apiFactory: (LearningSessionSource) -> LearningApi,
 ) : LearningSessionSource {
     constructor(context: Context, database: LearningDatabase, serviceOrigin: String, allowLocalHttp: Boolean = false) : this(
         database, SupabaseProfileAuth(AuthSessionStore(context.applicationContext)),
         { sessions -> LearningApi(context.applicationContext, serviceOrigin, sessions, allowLocalHttp) })
 
+    @Volatile private var transitioning = false
     private val mutex = Mutex()
     private val presentationToken = UUID.randomUUID()
     private val api = apiFactory(this)
     private val dao get() = database.learning()
 
     override suspend fun current(): LearningCallScope? = try {
+        if (transitioning) return null
         val owner = dao.currentOwner() ?: return null
         if (owner.status !in setOf("provisional", "active")) return null
         val session = auth.currentSession() ?: return null
+        if (transitioning || dao.currentOwner() != owner) return null
         LearningCallScope(OwnerContext(UUID.fromString(owner.profileId), owner.privacyEpoch, owner.revision, presentationToken), session)
     } catch (error: CancellationException) { throw error }
       catch (_: Exception) { null }
@@ -124,6 +129,98 @@ class ProfileRepository internal constructor(
             is LearningReply.Stored -> acceptProfile(scope, result.value, request.operationId to payload)
         }
 
+    internal suspend fun reloadProtectedAuth(replacement: ProfileAuth) = mutex.withLock {
+        val oldSession = auth.currentSession() ?: error("Current identity unavailable")
+        val fresh = replacement.ensureSession(false) { error("No automatic creation") }
+        require(fresh.subjectId == oldSession.subjectId && fresh.installationId == oldSession.installationId)
+        val previous = auth; auth = replacement
+        (previous as? SupabaseProfileAuth)?.close()
+    }
+
+    internal suspend fun maintenanceScope(): LearningCallScope? {
+        val local = dao.currentOwner()?.takeIf { it.status == "delete_pending" } ?: return current()
+        val session = auth.ensureSession(false) { error("Creation is not permitted during deletion") }
+        return LearningCallScope(OwnerContext(UUID.fromString(local.profileId), local.privacyEpoch, local.revision, presentationToken), session)
+    }
+
+    internal suspend fun adoptIdentity(newAuth: ProfileAuth, profile: WirePersonalProfileView, expectedRevision: Long,
+        cleanupSource: Pair<String, Long>? = null, transitionOperation: String? = null): LearningReply<WirePersonalProfileView> = mutex.withLock { withContext(NonCancellable) {
+        transitioning = true
+        try {
+        val session = newAuth.ensureSession(false) { error("No automatic signup during adoption") }
+        val owner = database.withTransaction {
+            val previous = requireNotNull(dao.currentOwner())
+            require(previous.revision == expectedRevision && previous.status == "transition")
+            FeatureLifecycle(database).isolateForOwnerTransition(UUID.fromString(previous.profileId))
+            database.openHelper.writableDatabase.query("SELECT MAX(privacyEpoch) FROM learning_record WHERE profileId=? AND kind='profile_view'",
+                arrayOf<Any>(profile.profileContext.profileId)).use{rows->
+                if(rows.moveToFirst() && !rows.isNull(0))require(rows.getLong(0)<=profile.profileContext.privacyEpoch){"Confirmed profile epoch cannot regress."}
+            }
+            if(profile.profileContext.privacyEpoch>0)eraseLocalLearning(database,profile.profileContext.profileId,profile.profileContext.privacyEpoch-1)
+            LocalOwner(profileId = profile.profileContext.profileId, privacyEpoch = profile.profileContext.privacyEpoch,
+                revision = previous.revision + 1, status = "active").also { next ->
+                dao.putOwner(next)
+                cleanupSource?.let { (source, epoch) -> require(source != next.profileId); eraseLocalLearning(database, source, epoch) }
+                transitionOperation?.let { dao.updateOwnerJournal(it, "complete") }
+                dao.saveRead(OwnerContext(UUID.fromString(next.profileId), next.privacyEpoch, next.revision, presentationToken),
+                    LearningRecord(next.profileId, next.privacyEpoch, stableRecordId("profile-view").toString(), "profile_view", learningJson.encodeToString(WirePersonalProfileView.serializer(), profile), profile.version))
+            }
+        }
+        val previousAuth = auth; auth = newAuth
+        (previousAuth as? SupabaseProfileAuth)?.close()
+        LearningReply.Stored(LearningCallScope(OwnerContext(UUID.fromString(owner.profileId), owner.privacyEpoch, owner.revision, presentationToken), session), profile)
+        } finally { transitioning = false }
+    } }
+
+    internal suspend fun useFreshGuestAuth(newAuth: ProfileAuth, expectedRevision: Long) = mutex.withLock { withContext(NonCancellable) {
+        transitioning = true
+        try {
+        database.withTransaction {
+            val previous = requireNotNull(dao.currentOwner())
+            require(previous.revision == expectedRevision && previous.status == "transition")
+            FeatureLifecycle(database).isolateForOwnerTransition(UUID.fromString(previous.profileId))
+            dao.putOwner(LocalOwner(profileId = UUID.randomUUID().toString(), privacyEpoch = 0, revision = previous.revision + 1, status = "provisional"))
+        }
+        val previousAuth = auth; auth = newAuth
+        (previousAuth as? SupabaseProfileAuth)?.close()
+        } finally { transitioning = false }
+    } }
+
+    internal suspend fun reconcileDeletion(profile: WirePersonalProfileView, operation: String, expectedRevision: Long,
+        receipt: WirePersonalDeletionReceipt?) = mutex.withLock { withContext(NonCancellable) {
+        database.withTransaction {
+            val local = requireNotNull(dao.currentOwner())
+            require(local.status == "delete_pending" && local.revision == expectedRevision && local.profileId == profile.profileContext.profileId &&
+                profile.profileContext.privacyEpoch > local.privacyEpoch)
+            if (receipt != null) require(receipt.profileContext.profileId == local.profileId && receipt.previousPrivacyEpoch == local.privacyEpoch &&
+                receipt.profileContext.privacyEpoch <= profile.profileContext.privacyEpoch && receipt.operationId == operation)
+            eraseLocalLearning(database, local.profileId, profile.profileContext.privacyEpoch - 1)
+            val next = local.copy(privacyEpoch = profile.profileContext.privacyEpoch, revision = local.revision + 1, status = "active")
+            dao.putOwner(next)
+            val owner = OwnerContext(UUID.fromString(next.profileId), next.privacyEpoch, next.revision, presentationToken)
+            dao.saveRead(owner, readRecord(owner, stableRecordId("profile-view"), "profile_view", learningJson.encodeToString(WirePersonalProfileView.serializer(), profile), profile.version))
+            val result = kotlinx.serialization.json.buildJsonObject {
+                put("operation_id", kotlinx.serialization.json.JsonPrimitive(operation))
+                put("requested_epoch", kotlinx.serialization.json.JsonPrimitive(local.privacyEpoch))
+                put("confirmed_server_epoch", kotlinx.serialization.json.JsonPrimitive(next.privacyEpoch))
+                put("resolution", kotlinx.serialization.json.JsonPrimitive(if (receipt != null) "own_deletion_receipt" else "old_generation_erased_elsewhere"))
+            }
+            dao.saveRead(owner, readRecord(owner, UUID.fromString(operation), "deletion_resolution", result.toString(), 1))
+            dao.updateOwnerJournal(operation, "complete")
+        }
+    } }
+
+    internal suspend fun confirmDeletion(receipt: WirePersonalDeletionReceipt, expectedRevision: Long) = mutex.withLock {
+        database.withTransaction {
+            val local = requireNotNull(dao.currentOwner())
+            require(local.profileId == receipt.profileContext.profileId && local.revision == expectedRevision && local.status == "delete_pending" &&
+                local.privacyEpoch == receipt.previousPrivacyEpoch && receipt.profileContext.privacyEpoch == local.privacyEpoch + 1)
+            eraseLocalLearning(database, local.profileId, local.privacyEpoch)
+            dao.putOwner(local.copy(privacyEpoch = receipt.profileContext.privacyEpoch, revision = local.revision + 1, status = "active"))
+            dao.updateOwnerJournal(receipt.operationId, "complete")
+        }
+    }
+
     private suspend fun requireCurrent(owner: OwnerContext) {
         val value = dao.currentOwner()
         require(value != null && value.profileId == owner.profileId.toString() && value.privacyEpoch == owner.privacyEpoch &&
@@ -143,13 +240,7 @@ class ProfileRepository internal constructor(
             val epoch = value.profileContext.privacyEpoch
             if (epoch > previous.privacyEpoch) {
                 // A server-confirmed history generation change discards old learning, not settings.
-                val db = database.openHelper.writableDatabase
-                for (table in listOf("learning_outbox", "history_coverage", "practice_binding", "presentation_ticket",
-                    "presentation_observation", "presentation_receipt", "dialogue_completion",
-                    "speaking_records_cache", "speaking_records_journal", "ai_learning_cache", "ai_learning_journal")) {
-                    db.execSQL("DELETE FROM $table WHERE profileId = ? AND privacyEpoch < ?", arrayOf<Any>(previous.profileId, epoch))
-                }
-                db.execSQL("DELETE FROM learning_record WHERE profileId = ? AND privacyEpoch < ? AND kind != 'profile_settings_command'", arrayOf<Any>(previous.profileId, epoch))
+                eraseLocalLearning(database,previous.profileId,epoch-1)
             }
             val owner = previous.copy(privacyEpoch = epoch, status = "active",
                 revision = previous.revision + if (epoch > previous.privacyEpoch) 1 else 0)

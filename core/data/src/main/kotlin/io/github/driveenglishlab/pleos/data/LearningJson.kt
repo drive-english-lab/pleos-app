@@ -15,8 +15,11 @@ internal object LearningJson {
     fun content(value: ContentRef) = JSONObject().put("article_id", value.articleId.toString())
         .put("bundle_id", value.bundleId.toString()).put("source_snapshot_id", value.sourceSnapshotId.toString())
         .put("listening_mode", wire(value.listeningMode)).put("listening_script_id", value.listeningScriptId.toString())
-    fun practice(value: PracticeContentRef) = content(value.content).put("task_id", value.taskId.toString())
-        .put("basic_question_version_id", value.basicQuestionVersionId.toString())
+    fun practice(value: PracticeRef): JSONObject {
+        require(value is PracticeContentRef) { "Prepared source requires source6 serialization" }
+        return content(value.content).put("task_id", value.taskId.toString())
+            .put("basic_question_version_id", value.basicQuestionVersionId.toString())
+    }
     fun question(value: BasicQuestionRef) = JSONObject().put("article_id", value.articleId.toString())
         .put("basic_question_version_id", value.basicQuestionVersionId.toString())
     fun profile(value: ProfileContext) = JSONObject().put("profile_id", value.profileId.toString()).put("privacy_epoch", value.privacyEpoch)

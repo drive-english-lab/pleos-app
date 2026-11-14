@@ -37,10 +37,17 @@ internal class KtorLearningTransport(origin: String, allowLocalHttp: Boolean = f
     }
     override suspend fun exchange(method: String, path: String, query: Map<String, String>, headers: Map<String, String>, body: ByteArray?): LearningHttpResponse {
         val base = origin ?: throw LearningTransportUnavailable()
-        require(path.startsWith("/v1/") && !path.contains('?') && !path.contains('#'))
+        require((path.startsWith("/v1/") || path.startsWith("/v2/")) && !path.contains('?') && !path.contains('#'))
         val response = client.request(base + path) {
             this.method = HttpMethod.parse(method.uppercase(java.util.Locale.ROOT))
-            url { query.forEach { (name, value) -> parameters.append(name, value) } }
+            url { query.forEach { (name, value) ->
+                // Internal map represents an array as JSON; OpenAPI form/explode uses repeated keys.
+                if (name == "topics" && path == "/v2/content/catalog") {
+                    val topics = learningJson.parseToJsonElement(value).jsonArray
+                    require(topics.all { it is JsonPrimitive && it.isString })
+                    parameters.appendAll(name, topics.map { it.jsonPrimitive.content })
+                } else parameters.append(name, value)
+            } }
             headers { headers.forEach { (name, value) -> append(name, value) } }
             if (body != null) setBody(body)
         }
@@ -66,6 +73,9 @@ class LearningApi internal constructor(private val sessions: LearningSessionSour
     constructor(context: Context, origin: String, sessions: LearningSessionSource, allowLocalHttp: Boolean = false) :
         this(sessions, LearningContractJson(context.applicationContext), KtorLearningTransport(origin, allowLocalHttp))
 
+    fun incremental(context: Context): IncrementalLearningApi =
+        IncrementalLearningApi(sessions, IncrementalContractJson(context.applicationContext), transport)
+
     internal fun validateSettings(request: WirePersonalSettingsPatch) {
         contracts.validate("personal-data.openapi.json", contracts.schema("personal-data.openapi.json", "#/components/schemas/SettingsPatch"),
             json.encodeToJsonElement(WirePersonalSettingsPatch.serializer(), request))
@@ -89,7 +99,7 @@ class LearningApi internal constructor(private val sessions: LearningSessionSour
                 if (context["profile_id"]?.jsonPrimitive?.content != scope.owner.profileId.toString() ||
                     ("privacy_epoch" in context && template != "/v1/profile/preferences" && context["privacy_epoch"]?.jsonPrimitive?.long != scope.owner.privacyEpoch)) throw LearningProtocolException()
                 if (template == "/v1/profile/preferences" && context["privacy_epoch"]!!.jsonPrimitive.long > scope.owner.privacyEpoch) throw LearningProtocolException()
-                if ("presentation_token" in context && (context["presentation_token"]?.jsonPrimitive?.content != scope.owner.presentationToken.toString() ||
+                if ("presentation_token" in context && template != "/v1/practice-presentations/{presentation_id}/observations" && (context["presentation_token"]?.jsonPrimitive?.content != scope.owner.presentationToken.toString() ||
                     context["context_revision"]?.jsonPrimitive?.long != scope.owner.revision)) throw LearningProtocolException()
             }
             content?.get("profile_id")?.let { if (it.jsonPrimitive.content != scope.owner.profileId.toString()) throw LearningProtocolException() }

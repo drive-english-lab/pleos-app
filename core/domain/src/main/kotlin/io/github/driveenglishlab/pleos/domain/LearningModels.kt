@@ -8,21 +8,35 @@ enum class HelpKind { FACT_EXPLANATION, SENTENCE_STARTER, PARTIAL_CORRECTION, CO
 enum class CaptureFidelity { UNKNOWN, CONFIRMED_FORM, LITERAL_CONTRACT_VERIFIED }
 enum class Judgement { SUFFICIENT, NEEDS_MORE, FACTUALLY_INCORRECT, UNASSESSABLE }
 
+/** Lossless source6 main reference. Legacy and prepared keep their own real identities. */
+sealed interface SegmentContentRef {
+    val articleId: UUID
+    val sourceSnapshotId: UUID
+    val listeningMode: ListeningMode
+}
+
 data class ContentRef(
-    val articleId: UUID,
+    override val articleId: UUID,
     val bundleId: UUID,
-    val sourceSnapshotId: UUID,
+    override val sourceSnapshotId: UUID,
     val listeningScriptId: UUID,
-    val listeningMode: ListeningMode,
-)
+    override val listeningMode: ListeningMode,
+) : SegmentContentRef
 
 data class BasicQuestionRef(val articleId: UUID, val basicQuestionVersionId: UUID)
 
-data class PracticeContentRef(val content: ContentRef, val taskId: UUID, val basicQuestionVersionId: UUID) {
-    val questionRef: BasicQuestionRef get() = BasicQuestionRef(content.articleId, basicQuestionVersionId)
+sealed interface PracticeRef {
+    val articleId: UUID
+    val basicQuestionVersionId: UUID
+    val taskIdentity: UUID
+    val supportTaskIdentity: UUID? get() = taskIdentity
+    val questionRef: BasicQuestionRef get() = BasicQuestionRef(articleId, basicQuestionVersionId)
 }
 
-typealias PracticeRef = PracticeContentRef
+data class PracticeContentRef(val content: ContentRef, val taskId: UUID, override val basicQuestionVersionId: UUID) : PracticeRef {
+    override val articleId get() = content.articleId
+    override val taskIdentity get() = taskId
+}
 
 enum class CapturePath { GLEO, PARKED_STT }
 enum class SpokenLanguage { EN, KO, MIXED, UNKNOWN }
@@ -89,7 +103,7 @@ data class DialogueProgressEvent(val eventId: UUID, val observation: DialoguePro
 
 enum class LessonInputPhase { QUESTION_WAIT, FEEDBACK_PENDING, RETRY_OFFER, SUSPENDED }
 data class LessonInput(
-    val lessonId: UUID, val contentRef: PracticeContentRef, val phase: LessonInputPhase,
+    val lessonId: UUID, val contentRef: PracticeRef, val phase: LessonInputPhase,
     val helpReceived: HelpSnapshot, val returnCheckpointId: UUID?, val dialogueProgress: DialogueProgress,
 )
 

@@ -57,7 +57,7 @@ kotlin {
 
 dependencies {
     implementation(project(":core:domain"))
-    implementation(libs.room.runtime)
+    api(libs.room.runtime)
     ksp(libs.room.compiler)
     androidTestImplementation("androidx.test:runner:1.7.0")
     androidTestImplementation("androidx.test.ext:junit:1.3.0")

@@ -3,7 +3,7 @@
   "info": {
     "title": "Drive English Listening Preference and Speaking Records",
     "version": "1.0.0",
-    "description": "S3 planned extension, not deployed. Six protected operations use schema_version5 plus feature_contract_version1; original22 operations/JSON3 are unchanged. Verify JWT subject/session/installation. Profile/epoch are expected context, never authority. Daily preference is history-epoch independent; cards/time/visibility require current epoch. Mutation <=16 KiB; key equals operation_id. GET never evaluates, acknowledges delivery, changes resume or starts media/input. Actual route/codec/generator/DB support remains a follow-on gate."
+    "description": "S3 feature design contract. Actual registration, handler wiring and validation are tracked per operation in implementation records. Six protected operations use schema_version5 plus feature_contract_version1; original22 operations/JSON3 are unchanged. Verify JWT subject/session/installation. Profile/epoch are expected context, never authority. Daily preference is history-epoch independent; cards/time/visibility require current epoch. Mutation <=16 KiB; key equals operation_id. GET never evaluates, acknowledges delivery, changes resume or starts media/input. Actual route/codec/generator/DB support remains a follow-on gate."
   },
   "paths": {
     "/v1/profile/daily-listening-preference": {

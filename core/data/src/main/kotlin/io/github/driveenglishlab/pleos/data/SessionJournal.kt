@@ -50,6 +50,32 @@ internal class SessionJournal(private val dao: LearningDao, private val api: Lea
             LearningReply.Failed("SYNC_NOT_READY", true)
         } ?: LearningReply.Failed("SYNC_NOT_READY", true)
 
+    suspend fun records(scope: LearningCallScope): LearningReply<List<WirePersonalReadRecord>> = withTimeoutOrNull(8_000) {
+        var cursor: String? = null
+        val records = linkedMapOf<String, WirePersonalReadRecord>()
+        repeat(100) {
+            when (val page = api.readSyncPage(scope, scope.owner.privacyEpoch, cursor, 50)) {
+                is LearningReply.Failed -> return@withTimeoutOrNull page
+                is LearningReply.Stored -> {
+                    if (page.value.resetRequired) return@withTimeoutOrNull LearningReply.Failed("SESSION_CHANGED", false)
+                    page.value.records.forEach { value ->
+                        val encoded = learningJson.encodeToJsonElement(WirePersonalReadRecord.serializer(), value).jsonObject
+                        val id = encoded.getValue("record_id").jsonPrimitive.content
+                        val version = encoded.getValue("version").jsonPrimitive.long
+                        val previous = records[id]?.let { learningJson.encodeToJsonElement(WirePersonalReadRecord.serializer(), it).jsonObject.getValue("version").jsonPrimitive.long } ?: 0
+                        if (version >= previous) records[id] = value
+                        dao.saveRead(scope.owner, readRecord(scope.owner, stableRecordId("server-record:$id"), "server_record_version",
+                            buildJsonObject { put("record_id", id); put("version", version) }.toString(), version))
+                    }
+                    if (page.value.records.size < 50 || page.value.cursor == null || page.value.cursor == cursor)
+                        return@withTimeoutOrNull LearningReply.Stored(scope, records.values.toList())
+                    cursor = page.value.cursor
+                }
+            }
+        }
+        LearningReply.Failed("SYNC_NOT_READY", true)
+    } ?: LearningReply.Failed("SYNC_NOT_READY", true)
+
     suspend fun queue(owner: OwnerContext, recordId: UUID, event: WirePersonalSyncEvent, preserveInputSnapshot: Boolean = false) {
         val value = learningJson.encodeToJsonElement(WirePersonalSyncEvent.serializer(), event)
         contracts.validate("personal-data.openapi.json", contracts.schema("personal-data.openapi.json", "#/components/schemas/SyncEvent"), value)

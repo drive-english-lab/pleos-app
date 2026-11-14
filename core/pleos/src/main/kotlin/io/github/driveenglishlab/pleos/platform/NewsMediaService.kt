@@ -31,10 +31,14 @@ import android.os.Bundle
 import io.github.driveenglishlab.pleos.domain.*
 import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.collect
 import java.io.IOException
 
 /** The product composition supplies a real owner/permission-aware port. Absent wiring stays silent. */
-interface NewsMediaRuntimeProvider { val newsPlayback: NewsPlaybackPort? }
+interface NewsMediaRuntimeProvider {
+    val newsPlayback: NewsPlaybackPort?
+    val segmentMedia: SegmentMediaControlPort? get() = null
+}
 
 /** Single-asset player. EOS is an observed event; only the product coordinator chooses a next step.
  * No Activity lifecycle, browser connection, focus gain or stale URL reply starts playback.
@@ -42,12 +46,19 @@ interface NewsMediaRuntimeProvider { val newsPlayback: NewsPlaybackPort? }
 @UnstableApi
 open class NewsMediaService : MediaLibraryService() {
     protected open val runtime: NewsPlaybackPort? get() = (application as? NewsMediaRuntimeProvider)?.newsPlayback
+    protected open val segmentRuntime: SegmentMediaControlPort? get() = (application as? NewsMediaRuntimeProvider)?.segmentMedia
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val writerScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private var writer: Job? = null
     private var writerFailures = 0L
     private lateinit var player: ExoPlayer
     private var library: MediaLibrarySession? = null
+    private lateinit var legacyControlled: Player
+    private lateinit var segmentControlled: SegmentSessionPlayer
+    private var observedSegmentPort: SegmentMediaControlPort? = null
+    private var segmentObserver: Job? = null
+    private var segmentProjection: SegmentMediaProjection? = null
+    private var usingSegments = false
     @Volatile private var resource: NewsPlaybackResource? = null
     private var tracker: PlaybackIntervalTracker? = null
     private var generation = 0L
@@ -111,6 +122,7 @@ open class NewsMediaService : MediaLibraryService() {
                     stationaryPosition = new.positionMs.takeIf { it >= 0 }
                 }
                 override fun onPlaybackStateChanged(state: Int) {
+                    if (segmentProjection != null) return
                     if (state == Player.STATE_ENDED && !ended) {
                         ended = true
                         val pinned = resource ?: return
@@ -156,7 +168,10 @@ open class NewsMediaService : MediaLibraryService() {
             override fun setMediaItems(items: List<MediaItem>, resetPosition: Boolean) { selectCurrent(items) }
             override fun setMediaItems(items: List<MediaItem>, startIndex: Int, startPositionMs: Long) { selectCurrent(items) }
         }
+        legacyControlled = controlled
+        segmentControlled = SegmentSessionPlayer(scope) { segmentRuntime }
         library = MediaLibrarySession.Builder(this, controlled, LibraryCallback()).build()
+        refreshSegmentPort()
         writer = writerScope.launch {
             for (event in events) {
                 try { event() }
@@ -167,6 +182,7 @@ open class NewsMediaService : MediaLibraryService() {
         scope.launch {
             while (isActive) {
                 delay(500)
+                refreshSegmentPort()
                 val key = resource?.key ?: continue
                 val port = runtime
                 val allowed = try { port != null && port.mayPlay(key) }
@@ -180,6 +196,7 @@ open class NewsMediaService : MediaLibraryService() {
     }
 
     private fun selectCurrent(items: List<MediaItem>) {
+        if (segmentProjection != null) return
         if (items.size == 1 && items[0].mediaId == CURRENT && items[0].localConfiguration == null) {
             pausePlayback("user")
             resource = null
@@ -194,6 +211,11 @@ open class NewsMediaService : MediaLibraryService() {
 
     private fun load(play: Boolean, seek: Long?, followupFrom: NewsPlaybackKey? = null) {
         if (disposed) return
+        if (segmentProjection != null) {
+            // A stale legacy controller command can neither open a file nor guess a time seek.
+            if (seek == null && play) segmentControlled.play()
+            return
+        }
         val ticket = ++generation
         if (seek != null) requestedPosition = seek
         val requested = requestedPosition
@@ -265,12 +287,39 @@ open class NewsMediaService : MediaLibraryService() {
 
     private fun abandonFocus() { focused = false; audio.abandonAudioFocusRequest(focusRequest) }
 
+    /** Dynamic provider binding lets the application install the process runtime after connect. */
+    private fun refreshSegmentPort() {
+        val port = segmentRuntime
+        if (port === observedSegmentPort) return
+        segmentObserver?.cancel(); observedSegmentPort = port
+        if (port == null) publishSegments(null)
+        else segmentObserver = scope.launch { port.state.collect { projection ->
+            if (observedSegmentPort === port) publishSegments(projection)
+        } }
+    }
+    private fun publishSegments(value: SegmentMediaProjection?) {
+        if (disposed) return
+        segmentProjection = value
+        segmentControlled.publish(value)
+        if (value != null && !usingSegments) {
+            // Existing file output is stopped first. The facade itself never synthesizes audio.
+            pausePlayback("transition")
+            usingSegments = true
+            library?.setPlayer(segmentControlled)
+        } else if (value == null && usingSegments) {
+            usingSegments = false
+            library?.setPlayer(legacyControlled)
+        }
+        library?.notifyChildrenChanged(ROOT, if (value != null || resource != null) 1 else 0, null)
+    }
+
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaLibrarySession? = library
 
     private inner class LibraryCallback : MediaLibrarySession.Callback {
         override fun onConnect(session: MediaSession, controller: MediaSession.ControllerInfo): MediaSession.ConnectionResult {
             if (controller.uid != applicationInfo.uid && !controller.isTrusted) return MediaSession.ConnectionResult.reject()
-            val allowed = Player.Commands.Builder().addAll(Player.COMMAND_PLAY_PAUSE, Player.COMMAND_PREPARE,
+            val allowed = Player.Commands.Builder().addAll(Player.COMMAND_SEEK_TO_PREVIOUS, Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM,
+                Player.COMMAND_SEEK_TO_NEXT, Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM, Player.COMMAND_PLAY_PAUSE, Player.COMMAND_PREPARE,
                 Player.COMMAND_STOP, Player.COMMAND_SEEK_IN_CURRENT_MEDIA_ITEM, Player.COMMAND_SEEK_BACK,
                 Player.COMMAND_SEEK_FORWARD, Player.COMMAND_SET_MEDIA_ITEM, Player.COMMAND_GET_CURRENT_MEDIA_ITEM,
                 Player.COMMAND_GET_METADATA, Player.COMMAND_GET_TIMELINE).build()
@@ -282,6 +331,17 @@ open class NewsMediaService : MediaLibraryService() {
             if (command.customAction != FREEZE || controller.uid != applicationInfo.uid)
                 return Futures.immediateFuture(SessionResult(SessionResult.RESULT_ERROR_NOT_SUPPORTED))
             val result = SettableFuture.create<SessionResult>()
+            val segment = segmentProjection
+            if (segment != null) {
+                val port = segmentRuntime
+                scope.launch {
+                    val saved = try { port != null && port.state.value?.key == segment.key && port.command(segment.key, SegmentMediaCommand.FREEZE) }
+                        catch (cancelled: CancellationException) { result.cancel(false); throw cancelled }
+                        catch (_: Exception) { false }
+                    result.set(SessionResult(if (saved) SessionResult.RESULT_SUCCESS else SessionResult.RESULT_ERROR_IO))
+                }
+                return result
+            }
             val before = writerFailures
             pausePlayback("transition")
             if (!enqueue { result.set(SessionResult(if (writerFailures == before) SessionResult.RESULT_SUCCESS else SessionResult.RESULT_ERROR_IO)) })
@@ -297,10 +357,10 @@ open class NewsMediaService : MediaLibraryService() {
             parentId: String, page: Int, pageSize: Int, params: LibraryParams?) =
             Futures.immediateFuture(if (parentId != ROOT || page < 0 || pageSize !in 1..100)
                 LibraryResult.ofError(LibraryResult.RESULT_ERROR_BAD_VALUE)
-            else LibraryResult.ofItemList(if (page == 0 && resource != null) listOf(currentItem()) else emptyList(), params))
+            else LibraryResult.ofItemList(if (page == 0 && (resource != null || segmentProjection != null)) listOf(currentItem()) else emptyList(), params))
 
         override fun onGetItem(session: MediaLibrarySession, browser: MediaSession.ControllerInfo, mediaId: String) =
-            Futures.immediateFuture(if (mediaId == CURRENT && resource != null) LibraryResult.ofItem(currentItem(), null)
+            Futures.immediateFuture(if (mediaId == CURRENT && (resource != null || segmentProjection != null)) LibraryResult.ofItem(currentItem(), null)
                 else LibraryResult.ofError(LibraryResult.RESULT_ERROR_BAD_VALUE))
 
         override fun onAddMediaItems(session: MediaSession, controller: MediaSession.ControllerInfo, items: List<MediaItem>) =
@@ -309,16 +369,23 @@ open class NewsMediaService : MediaLibraryService() {
     }
 
     private fun currentItem() = MediaItem.Builder().setMediaId(CURRENT)
-        .setMediaMetadata(metadata(resource?.title ?: "현재 기사", true)).build()
+        .setMediaMetadata(metadata(segmentProjection?.title ?: resource?.title ?: "현재 기사", segmentProjection?.available ?: true)).build()
 
     private fun metadata(title: String, playable: Boolean, browsable: Boolean = false) = MediaMetadata.Builder()
         .setTitle(title).setIsPlayable(playable).setIsBrowsable(browsable)
         .setMediaType(if (browsable) MediaMetadata.MEDIA_TYPE_FOLDER_MIXED else MediaMetadata.MEDIA_TYPE_NEWS).build()
 
     override fun onDestroy() {
+        val segment = segmentProjection
+        val port = segmentRuntime
+        if (segment != null && port != null) writerScope.launch {
+            withContext(NonCancellable) { try { port.command(segment.key, SegmentMediaCommand.STOP) } catch (_: Exception) { } }
+        }
+        segmentObserver?.cancel()
         disposed = true
         pausePlayback("service_stopped")
         player.release()
+        segmentControlled.release()
         library?.release()
         library = null
         events.close()

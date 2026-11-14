@@ -21,13 +21,15 @@ sealed interface PracticeResult {
 /** Owns durable input and data results. It never starts capture, playback, speech or presentation. */
 class PracticeRepository internal constructor(private val api: LearningApi, private val dao: LearningDao,
     private val store: LearningStore, contracts: LearningContractJson,
-    private val isCurrent: suspend (OwnerContext, UUID, PracticeContentRef) -> Boolean,
+    private val isCurrent: suspend (OwnerContext, UUID, PracticeRef) -> Boolean,
     private val presentationVerifier: FeedbackPresentationVerifier = FeedbackPresentationVerifier { false },
+    private val mayProjectResult: suspend (OwnerContext, UUID, UUID) -> Boolean = { _, _, _ -> true },
     private val elapsedMs: () -> Long = { System.nanoTime() / 1_000_000 }) {
     constructor(context: Context, api: LearningApi, database: LearningDatabase,
-        isCurrent: suspend (OwnerContext, UUID, PracticeContentRef) -> Boolean,
-        presentationVerifier: FeedbackPresentationVerifier = FeedbackPresentationVerifier { false }) :
-        this(api, database.learning(), LearningStore(database), LearningContractJson(context), isCurrent, presentationVerifier)
+        isCurrent: suspend (OwnerContext, UUID, PracticeRef) -> Boolean,
+        presentationVerifier: FeedbackPresentationVerifier = FeedbackPresentationVerifier { false },
+        mayProjectResult: suspend (OwnerContext, UUID, UUID) -> Boolean = { _, _, _ -> true }) :
+        this(api, database.learning(), LearningStore(database), LearningContractJson(context), isCurrent, presentationVerifier, mayProjectResult)
 
     private val lane = Mutex()
     private val journal = SessionJournal(dao, api, contracts)
@@ -41,10 +43,11 @@ class PracticeRepository internal constructor(private val api: LearningApi, priv
 
     suspend fun open(scope: LearningCallScope, lesson: LessonInput, questionEn: String,
         restored: WirePersonalLessonRecord? = null): PracticeResult {
+        val legacy = lesson.contentRef as? PracticeContentRef ?: return PracticeResult.Failed("SOURCE_PROTOCOL_REQUIRED")
         if (!isCurrent(scope.owner, lesson.lessonId, lesson.contentRef)) return PracticeResult.Superseded
         if (restored != null) {
             require(restored.lessonId == lesson.lessonId.toString() && restored.contentRef == lesson.contentRef.commonWire())
-            dao.importLessonBinding(scope.owner, lesson.lessonId, lesson.contentRef, restored.dialogueProgress.hintMethodAnnounced)
+            dao.importLessonBinding(scope.owner, lesson.lessonId, legacy, restored.dialogueProgress.hintMethodAnnounced)
             // The caller has already obtained this authoritative record through scoped sync GET.
             dao.saveRead(scope.owner, readRecord(scope.owner, stableRecordId("lesson-read:" + lesson.lessonId), "lesson_read",
                 learningJson.encodeToJsonElement(WirePersonalLessonRecord.serializer(), restored).toString(), restored.state.version))
@@ -60,6 +63,54 @@ class PracticeRepository internal constructor(private val api: LearningApi, priv
             operation = null; clock.clear(); session = value
             PracticeResult.Ready(value)
         }
+    }
+
+    suspend fun synchronize(scope: LearningCallScope): PracticeResult {
+        val current = lane.withLock { session } ?: return PracticeResult.Superseded
+        if (current.owner != scope.owner || !isCurrent(scope.owner, current.lesson.lessonId, current.lesson.contentRef)) return PracticeResult.Superseded
+        val synced = journal.flush(scope, setOf(current.lesson.lessonId))
+        if (synced is LearningReply.Failed) return PracticeResult.Failed(synced.code)
+        val rows = journal.records(scope)
+        if (rows is LearningReply.Failed) return PracticeResult.Failed(rows.code)
+        val record = (rows as LearningReply.Stored).value.filterIsInstance<WirePersonalReadLesson>()
+            .singleOrNull { it.recordId == current.lesson.lessonId.toString() } ?: return PracticeResult.Failed("LESSON_NOT_FOUND")
+        if (record.payload.contentRef != current.lesson.contentRef.commonWire()) return PracticeResult.Failed("INVALID_RESPONSE")
+        dao.saveRead(scope.owner, readRecord(scope.owner, stableRecordId("lesson-read:${current.lesson.lessonId}"), "lesson_read",
+            learningJson.encodeToJsonElement(WirePersonalLessonRecord.serializer(), record.payload).toString(), record.version))
+        if (!isCurrent(scope.owner, current.lesson.lessonId, current.lesson.contentRef)) return PracticeResult.Superseded
+        return lane.withLock { session = session?.copy(lesson = current.lesson.copy(helpReceived = HelpSnapshot(record.payload.helpReceived.map { HelpKind.valueOf(it.name) }.toSet(), record.payload.supportRefs.toSet()), dialogueProgress = DialogueProgress(record.payload.dialogueProgress.hintMethodAnnounced)), progress = record.payload.state.domain()); PracticeResult.Ready(requireNotNull(session)) }
+    }
+
+    suspend fun persistHintCompletion(owner: OwnerContext, event: DialogueProgressEvent) { dao.persistHintCompletion(owner, event) }
+
+    suspend fun preparedFeedbackSupports(owner: OwnerContext, attemptId: UUID): List<SupportArtifact> {
+        val result = dao.record(owner.profileId.toString(), owner.privacyEpoch, stableRecordId("attempt-result:$attemptId").toString()) ?: return emptyList()
+        val value = learningJson.decodeFromString(WireInferenceAttemptResult.serializer(), result.payloadJson)
+        return value.feedback?.preparedSupports?.map { it.domain() } ?: emptyList()
+    }
+
+    suspend fun resumeLesson(scope: LearningCallScope): PracticeResult {
+        val current = lane.withLock { session } ?: return PracticeResult.Superseded
+        val progress = current.progress ?: return PracticeResult.Failed("NO_SERVER_STATE")
+        if (progress.phase != "suspended" || progress.pendingAttemptId != null || progress.pendingFeedbackAttemptId != null) return PracticeResult.Ready(current)
+        val dialogue = dao.restoreDialogue(scope.owner, current.lesson.lessonId) ?: current.lesson.dialogueProgress
+        val value = WirePersonalLessonInput(current.lesson.lessonId.toString(), current.lesson.contentRef.commonWire(), "question_wait",
+            current.lesson.helpReceived.kinds.map { WireCommonHelpKind.valueOf(it.name) }, current.lesson.helpReceived.refs.toList(),
+            current.lesson.returnCheckpointId?.toString(), WireCommonDialogueProgress(dialogue.hintMethodAnnounced))
+        journal.queue(scope.owner, current.lesson.lessonId, WirePersonalLessonEvent(stableRecordId("lesson-resume:${current.lesson.lessonId}:${progress.version}").toString(), "lesson", progress.version, value))
+        return synchronize(scope)
+    }
+
+    suspend fun suspendLesson(scope: LearningCallScope): LearningReply<Unit> {
+        val current = lane.withLock { session } ?: return LearningReply.Failed("NO_LESSON", false)
+        val progress = current.progress ?: return LearningReply.Failed("NO_SERVER_STATE", false)
+        if (progress.phase == "completed") return LearningReply.Stored(scope, Unit)
+        val value = WirePersonalLessonInput(current.lesson.lessonId.toString(), current.lesson.contentRef.commonWire(), "suspended",
+            current.lesson.helpReceived.kinds.map { WireCommonHelpKind.valueOf(it.name) }, current.lesson.helpReceived.refs.toList(),
+            current.lesson.returnCheckpointId?.toString(), WireCommonDialogueProgress(current.lesson.dialogueProgress.hintMethodAnnounced))
+        val event = WirePersonalLessonEvent(stableRecordId("lesson-suspend:${current.lesson.lessonId}:${progress.version}").toString(), "lesson", progress.version, value)
+        journal.queue(scope.owner, current.lesson.lessonId, event)
+        return journal.flush(scope, setOf(current.lesson.lessonId))
     }
 
     suspend fun interrupt() = lane.withLock { operation = null; clock.clear() }
@@ -144,7 +195,9 @@ class PracticeRepository internal constructor(private val api: LearningApi, priv
             return LearningReply.Failed("CONTEXT_CHANGED", false)
         val request = WirePersonalLessonFinishRequest("5", stableRecordId("decline:" + current.lesson.lessonId + ":" + progress.version).toString(),
             scope.owner.profileWire(), progress.version, feedback.attemptId.toString(), "retry_declined")
-        return saveCommand(scope, current, api.declineLessonRetry(scope, request, current.lesson.lessonId))
+        val saved = saveLocalCommand(scope.owner, request.operationId, learningJson.encodeToString(WirePersonalLessonFinishRequest.serializer(), request))
+        val original = learningJson.decodeFromString(WirePersonalLessonFinishRequest.serializer(), saved)
+        return saveCommand(scope, current, api.declineLessonRetry(scope, original, current.lesson.lessonId), original.operationId, saved)
     }
 
     suspend fun acknowledgeFeedback(scope: LearningCallScope, witness: FeedbackPresentationWitness): LearningReply<WirePersonalLessonCommandReceipt> {
@@ -154,20 +207,31 @@ class PracticeRepository internal constructor(private val api: LearningApi, priv
             progress.pendingFeedbackAttemptId != witness.attemptId || !isCurrent(scope.owner, current.lesson.lessonId, current.lesson.contentRef) ||
             !presentationVerifier.verify(witness)) return LearningReply.Failed("PRESENTATION_NOT_VERIFIED", false)
         // Optional examples use their own observed ticket path in PresentationRepository.
-        val request = WirePersonalLessonPresentationRequest("5", stableRecordId("feedback-ack:" + witness.outputInstanceId).toString(),
+        val request = WirePersonalLessonPresentationRequest("5", stableRecordId("feedback-ack:${current.lesson.lessonId}:${witness.attemptId}:${progress.version}:${witness.mode}").toString(),
             scope.owner.profileWire(), progress.version, witness.attemptId.toString(), witness.mode, emptyList())
-        return saveCommand(scope, current, api.acknowledgeFeedbackPresentation(scope, request, current.lesson.lessonId))
+        val saved = saveLocalCommand(scope.owner, request.operationId, learningJson.encodeToString(WirePersonalLessonPresentationRequest.serializer(), request))
+        val original = learningJson.decodeFromString(WirePersonalLessonPresentationRequest.serializer(), saved)
+        return saveCommand(scope, current, api.acknowledgeFeedbackPresentation(scope, original, current.lesson.lessonId), original.operationId, saved)
+    }
+
+    private suspend fun saveLocalCommand(owner: OwnerContext, operation: String, payload: String): String {
+        val old = dao.record(owner.profileId.toString(), owner.privacyEpoch, operation)
+        if (old != null) { require(old.kind == "lesson_command" && old.payloadJson == payload); return old.payloadJson }
+        dao.saveRead(owner, readRecord(owner, UUID.fromString(operation), "lesson_command", payload, 1))
+        return payload
     }
 
     private suspend fun saveCommand(scope: LearningCallScope, current: PracticeSession,
-        reply: LearningReply<WirePersonalLessonCommandReceipt>): LearningReply<WirePersonalLessonCommandReceipt> {
+        reply: LearningReply<WirePersonalLessonCommandReceipt>, operation: String, payload: String): LearningReply<WirePersonalLessonCommandReceipt> {
         if (reply is LearningReply.Stored) {
             if (reply.value.lesson.lessonId != current.lesson.lessonId.toString() || reply.value.lesson.contentRef != current.lesson.contentRef.commonWire())
                 return LearningReply.Failed("INVALID_RESPONSE", false)
             dao.saveRead(scope.owner, readRecord(scope.owner, stableRecordId("lesson-read:" + current.lesson.lessonId), "lesson_read",
                 learningJson.encodeToJsonElement(WirePersonalLessonRecord.serializer(), reply.value.lesson).toString(), reply.value.lesson.state.version))
+            dao.acknowledgeLocalCommand(scope.owner.profileId.toString(), scope.owner.privacyEpoch, operation, payload)
             if (isCurrent(scope.owner, current.lesson.lessonId, current.lesson.contentRef)) lane.withLock {
-                if (session?.owner == scope.owner && session?.lesson?.lessonId == current.lesson.lessonId)
+                if (session?.owner == scope.owner && session?.lesson?.lessonId == current.lesson.lessonId &&
+                    (session?.progress?.version ?: 0) <= reply.value.lesson.state.version)
                     session = session?.copy(progress = reply.value.lesson.state.domain())
             }
         }
@@ -195,6 +259,7 @@ class PracticeRepository internal constructor(private val api: LearningApi, priv
     private suspend fun finishResult(id: UUID, scope: LearningCallScope, original: PracticeSession, result: WireInferenceAttemptResult): PracticeResult {
         val expired = lane.withLock { operation == id && clock.state(elapsedMs()) == PracticeRequestState.WAIT_EXPIRED }
         if (!clear(id) || !isCurrent(scope.owner, original.lesson.lessonId, original.lesson.contentRef)) return PracticeResult.Superseded
+        if (!mayProjectResult(scope.owner, original.lesson.lessonId, UUID.fromString(result.attemptId))) return PracticeResult.Superseded
         val input = dao.record(scope.owner.profileId.toString(), scope.owner.privacyEpoch, result.attemptId)
             ?.takeIf { it.kind == "attempt" && it.payloadSchemaVersion == 5 }
             ?.let { learningJson.decodeFromString(WirePersonalAttemptInput.serializer(), it.payloadJson) }
@@ -202,6 +267,7 @@ class PracticeRepository internal constructor(private val api: LearningApi, priv
         val feedback = if (expired) null else result.feedback?.safeFeedback(result.lessonState, formConfirmed)
         lane.withLock {
             if (session?.owner != scope.owner || session?.lesson?.lessonId != original.lesson.lessonId) return PracticeResult.Superseded
+            if ((session?.progress?.version ?: 0) > result.lessonState.version) return PracticeResult.Superseded
             session = session?.copy(progress = result.lessonState.domain(), feedback = feedback,
                 requestState = if (expired) PracticeRequestState.WAIT_EXPIRED else if (feedback == null) PracticeRequestState.DEVICE_ONLY else PracticeRequestState.STORED)
         }
@@ -209,13 +275,15 @@ class PracticeRepository internal constructor(private val api: LearningApi, priv
     }
 }
 
-internal fun PracticeContentRef.commonWire(): WireCommonPracticeContentRef =
-    learningJson.decodeFromString(WireCommonPracticeContentRef.serializer(), LearningJson.practice(this).toString())
+internal fun PracticeRef.commonWire(): WireCommonPracticeContentRef {
+    require(this is PracticeContentRef) { "Prepared source requires the strict source6 adapter" }
+    return learningJson.decodeFromString(WireCommonPracticeContentRef.serializer(), LearningJson.practice(this).toString())
+}
 internal fun WireCommonLessonState.domain() = PracticeProgress(version, validFirstAttemptId?.let(UUID::fromString), validRetryAttemptId?.let(UUID::fromString),
     pendingAttemptId?.let(UUID::fromString), pendingFeedbackAttemptId?.let(UUID::fromString), phase, contentSuccess, retryOutcome, endReason)
 private fun WireInferenceStoredFeedback.safeFeedback(state: WireCommonLessonState, formConfirmed: Boolean) = PracticeFeedback(UUID.fromString(attemptId),
     Judgement.valueOf(judgement.uppercase(Locale.ROOT)), focus, feedbackKo,
-    if (englishAttemptStatus == WireCommonEnglishAttemptStatus.VERIFIED_ENGLISH && formConfirmed) correction?.replacement else null,
+    null, // Exact optional corrections are opened only through the registered support presenter.
     EnglishAttemptStatus.valueOf(englishAttemptStatus.name), state.domain())
 private fun WireInferenceFeedbackResponse.asStoredResult(owner: OwnerContext): WireInferenceAttemptResult {
     val transient = learningJson.encodeToJsonElement(WireInferenceFeedbackResponse.serializer(), this).jsonObject

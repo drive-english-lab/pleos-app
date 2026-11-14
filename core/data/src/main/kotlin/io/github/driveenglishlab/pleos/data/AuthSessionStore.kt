@@ -21,13 +21,14 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 
 @Serializable
-internal class StoredIdentity(
+internal data class StoredIdentity(
     val installationId: String = UUID.randomUUID().toString(),
     val creationStarted: Boolean = false,
     val session: UserSession? = null,
     val bootstrapProfileId: String? = null,
     val bootstrapOperationId: String? = null,
-)
+    val accountState: String? = null,
+) { override fun toString() = "StoredIdentity(credentials=redacted)" }
 
 /** Ciphertext only, outside backup; unreadable state is an error, never an empty session.
  * One process-wide instance owns this file. Neither SDK nor callers use loadSessionOrNull.
@@ -74,26 +75,41 @@ class AuthSessionStore internal constructor(context: Context, name: String = "le
     internal suspend fun identity(): StoredIdentity = withContext(Dispatchers.IO) { mutex.withLock { read() } }
     internal suspend fun beginCreation() = withContext(Dispatchers.IO) { mutex.withLock {
         val value = read(); check(!value.creationStarted && value.session == null)
-        write(StoredIdentity(value.installationId, true, bootstrapProfileId = value.bootstrapProfileId, bootstrapOperationId = value.bootstrapOperationId))
+        write(value.copy(creationStarted = true, session = null))
     } }
     internal suspend fun bootstrapOperation(profileId: UUID): UUID = withContext(Dispatchers.IO) { mutex.withLock {
         val value = read()
         if (value.bootstrapProfileId != null) {
             check(value.bootstrapProfileId == profileId.toString()) { "Profile transition required." }
             UUID.fromString(value.bootstrapOperationId)
-        } else UUID.randomUUID().also { operation -> write(StoredIdentity(value.installationId, value.creationStarted,
-            value.session, profileId.toString(), operation.toString())) }
+        } else UUID.randomUUID().also { operation -> write(value.copy(bootstrapProfileId = profileId.toString(), bootstrapOperationId = operation.toString())) }
+    } }
+
+    internal suspend fun saveAccountState(value: String?) = withContext(Dispatchers.IO) { mutex.withLock {
+        write(read().copy(accountState = value))
+    } }
+    /** Explicit, journalled transition only. The caller fences Room before changing credentials. */
+    internal suspend fun replaceForTransition(expectedSubject: String?, replacement: StoredIdentity) = withContext(Dispatchers.IO) { mutex.withLock {
+        val previous = read()
+        check(previous.session?.user?.id == expectedSubject)
+        check(replacement.installationId == previous.installationId)
+        write(replacement)
+    } }
+    internal suspend fun initializeIsolated(identity: StoredIdentity) = withContext(Dispatchers.IO) { mutex.withLock {
+        val old = read()
+        check(old.session == null || old.session.user?.id == identity.session?.user?.id)
+        write(identity)
     } }
 
     override suspend fun saveSession(session: UserSession) = withContext(Dispatchers.IO) { mutex.withLock {
         val value = read()
         check(value.session?.user?.id == null || value.session.user?.id == session.user?.id) { "Explicit account transition required." }
-        write(StoredIdentity(value.installationId, true, session, value.bootstrapProfileId, value.bootstrapOperationId))
+        write(value.copy(creationStarted = true, session = session))
     } }
     override suspend fun loadSession(): UserSession = identity().session ?: error("No protected session stored.")
     // Clearing credentials retains the creation fence: a failure must not silently make a new guest.
     override suspend fun deleteSession() = withContext(Dispatchers.IO) { mutex.withLock {
-        val value = read(); write(StoredIdentity(value.installationId, true, bootstrapProfileId = value.bootstrapProfileId, bootstrapOperationId = value.bootstrapOperationId))
+        val value = read(); write(value.copy(creationStarted = true, session = null))
     } }
     override fun toString() = "AuthSessionStore(credentials=redacted)"
 }
