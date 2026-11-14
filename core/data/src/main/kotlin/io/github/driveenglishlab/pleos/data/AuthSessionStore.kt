@@ -9,6 +9,7 @@ import io.github.jan.supabase.auth.user.UserSession
 import java.io.File
 import java.security.KeyStore
 import java.util.UUID
+import java.util.concurrent.ConcurrentHashMap
 import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
@@ -34,10 +35,61 @@ internal data class StoredIdentity(
  * One process-wide instance owns this file. Neither SDK nor callers use loadSessionOrNull.
  */
 class AuthSessionStore internal constructor(context: Context, name: String = "learning-auth-v1") : SessionManager {
-    private val file = AtomicFile(File(context.noBackupFilesDir, "$name.enc"))
-    private val alias = "${context.packageName}.$name"
-    private val mutex = Mutex()
+    private val storageName:String by lazy {
+        if(name==DEFAULT_NAME)resolvedBinding(context).reference else name
+    }
+    private val file by lazy { AtomicFile(File(context.noBackupFilesDir,"$storageName.enc")) }
+    private val alias by lazy { "${context.packageName}.$storageName" }
+    private val mutex=locks.getOrPut(context.packageName){Mutex()}
     private val json = Json { encodeDefaults = true; ignoreUnknownKeys = false }
+
+    companion object {
+        private const val DEFAULT_NAME="learning-auth-v1"
+        private const val SELECTOR_NAME="learning-auth-active-v1"
+        private val locks=ConcurrentHashMap<String,Mutex>()
+        private val selectionJson=Json{encodeDefaults=true;ignoreUnknownKeys=false}
+        private fun resolvedBinding(context:Context):ProtectedAuthBinding {
+            val saved=AuthSessionStore(context,SELECTOR_NAME).readExistingIdentity()?:return ProtectedAuthBinding(DEFAULT_NAME,0,null)
+            return selectionJson.decodeFromString(ProtectedAuthBinding.serializer(),requireNotNull(saved.accountState)).also {
+                require(it.revision>=1 && it.operationId!=null && it.reference.matches(Regex("learning-account-target-[a-f0-9-]{36}")))
+                UUID.fromString(it.operationId);UUID.fromString(it.reference.removePrefix("learning-account-target-"))
+            }
+        }
+        /** Pointer reads never inspect or reset an unreadable source session. */
+        internal suspend fun activeBinding(context:Context):ProtectedAuthBinding=withContext(Dispatchers.IO){
+            val selector=AuthSessionStore(context,SELECTOR_NAME)
+            selector.mutex.withLock{resolvedBinding(context)}
+        }
+        /** Only a journaled, server-confirmed target may become the active store.
+         * The old ciphertext, key, creation fence and isolated records remain untouched.
+         */
+        internal suspend fun selectVerifiedTarget(context:Context,expected:ProtectedAuthBinding,target:String,operation:UUID)=withContext(Dispatchers.IO){
+            require(target=="learning-account-target-$operation")
+            val selector=AuthSessionStore(context,SELECTOR_NAME)
+            selector.mutex.withLock {
+                val current=resolvedBinding(context)
+                if(current.reference==target && current.operationId==operation.toString())return@withLock
+                require(current==expected){"Protected active store changed."}
+                val identity=requireNotNull(AuthSessionStore(context,target).readExistingIdentity())
+                require(identity.session!=null){"Verified target session unavailable."}
+                val proof=selectionJson.decodeFromString(ProtectedLinkedTarget.serializer(),requireNotNull(identity.accountState))
+                require(proof.operationId==operation.toString() && proof.sourceBinding==expected && proof.confirmedProfile?.profileKind=="linked")
+                UUID.fromString(requireNotNull(proof.verifiedSubject))
+                identity.session.user?.id?.let{require(it==proof.verifiedSubject)}
+                val next=ProtectedAuthBinding(target,current.revision+1,operation.toString())
+                val previous=selector.readExistingIdentity()?:StoredIdentity()
+                selector.write(previous.copy(accountState=selectionJson.encodeToString(ProtectedAuthBinding.serializer(),next)))
+            }
+        }
+    }
+    /** Direct preferred-file read: no AtomicFile recovery, key generation or installation creation. */
+    internal fun readExistingIdentity():StoredIdentity? {
+        val backup=File(file.baseFile.path+".bak")
+        val source=if(backup.exists())backup else file.baseFile
+        if(!source.exists())return null
+        val bytes=source.inputStream().use{input->require(input.available()<=128*1024);input.readBytes().also{require(it.size in 30..128*1024)}}
+        return decodeIdentity(bytes,::existingKey)
+    }
 
     private fun key(): SecretKey {
         val store = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
@@ -82,9 +134,9 @@ class AuthSessionStore internal constructor(context: Context, name: String = "le
     /** Read-only recovery evidence. Absence never creates a replacement installation. */
     internal suspend fun protectedEvidence(): io.github.driveenglishlab.pleos.domain.ProtectedIdentityEvidence =
         withContext(Dispatchers.IO) { mutex.withLock {
-            if (!file.baseFile.exists() && !File(file.baseFile.path + ".bak").exists())
-                return@withLock io.github.driveenglishlab.pleos.domain.ProtectedIdentityEvidence.ABSENT
             try {
+                if (!file.baseFile.exists() && !File(file.baseFile.path + ".bak").exists())
+                    return@withLock io.github.driveenglishlab.pleos.domain.ProtectedIdentityEvidence.ABSENT
                 if (read().session == null) io.github.driveenglishlab.pleos.domain.ProtectedIdentityEvidence.ABSENT
                 else io.github.driveenglishlab.pleos.domain.ProtectedIdentityEvidence.AVAILABLE
             } catch (_: java.io.IOException) { io.github.driveenglishlab.pleos.domain.ProtectedIdentityEvidence.READ_RETRYABLE }
@@ -93,9 +145,9 @@ class AuthSessionStore internal constructor(context: Context, name: String = "le
 
     /** A missing file stays missing. This probe never creates a key, installation or session. */
     internal suspend fun diagnosticState():ProtectedIdentityDiagnostic=withContext(Dispatchers.IO) { mutex.withLock {
-        if(!file.baseFile.exists() && !File(file.baseFile.path+".bak").exists())return@withLock ProtectedIdentityDiagnostic(
-            false,null,null,io.github.driveenglishlab.pleos.domain.ProtectedIdentityEvidence.ABSENT)
         try {
+            if(!file.baseFile.exists() && !File(file.baseFile.path+".bak").exists())return@withLock ProtectedIdentityDiagnostic(
+                false,null,null,io.github.driveenglishlab.pleos.domain.ProtectedIdentityEvidence.ABSENT)
             // AtomicFile.openRead() can rename its backup. Inspect the same preferred bytes
             // through FileInputStream instead, without repairing or replacing either file.
             val backup=File(file.baseFile.path+".bak")

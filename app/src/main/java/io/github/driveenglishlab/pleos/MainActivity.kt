@@ -55,6 +55,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        host.bindAccountActivity(this)
         windowAccess = WindowAccessSource(this)
         lifecycleScope.launch { host.attachWindow(windowToken) }
         setContent {
@@ -90,6 +91,7 @@ class MainActivity : ComponentActivity() {
         }
         super.onStop()
     }
+    override fun onDestroy() { host.unbindAccountActivity(this); super.onDestroy() }
     companion object {
         const val EXTRA_DESTINATION = "io.github.driveenglishlab.pleos.DESTINATION"
         const val DIAGNOSTICS = "diagnostics"

@@ -20,6 +20,20 @@ import io.github.driveenglishlab.pleos.platform.SegmentRuntimeState
 import io.github.driveenglishlab.pleos.platform.PresentationUiBinding
 import io.github.driveenglishlab.pleos.platform.ArtifactWitness
 
+enum class AccountEntryAction { NEW_LINK, EXISTING_MERGE, RESTORE_LINKED, SWITCH_LINKED, RETRY_TRANSITION, CANCEL }
+enum class AccountEntryPhase { IDLE, CHECKING_PROVIDER, PREPARING, AUTHENTICATING, VERIFYING, RECOVERING, UNAVAILABLE, CANCELLED, FAILED, COMPLETE }
+data class AccountEntryState(val phase: AccountEntryPhase = AccountEntryPhase.IDLE, val action: AccountEntryAction? = null,
+    val message: String? = null, val linked: Boolean = false, val hasSession: Boolean = false,
+    val canLaunch: Boolean = false, val canRetryTransition: Boolean = false) {
+    val busy get() = phase in setOf(AccountEntryPhase.CHECKING_PROVIDER, AccountEntryPhase.PREPARING, AccountEntryPhase.AUTHENTICATING, AccountEntryPhase.VERIFYING, AccountEntryPhase.RECOVERING)
+    val canCancel get() = busy
+}
+fun accountEntryAllowed(view: SessionView, requireFocus: Boolean = true): Boolean =
+    view.access.power == PowerAvailability.ALLOWED && view.access.safety.position == VehiclePosition.PARKED &&
+        view.access.safety.uxKnown && view.access.safety.detailsAllowed && view.access.safety.directInputAllowed && !view.access.safety.systemBlocked &&
+        view.access.window.visible && (!requireFocus || view.access.window.focused) &&
+        view.task == null && view.inputPhase == InputPhase.IDLE && view.voiceInput == VoiceInputActivity.IDLE && view.pendingAnswer == null
+
 enum class LoadStatus { NOT_REQUESTED, LOADING, READY, FAILED }
 enum class ReaderLanguage { ENGLISH, KOREAN }
 data class ReaderPresentation(val script: PublishedScript, val language: ReaderLanguage)
@@ -43,7 +57,7 @@ data class ProductScreenState(val session: SessionView = SessionView(), val prof
     val segmentPlayback: SegmentRuntimeState = SegmentRuntimeState(), val followupWaiting: Boolean = false, val source6History: Source6ProfileSnapshot? = null, val source6SpeakingRecords: Source6SpeakingRecordsState = Source6SpeakingRecordsState(), val reviewTools: ReviewToolsState = ReviewToolsState(),
     val catalogViews: CatalogViewState = CatalogViewState(), val assessments: AssessmentReviewState = AssessmentReviewState(),
     val identityRecovery: IdentityRecoveryProjection? = null, val playbackRequest: ReviewNext2State = ReviewNext2State(),
-    val playbackRequest3: ReviewNext3State = ReviewNext3State(), val originalOutputConfigured: Boolean = false) {
+    val playbackRequest3: ReviewNext3State = ReviewNext3State(), val originalOutputConfigured: Boolean = false, val accountEntry: AccountEntryState = AccountEntryState()) {
     val origin get() = UiOrigin(session.owner, session.listening, session.navigationGeneration, session.task, session.lessonId, session.preparedListening)
     val activePlaybackRequest get() = listOfNotNull(playbackRequest3.intent, playbackRequest.intent).firstOrNull {
         it.state in setOf(PlaybackRequestState.ACTIVE, PlaybackRequestState.EXPIRED) &&
@@ -67,6 +81,7 @@ data class ProductScreenState(val session: SessionView = SessionView(), val prof
 }
 
 sealed interface UiIntent {
+    data class AccountEntry(override val origin: UiOrigin, val action: AccountEntryAction) : UiIntent
     val origin: UiOrigin
     data class CatalogViewChanged(override val origin: UiOrigin, val view: CatalogView) : UiIntent
     data class CatalogFilterChanged(override val origin: UiOrigin, val category: CatalogCategoryId?) : UiIntent

@@ -2,6 +2,18 @@
 
 Pleos Connect용 Android 앱이다. 기본 진입은 실제 프로필·catalog·대본·단일 기사 미디어 port에 연결한 제품 화면이다. 차량 전원·owner·입력 권한을 확인하지 못하면 준비/제한 상태를 표시한다. 연결 점검은 별도 destination으로 보존한다. schema5·Room5와 기사 질문·연습의 제품 연결 코드를 갖추며 실제 음성·전원·자료 승인을 별도 확인한다.
 
+## T052 선택 로그인·연결 계정 복원 · 2026-11-15
+
+설정의 새 Google 연결/기존 계정 병합/연결 계정 전환과 복구 안내의 연결 계정 복원을 제품 intent로 연결했다. 보호된 연결 재확인은 새 anonymous 생성을 허용하지 않는다. 세션 없는 설치의 복원은 별도 target 인증·서버의 최신 linked profile/epoch·영속 전환 journal·암호화 selector CAS를 사용하며 원래 암호문/creation fence/미전송 자료를 보존한다. 기존 계정 전환은 자동 병합하지 않는다. 취소·차량/창 변화·늦은 결과는 실제 시도 권한을 재검사하고 저장 복구와 재생을 구분한다.
+
+기존 계정 병합의 source 차단은 target SDK 인증·보호 저장과 현재 source 재검사 뒤로 미뤘다. Auth HTTP 실패·입력 권한 소실·인증 대기 중 epoch/revision 변경은 기존 owner·outbox·암호문을 덮지 않는다.
+
+실제 Google SDK의 명시 선택 옵션에 autoSelect=false/filterAuthorizedAccounts=false와 hashed nonce를 설정하고, Supabase에는 raw nonce를 전달한다. 매 요청의 공개 제공자 설정·실제 client/기기 지원을 확인하며 token/nonce/계정 정보는 UI state/로그에 남기지 않는다. 공개 OAuth web client ID는 local.properties 또는 환경의 GOOGLE_WEB_CLIENT_ID로 주입하며 Google client secret은 앱에 넣지 않는다.
+
+최종 domain73·data138통과/실연동1제외·기존/신규 UI18통과/진단1제외와 별도 재검증 credential7통과, debug/release/test APK·lint(error0/warning37)를 확인했다. 최초 compiler의 owner smart-cast, 테스트 Activity의 Main Looper, 실제 SDK의 자동 선택 기본값을 각각 수정했고 마지막 인증7개에는 실제 fetch 도달과5초 제한을 검증했다. 전체26 UI 사례의 고유 최종 결과는25통과/진단1제외이며 반복 실행을 새 사례로 합산하지 않는다.
+
+**실제 Google 제공자는 비활성이고 client ID가 없으며 actualPower는 UNKNOWN이다.** 기존 MainActivity는 복구 안내/비활성 복원 행동을 유지한다. 실제 보호 재확인 후 암호문 hash가 같고 session 없는 creation fence가 유지됨을 확인했다. 실제 계정 로그인·복원 성공, provider 활성화/기기 지원·전원·차량을 검증했다고 표시하지 않는다. T052/T057은 미완료로 유지한다. Sites는 로컬 예시4캡처만 반영했고 배포하지 않았다. [최종 검증·캡처](../docs/verification/learning-review-20261115/README.md).
+
 ## R8 현재 구현·검증 · 2026-11-15
 
 대기 중인 같은 기사 B에 대해 계속 기다리기·원문 듣기·다른 준비 뉴스를 각각 명시적으로 선택한다. 듣던 A의 실제 위치와 전역 설정은 보존하고, 대안은 준비된 다른 기사만 고른다. 새 읽기 전용 GET은 원 요청/해시/현재 사용자·서버 메타데이터를 확인하며 구형 서버에서 POST로 우회하지 않는다. 앱 재시작·실패·늦은 응답은 저장 상태만 복원하고 자동 재생하지 않는다.

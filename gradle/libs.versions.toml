@@ -19,6 +19,8 @@ pleos-tts = "3.3.1"
 media3 = "1.11.1"
 room = "2.8.5"
 serialization = "1.11.0"
+credentials = "1.6.0"
+googleid = "1.2.1"
 
 [libraries]
 activity-compose = { module = "androidx.activity:activity-compose", version.ref = "activity" }
@@ -46,6 +48,9 @@ room-runtime = { module = "androidx.room:room-runtime", version.ref = "room" }
 room-compiler = { module = "androidx.room:room-compiler", version.ref = "room" }
 junit = { module = "junit:junit", version = "4.13.2" }
 serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "serialization" }
+credential-manager = { module = "androidx.credentials:credentials", version.ref = "credentials" }
+credential-play-services-auth = { module = "androidx.credentials:credentials-play-services-auth", version.ref = "credentials" }
+googleid = { module = "com.google.android.libraries.identity.googleid:googleid", version.ref = "googleid" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

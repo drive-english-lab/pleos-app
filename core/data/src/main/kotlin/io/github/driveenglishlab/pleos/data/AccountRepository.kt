@@ -18,9 +18,56 @@ internal data class ProtectedMerge(val intent: WirePersonalMergeIntent, val comp
 class AccountRepository(private val context: Context, private val database: LearningDatabase,
     private val profiles: ProfileRepository, private val origin: String, private val allowLocalHttp: Boolean = false) {
     private val active get() = AuthSessionStore(context)
+    internal var mergeTargetAuthFactory:(AuthSessionStore)->LinkedTargetAuth={ActualLinkedTargetAuth(it)}
     private val api = LearningApi(context, origin, LearningSessionSource { profiles.maintenanceScope() }, allowLocalHttp)
     private val journal = SessionJournal(database.learning(), api, LearningContractJson(context))
     val transitions = OwnerTransition(context, database, profiles, origin, allowLocalHttp)
+    private val linkedTargets by lazy {
+        LinkedAccountTargetCoordinator(context,database,LinkedTargetProfileReader{session,operation->
+            val provisional=OwnerContext(UUID.randomUUID(),0,1,UUID.randomUUID())
+            var call=LearningCallScope(provisional,session)
+            val targetApi=LearningApi(context,origin,LearningSessionSource{call},allowLocalHttp)
+            when(val boot=targetApi.bootstrapProfile(call,WirePersonalBootstrapRequest(operation.toString(),null,"5"))) {
+                is LearningReply.Failed->boot
+                is LearningReply.Stored->{
+                    call=call.copy(owner=provisional.copy(profileId=UUID.fromString(boot.value.profileContext.profileId),privacyEpoch=boot.value.profileContext.privacyEpoch))
+                    targetApi.readProfile(call)
+                }
+            }
+        },LinkedTargetAdopter{auth,profile,revision,operation,mayAdopt->
+            profiles.adoptIdentity(auth,profile,revision,transitionOperation=operation,mayAdopt=mayAdopt)
+        })
+    }
+
+    /** Refresh only the existing protected identity. This call can never sign up a guest. */
+    suspend fun retryProtectedSession():LearningReply<WirePersonalProfileView> = profiles.connect(allowCreation=false)
+    suspend fun pendingLinkedTarget():AccountTargetAttempt?=linkedTargets.pending()
+    suspend fun prepareLinkedTarget(purpose:AccountTargetPurpose):AccountTargetPreparation {
+        // A staged attempt must be resumed, never silently replaced with another credential flow.
+        linkedTargets.pending()?.let{existing->
+            if(existing.purpose!=purpose)return AccountTargetPreparation.Failed("ACCOUNT_TRANSITION_PENDING",false)
+            return linkedTargets.prepare(purpose)
+        }
+        val current=profiles.current()
+        if(purpose==AccountTargetPurpose.SWITCH_LINKED) {
+            if(current==null)return AccountTargetPreparation.Failed("PROTECTED_SESSION_RETRY_REQUIRED",true)
+            when(val profile=profiles.refresh()) {
+                is LearningReply.Failed->return AccountTargetPreparation.Failed(profile.code,profile.retryable)
+                is LearningReply.Stored->if(profile.value.profileKind!="linked")return AccountTargetPreparation.Failed("SOURCE_MERGE_REQUIRED",false)
+            }
+        } else {
+            if(current!=null)return AccountTargetPreparation.Failed("EXPLICIT_LINK_OR_SWITCH_REQUIRED",false)
+            val evidence=active.diagnosticState()
+            if(evidence.sessionPresent==true)return AccountTargetPreparation.Failed("PROTECTED_SESSION_RETRY_REQUIRED",true)
+        }
+        return linkedTargets.prepare(purpose)
+    }
+    suspend fun signInLinkedTargetGoogle(attemptId:UUID,idToken:String,nonce:String?,mayAdopt:()->Boolean={true}):LearningReply<WirePersonalProfileView> =
+        linkedTargets.signIn(attemptId,idToken,nonce,mayAdopt)
+    /** Default recovery only completes an already-authorized durable fence; no foreground grant. */
+    suspend fun recoverLinkedTarget(mayAdopt:()->Boolean={false}):LearningReply<WirePersonalProfileView>?=linkedTargets.recover(mayAdopt)
+    suspend fun cancelLinkedTarget(attemptId:UUID):Boolean=linkedTargets.cancel(attemptId)
+
 
     suspend fun requestHistoryDeletion(): LearningReply<Unit> {
         val call = profiles.current() ?: return LearningReply.Failed("SESSION_UNAVAILABLE", true)
@@ -107,30 +154,49 @@ class AccountRepository(private val context: Context, private val database: Lear
     }
 
     /** Called only with an actual Google credential and nonce from the approved provider flow. */
-    suspend fun signInExistingGoogle(idToken: String, nonce: String?): LearningReply<WirePersonalProfileView> {
+    suspend fun signInExistingGoogle(idToken: String, nonce: String?, mayAct:()->Boolean={true}): LearningReply<WirePersonalProfileView> {
+        if(!mayAct())return LearningReply.Failed("ACCOUNT_ACTION_CONTEXT_CHANGED",false)
         val old = active.identity()
         val pending = old.accountState?.let { learningJson.decodeFromString(ProtectedMerge.serializer(), it) }
             ?: return LearningReply.Failed("MERGE_PREPARATION_REQUIRED", false)
         val local = database.learning().currentOwner() ?: return LearningReply.Failed("SESSION_UNAVAILABLE", true)
-        if (local.profileId != pending.sourceProfile || local.revision !in setOf(pending.sourceRevision, pending.sourceRevision + 1))
+        if (local.profileId != pending.sourceProfile || local.privacyEpoch!=pending.sourceEpoch ||
+            !(local.status=="active" && local.revision==pending.sourceRevision || local.status=="transition" && local.revision==pending.sourceRevision+1))
             return LearningReply.Failed("SESSION_CHANGED", false)
+        if(local.status=="transition" && database.learning().pendingOwnerTransitions().none{
+                it.operationId==pending.completeOperation && it.kind=="merge" && it.profileId==pending.sourceProfile && it.ownerRevision==pending.sourceRevision})
+            return LearningReply.Failed("SESSION_CHANGED",false)
         val target = AuthSessionStore(context, "learning-merge-target-${pending.intent.intentId}")
         if (target.identity().session == null) target.initializeIsolated(StoredIdentity(installationId = old.installationId,
             accountState = learningJson.encodeToString(ProtectedMerge.serializer(), pending)))
-        if (local.status == "active") {
-            val source = profiles.current() ?: return LearningReply.Failed("SESSION_UNAVAILABLE", true)
-            val fenced=database.withTransaction {
-                if(!sourceSettled(source.owner))return@withTransaction false
-                database.learning().fenceOwner(source.owner, UUID.fromString(pending.completeOperation), "merge", "learning-merge-target-${pending.intent.intentId}")
-                FeatureLifecycle(database).isolateForOwnerTransition(source.owner.profileId)
-                true
-            }
-            if(!fenced)return LearningReply.Failed("SYNC_REQUIRED_BEFORE_MERGE",true)
-        }
-        val auth = SupabaseProfileAuth(target)
+        val auth = mergeTargetAuthFactory(target)
         try {
+            if(!mayAct())return LearningReply.Failed("ACCOUNT_ACTION_CONTEXT_CHANGED",false)
+            // Target provider failure/cancellation must leave the valid source usable.
+            // No source fence exists until the actual target session is protected.
             auth.signInGoogle(idToken, nonce)
-            return completeTarget(pending, target, auth)
+            if(!mayAct())return LearningReply.Failed("ACCOUNT_ACTION_CONTEXT_CHANGED",false)
+            if(target.identity().session==null)return LearningReply.Failed("TARGET_SESSION_RECOVERY_REQUIRED",true)
+            val latest=database.learning().currentOwner()?:return LearningReply.Failed("SESSION_CHANGED",false)
+            if(latest.profileId!=pending.sourceProfile || latest.privacyEpoch!=pending.sourceEpoch)
+                return LearningReply.Failed("SESSION_CHANGED",false)
+            if(latest.status=="active" && latest.revision==pending.sourceRevision) {
+                val source = profiles.current() ?: return LearningReply.Failed("SESSION_UNAVAILABLE", true)
+                if(source.owner.profileId.toString()!=pending.sourceProfile || source.owner.privacyEpoch!=pending.sourceEpoch ||
+                    source.owner.revision!=pending.sourceRevision || source.session.subjectId.toString()!=pending.sourceSubject)
+                    return LearningReply.Failed("SESSION_CHANGED",false)
+                val fenced=database.withTransaction {
+                    if(database.learning().currentOwner()!=latest)return@withTransaction false
+                    if(!mayAct() || !sourceSettled(source.owner))return@withTransaction false
+                    database.learning().fenceOwner(source.owner, UUID.fromString(pending.completeOperation), "merge", "learning-merge-target-${pending.intent.intentId}")
+                    FeatureLifecycle(database).isolateForOwnerTransition(source.owner.profileId)
+                    true
+                }
+                if(!fenced)return LearningReply.Failed(if(mayAct())"SYNC_REQUIRED_BEFORE_MERGE" else "ACCOUNT_ACTION_CONTEXT_CHANGED",true)
+            } else if(latest.status!="transition" || latest.revision!=pending.sourceRevision+1 ||
+                database.learning().pendingOwnerTransitions().none{it.operationId==pending.completeOperation && it.kind=="merge" && it.profileId==pending.sourceProfile && it.ownerRevision==pending.sourceRevision})
+                return LearningReply.Failed("SESSION_CHANGED",false)
+            return completeTarget(pending, target, auth,mayAct)
         } finally { auth.close() }
     }
 
@@ -147,7 +213,7 @@ class AccountRepository(private val context: Context, private val database: Lear
             database.review().unresolvedQuestionDeliveries(profile,owner.privacyEpoch).isEmpty() && database.segments().pending(profile,owner.privacyEpoch).isEmpty()
     }
 
-    private suspend fun completeTarget(pending: ProtectedMerge, target: AuthSessionStore, targetAuth: SupabaseProfileAuth): LearningReply<WirePersonalProfileView> {
+    private suspend fun completeTarget(pending: ProtectedMerge, target: AuthSessionStore, targetAuth: ProfileAuth,mayAct:()->Boolean={true}): LearningReply<WirePersonalProfileView> {
         val session = targetAuth.ensureSession(false) { error("No anonymous target signup") }
         val provisional = OwnerContext(UUID.randomUUID(), 0, 1, UUID.randomUUID())
         var targetCall = LearningCallScope(provisional, session)
@@ -159,14 +225,15 @@ class AccountRepository(private val context: Context, private val database: Lear
         if (current !is LearningReply.Stored) return current as LearningReply.Failed
         if (current.value.profileKind == "anonymous") return LearningReply.Failed("PERMANENT_ACCOUNT_REQUIRED", false)
         val request = WirePersonalMergeComplete(pending.completeOperation, current.value.profileContext, pending.intent.intentId, pending.intent.proofToken, "5")
+        if(!mayAct())return LearningReply.Failed("ACCOUNT_ACTION_CONTEXT_CHANGED",false)
         val complete = targetApi.completeMerge(targetCall, request)
         if (complete !is LearningReply.Stored) return complete as LearningReply.Failed
         val accepted = pending.copy(receipt = complete.value)
         target.saveAccountState(learningJson.encodeToString(ProtectedMerge.serializer(), accepted))
-        return adoptMerged(accepted, target)
+        return adoptMerged(accepted, target,mayAct)
     }
 
-    private suspend fun adoptMerged(pending: ProtectedMerge, target: AuthSessionStore): LearningReply<WirePersonalProfileView> {
+    private suspend fun adoptMerged(pending: ProtectedMerge, target: AuthSessionStore,mayAct:()->Boolean={true}): LearningReply<WirePersonalProfileView> {
         val receipt = requireNotNull(pending.receipt)
         val local = requireNotNull(database.learning().currentOwner())
         val command = UUID.fromString(pending.completeOperation)
@@ -208,13 +275,14 @@ class AccountRepository(private val context: Context, private val database: Lear
             require(local.status == "transition" && local.profileId == pending.sourceProfile)
             local.revision
         }
+        if(!mayAct())return LearningReply.Failed("ACCOUNT_ACTION_CONTEXT_CHANGED",false)
         val targetIdentity = target.identity()
         val previous = active.identity()
         if (previous.session?.user?.id != targetIdentity.session?.user?.id)
             active.replaceForTransition(pending.sourceSubject, targetIdentity.copy(bootstrapProfileId = receipt.canonicalProfile.profileContext.profileId,
                 bootstrapOperationId = UUID.randomUUID().toString(), accountState = null))
         return profiles.adoptIdentity(SupabaseProfileAuth(active), confirmedProfile, revision,
-            pending.sourceProfile to pending.sourceEpoch, command.toString())
+            pending.sourceProfile to pending.sourceEpoch, command.toString(),mayAdopt=mayAct)
     }
 
     suspend fun recoverMerge(): LearningReply<WirePersonalProfileView>? {
@@ -229,15 +297,18 @@ class AccountRepository(private val context: Context, private val database: Lear
     }
 
     /** New identity linking keeps the anonymous user's subject and profile. */
-    suspend fun linkNewGoogle(idToken: String, nonce: String?): LearningReply<WirePersonalProfileView> {
+    suspend fun linkNewGoogle(idToken: String, nonce: String?,mayAct:()->Boolean={true}): LearningReply<WirePersonalProfileView> {
+        if(!mayAct())return LearningReply.Failed("ACCOUNT_ACTION_CONTEXT_CHANGED",false)
         val before = profiles.current() ?: return LearningReply.Failed("SESSION_UNAVAILABLE", true)
         val auth = SupabaseProfileAuth(active)
         try {
             auth.ensureSession(false) { error("No signup during identity link") }
+            if(!mayAct())return LearningReply.Failed("ACCOUNT_ACTION_CONTEXT_CHANGED",false)
             auth.linkGoogle(idToken, nonce)
             val after = auth.currentSession() ?: return LearningReply.Failed("SESSION_UNAVAILABLE", true)
             if (after.subjectId != before.session.subjectId) return LearningReply.Failed("MERGE_REQUIRED", false)
             profiles.reloadProtectedAuth(SupabaseProfileAuth(active))
+            if(!mayAct())return LearningReply.Failed("ACCOUNT_ACTION_CONTEXT_CHANGED",false)
             return profiles.refresh()
         } finally { auth.close() }
     }

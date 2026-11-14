@@ -49,14 +49,19 @@ fun NewsScreens(state: ProductScreenState, send: (UiIntent) -> Unit, onDiagnosti
         Box(Modifier.weight(1f).fillMaxWidth()) {
             when {
                 !state.canRead -> Column(Modifier.fillMaxSize()) {
-                    IdentityRecoveryNotice(state, allowUnbound = true)
-                    ProductStatus("이어서 이용할 준비를 확인해 주세요", state.recovery ?: "차량과 학습 연결을 확인하고 있어요",
-                        Modifier.weight(1f), loading = SessionOperationKind.PROFILE in state.session.activeOperations) {
-                        FlowRow(horizontalArrangement = Arrangement.spacedBy(24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                            if (state.deletionPending) ProductButton("삭제 상태 다시 확인", { send(UiIntent.RetryDeletion(state.origin)) })
-                            ProductButton("다시 확인", { send(UiIntent.Refresh(state.origin)) }, busy = state.busy)
-                            ProductButton("연결 점검", onDiagnostics, secondary = true)
-                        }
+                    LazyColumn(Modifier.weight(1f).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(24.dp)) {
+                        item { IdentityRecoveryNotice(state, allowUnbound = true) }
+                        item { ProductStatus("이어서 이용할 준비를 확인해 주세요", state.recovery ?: "차량과 학습 연결을 확인하고 있어요",
+                            loading = SessionOperationKind.PROFILE in state.session.activeOperations) {
+                            Text("저장된 연결만 다시 확인해요. 계정 선택이나 새 미로그인 프로필 생성은 하지 않아요",
+                                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            FlowRow(horizontalArrangement = Arrangement.spacedBy(24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                                if (state.deletionPending) ProductButton("삭제 상태 다시 확인", { send(UiIntent.RetryDeletion(state.origin)) })
+                                ProductButton("보호된 연결 다시 확인", { send(UiIntent.Refresh(state.origin)) }, busy = state.busy || state.accountEntry.busy)
+                                ProductButton("연결 점검", onDiagnostics, secondary = true)
+                            }
+                        } }
+                        item { AccountEntryPanel(state, send) }
                     }
                     if (state.session.preparedListening != null) {
                         PreparedPlaybackDock(state, send)
@@ -391,10 +396,9 @@ private fun SettingsPage(state: ProductScreenState, send: (UiIntent) -> Unit, di
             if (!onboarding) item {
                 Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
                     Text("학습 기록과 계정", style = MaterialTheme.typography.titleMedium)
-                    Text("계정을 연결하면 이 차량의 설정과 진행 중 학습을 우선하고, 양쪽 기록은 함께 보존해요. 로그인 연결은 차량과 제공자 설정 확인이 필요해요", style = MaterialTheme.typography.bodySmall)
-                    ProductButton("계정 연결 준비 중", {}, enabled = false, secondary = true)
-                    ProductButton("학습 기록 삭제", { deleteConfirmation = true }, enabled = !state.busy, secondary = true)
-                    ProductButton("이 차량에서 로그아웃", { logoutConfirmation = true }, enabled = !state.busy, secondary = true)
+                    AccountEntryPanel(state, send)
+                    ProductButton("학습 기록 삭제", { deleteConfirmation = true }, enabled = !state.busy && !state.accountEntry.busy, secondary = true)
+                    ProductButton("이 차량에서 로그아웃", { logoutConfirmation = true }, enabled = !state.busy && !state.accountEntry.busy, secondary = true)
                 }
             }
             item { Text("로그인 없이도 이 차량의 학습 기록을 이어갈 수 있어요", style = MaterialTheme.typography.bodySmall,

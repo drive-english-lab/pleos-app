@@ -25,6 +25,12 @@ fun serviceOrigin(name: String, localHttp: Boolean): String {
 }
 val releaseLearningOrigin = serviceOrigin("LEARNING_API_ORIGIN", false)
 val debugLearningOrigin = serviceOrigin("LEARNING_API_DEBUG_ORIGIN", true).ifBlank { releaseLearningOrigin }
+// Public OAuth web client identity, never the Google client secret. Missing means unavailable.
+val googleWebClientId = runtimeProperties.getProperty("GOOGLE_WEB_CLIENT_ID",
+    System.getenv("GOOGLE_WEB_CLIENT_ID") ?: "").trim()
+require(googleWebClientId.isEmpty() || googleWebClientId.matches(Regex("[0-9]+-[A-Za-z0-9_-]+\\.apps\\.googleusercontent\\.com"))) {
+    "GOOGLE_WEB_CLIENT_ID must be a Google OAuth web client ID."
+}
 
 android {
     namespace = "io.github.driveenglishlab.pleos"
@@ -38,6 +44,7 @@ android {
         versionName = "0.1.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("String", "LEARNING_API_ORIGIN", "\"$releaseLearningOrigin\"")
+        buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", "\"$googleWebClientId\"")
     }
 
     buildTypes.getByName("debug") { buildConfigField("String", "LEARNING_API_ORIGIN", "\"$debugLearningOrigin\"") }
@@ -73,5 +80,8 @@ dependencies {
     implementation(libs.hilt.android)
     implementation(libs.media3.session)
     implementation(libs.serialization.json)
+    implementation(libs.credential.manager)
+    implementation(libs.credential.play.services.auth)
+    implementation(libs.googleid)
     ksp(libs.hilt.compiler)
 }

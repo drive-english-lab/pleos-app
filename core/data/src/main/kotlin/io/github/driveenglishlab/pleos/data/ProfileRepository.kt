@@ -88,12 +88,12 @@ class ProfileRepository internal constructor(
     }
 
     /** On restoration/network/storage failure retain the same local owner and immutable outbox. */
-    suspend fun connect(): LearningReply<WirePersonalProfileView> = mutex.withLock {
+    suspend fun connect(allowCreation: Boolean = true): LearningReply<WirePersonalProfileView> = mutex.withLock {
         try {
             connectionStage(ProfileConnectionStage.OWNER_READ)
             val local = dao.provisionalOwner()
             if (local.status !in setOf("provisional", "active")) return@withLock LearningReply.Failed("PROFILE_TRANSITION_PENDING", false)
-            auth.ensureSessionTraced(allowCreate = local.status == "provisional" && dao.authCreation(local.profileId) == null,beforeCreate = {
+            auth.ensureSessionTraced(allowCreate = allowCreation && local.status == "provisional" && dao.authCreation(local.profileId) == null,beforeCreate = {
                 database.withTransaction {
                     check(dao.currentOwner() == local && dao.authCreation(local.profileId) == null)
                     dao.insertJournal(OwnerJournal(UUID.randomUUID().toString(), local.profileId, local.revision, "auth_creation", "started", null))
@@ -208,10 +208,11 @@ class ProfileRepository internal constructor(
     }
 
     internal suspend fun adoptIdentity(newAuth: ProfileAuth, profile: WirePersonalProfileView, expectedRevision: Long,
-        cleanupSource: Pair<String, Long>? = null, transitionOperation: String? = null): LearningReply<WirePersonalProfileView> = mutex.withLock { withContext(NonCancellable) {
+        cleanupSource: Pair<String, Long>? = null, transitionOperation: String? = null, mayAdopt: () -> Boolean = { true }): LearningReply<WirePersonalProfileView> = mutex.withLock { withContext(NonCancellable) {
         transitioning = true
         try {
         val session = newAuth.ensureSession(false) { error("No automatic signup during adoption") }
+        if (!mayAdopt()) return@withContext LearningReply.Failed("ACCOUNT_ACTION_CONTEXT_CHANGED", false)
         val owner = database.withTransaction {
             val previous = requireNotNull(dao.currentOwner())
             require(previous.revision == expectedRevision && previous.status == "transition")

@@ -52,7 +52,7 @@ private data class ProductPresentation(val owner: OwnerContext? = null, val prof
     val preparedCatalogCursor: String? = null, val preparedCatalogAvailable: Boolean = false,
     val preparedSelection: WireSource6PersonalSelectionRecord? = null, val preparedScript: SourcePublicScript? = null,
     val preparedSource: WirePreparationDiscovery? = null, val followupWaiting: Boolean = false, val source6History: Source6ProfileSnapshot? = null,
-    val identityRecovery: IdentityRecoveryProjection? = null, val autoProgress: WireReview2AutoProgressRef? = null, val autoProgressHead: String? = null,
+    val accountEntry: AccountEntryState = AccountEntryState(), val identityRecovery: IdentityRecoveryProjection? = null, val autoProgress: WireReview2AutoProgressRef? = null, val autoProgressHead: String? = null,
     val draftStorageRevision: Long? = null, val draftRevision: Long = 1, val draftToken: UUID = UUID.randomUUID())
 
 private data class PendingReview2Selection(val owner: OwnerContext, val binding: PlaybackRequestBinding,
@@ -220,7 +220,7 @@ class ProductSessionHost @Inject constructor(@param:ApplicationContext private v
         }, catalog = visible.catalog, catalogStatus = visible.catalogStatus, moreCatalog = visible.more,
             selectedArticle = visible.article, reader = if (session.access.detailsOpen) visible.reader else null,
             readerStatus = visible.readerStatus, draft = visible.draft, appearance = theme, appearanceDraft = visible.themeDraft,
-            busy = session.activeOperations.any { it in setOf(SessionOperationKind.PROFILE, SessionOperationKind.SELECTION, SessionOperationKind.SETTINGS) },
+            busy = visible.accountEntry.busy || session.activeOperations.any { it in setOf(SessionOperationKind.PROFILE, SessionOperationKind.SELECTION, SessionOperationKind.SETTINGS) },
             notice = study.takeIf { it.owner == session.owner }?.notice ?: visible.notice, recovery = visible.recovery ?: restriction(session), noCandidateReason = visible.noCandidate,
             settingsPending = visible.settingsPending, selectionPending = visible.selectionPending, formatPendingMode = visible.formatPendingMode, learning = if (study.owner == session.owner) study else LearningPresentation(), history = visible.history, historyStatus = visible.historyStatus, deletionPending = visible.deletionPending, dailyListening = visible.daily, listenOnlyActive = visible.listenOnly, speakingRecords = if (records.owner == session.owner) records else SpeakingRecordsState(),
             learningPreference = if (feature.preference.owner == session.owner) feature.preference else LearningPreferenceState(),
@@ -229,7 +229,9 @@ class ProductSessionHost @Inject constructor(@param:ApplicationContext private v
             preparedSource = visible.preparedSource, preparedScript = if (session.access.detailsOpen) visible.preparedScript else null, segmentPlayback = joined.second, followupWaiting = visible.followupWaiting, source6History = visible.source6History, source6SpeakingRecords = if (joined.third.owner == session.owner) joined.third else Source6SpeakingRecordsState(), reviewTools = if (joined.tools.owner == session.owner) joined.tools else ReviewToolsState(), assessments = if (joined.assessments.owner == session.owner) joined.assessments else AssessmentReviewState(),
             catalogViews = if (discovered.owner == session.owner) discovered else CatalogViewState(), identityRecovery = visible.identityRecovery, playbackRequest = if (services.second.owner == session.owner) services.second else ReviewNext2State(),
             playbackRequest3 = if (services.third.owner == session.owner) services.third else ReviewNext3State(),
-            originalOutputConfigured = originalOutputConfigured())
+            originalOutputConfigured = originalOutputConfigured(), accountEntry = visible.accountEntry.copy(
+                linked = visible.profile?.profileKind == "linked", hasSession = session.ownerBinding == OwnerBindingStatus.VERIFIED,
+                canLaunch = accountAccess(session) && !visible.accountEntry.canRetryTransition))
     }.stateIn(scope, SharingStarted.Eagerly, ProductScreenState())
 
     val mediaPort: NewsPlaybackPort = object : NewsPlaybackPort {
@@ -376,6 +378,8 @@ class ProductSessionHost @Inject constructor(@param:ApplicationContext private v
     }
 
     private suspend fun updateAccess() {
+        if (accountJob?.isActive == true && !accountAccess(coordinator.state.value.copy(access = coordinator.state.value.access.copy(
+                safety = vehicleSnapshot.safety, power = vehicleSnapshot.effectivePower, window = window.copy(visible = window.visible && productVisible))), requireFocus = false)) cancelAccountEntry()
         val ownerValid = coordinator.state.value.ownerBinding == OwnerBindingStatus.VERIFIED &&
             coordinator.state.value.owner?.let { profiles.current()?.owner == it } == true
         val previous = coordinator.state.value.access
@@ -426,6 +430,138 @@ class ProductSessionHost @Inject constructor(@param:ApplicationContext private v
         }
     }
 
+    private var accountActivity = java.lang.ref.WeakReference<android.app.Activity>(null)
+    private var accountJob: Job? = null
+    private var accountGeneration = 0L
+    private val accountCredentials = io.github.driveenglishlab.pleos.accountcredential.GoogleAccountCredentialAdapter(context)
+    fun bindAccountActivity(activity: android.app.Activity) { accountActivity = java.lang.ref.WeakReference(activity) }
+    fun unbindAccountActivity(activity: android.app.Activity) {
+        if (accountActivity.get() === activity) { cancelAccountEntry(); accountActivity.clear() }
+    }
+    private fun accountAccess(view: SessionView, requireFocus: Boolean = true) = accountEntryAllowed(view, requireFocus)
+    private fun cancelAccountEntry() {
+        accountGeneration++
+        accountJob?.cancel(); accountJob = null
+        presentation.update { it.copy(accountEntry = AccountEntryState(AccountEntryPhase.CANCELLED, message = "계정 연결을 멈췄어요. 기존 기록은 유지돼요", canRetryTransition = it.accountEntry.canRetryTransition)) }
+    }
+    private fun accountMessage(code: String) = when (code) {
+        "GOOGLE_PROVIDER_DISABLED" -> "로그인 제공자가 아직 활성화되지 않았어요"
+        "GOOGLE_WEB_CLIENT_ID_MISSING", "GOOGLE_WEB_CLIENT_ID_INVALID", "AUTH_PROJECT_NOT_CONFIGURED" -> "차량의 계정 연결 설정을 먼저 확인해 주세요"
+        "AUTH_SETTINGS_UNAVAILABLE" -> "로그인 제공자 상태를 확인하지 못했어요. 연결을 다시 확인해 주세요"
+        "GOOGLE_CREDENTIAL_CLIENT_UNAVAILABLE", "GOOGLE_CREDENTIAL_CLIENT_UNSUPPORTED", "GOOGLE_CREDENTIAL_PROVIDER_UNAVAILABLE" -> "이 차량에서 Google 계정 선택을 사용할 수 없어요"
+        else -> "계정 연결을 확인하지 못했어요. 기존 기록을 유지한 채 다시 시도할 수 있어요"
+    }
+    private fun startAccountEntry(action: AccountEntryAction) {
+        if (action == AccountEntryAction.CANCEL) { cancelAccountEntry(); return }
+        if (accountJob?.isActive == true || !accountAccess(coordinator.state.value)) return
+        val original = coordinator.state.value
+        val originalOwner = original.owner
+        val generation = ++accountGeneration
+        fun current() = generation == accountGeneration && coordinator.state.value.owner == originalOwner &&
+            coordinator.state.value.navigationGeneration == original.navigationGeneration && accountAccess(coordinator.state.value)
+        accountJob = scope.launch {
+            fun phase(value: AccountEntryPhase, message: String? = null) {
+                if (generation == accountGeneration) presentation.update { it.copy(accountEntry = it.accountEntry.copy(phase = value, action = action, message = message)) }
+            }
+            var preparedTarget: UUID? = null
+            try {
+                if (action == AccountEntryAction.RETRY_TRANSITION) {
+                    phase(AccountEntryPhase.RECOVERING)
+                    if (originalOwner != null) {
+                        if ((original.listening != null || original.preparedListening != null) && !freezeAndSave(originalOwner)) {
+                            phase(AccountEntryPhase.FAILED, "듣던 위치를 저장한 뒤 다시 확인해 주세요"); return@launch
+                        }
+                        if (!current()) return@launch
+                        coordinator.invalidateMediaActivation(originalOwner)
+                        coordinator.suspendForReviewTools(originalOwner)
+                    }
+                    learning.cancelEffects(); controller?.pause()
+                    val result = accounts.recoverLinkedTarget(::current) ?: accounts.recoverMerge()
+                    if (generation != accountGeneration) return@launch
+                    if (result == null) phase(AccountEntryPhase.FAILED, "저장된 계정 전환이 없어요")
+                    else if (result is LearningReply.Failed) phase(AccountEntryPhase.FAILED, accountMessage(result.code))
+                    else { phase(AccountEntryPhase.COMPLETE, "저장된 계정 전환을 확인했어요"); connectProfile() }
+                    return@launch
+                }
+                if (accounts.pendingLinkedTarget() != null) {
+                    phase(AccountEntryPhase.FAILED, "저장된 계정 전환을 먼저 다시 확인해 주세요"); return@launch
+                }
+                phase(AccountEntryPhase.CHECKING_PROVIDER)
+                val ready = accountCredentials.readiness()
+                if (!current()) return@launch
+                if (ready is io.github.driveenglishlab.pleos.accountcredential.GoogleCredentialReadiness.Unavailable) {
+                    phase(AccountEntryPhase.UNAVAILABLE, accountMessage(ready.code)); return@launch
+                }
+                val call = profiles.current()
+                if (action in setOf(AccountEntryAction.NEW_LINK, AccountEntryAction.EXISTING_MERGE) &&
+                    (call == null || presentation.value.profile?.profileKind != "anonymous")) {
+                    phase(AccountEntryPhase.FAILED, "현재 미로그인 학습 연결을 먼저 확인해 주세요"); return@launch
+                }
+                if (action == AccountEntryAction.RESTORE_LINKED && call != null) { phase(AccountEntryPhase.FAILED, "현재 계정에서 연결 또는 전환을 선택해 주세요"); return@launch }
+                if (action == AccountEntryAction.SWITCH_LINKED && (call == null || presentation.value.profile?.profileKind != "linked")) return@launch
+                if (originalOwner != null) {
+                    if ((original.listening != null || original.preparedListening != null) && !freezeAndSave(originalOwner)) {
+                        phase(AccountEntryPhase.FAILED, "듣던 위치를 저장한 뒤 다시 연결해 주세요"); return@launch
+                    }
+                    if (!current()) return@launch
+                    cancelPendingSelection()
+                    coordinator.invalidateMediaActivation(originalOwner)
+                    coordinator.suspendForReviewTools(originalOwner)
+                }
+                learning.cancelEffects(); controller?.pause()
+                phase(AccountEntryPhase.PREPARING)
+                val target = withContext(NonCancellable) {
+                    val prepared = when (action) {
+                        AccountEntryAction.RESTORE_LINKED -> accounts.prepareLinkedTarget(AccountTargetPurpose.RESTORE_LINKED)
+                        AccountEntryAction.SWITCH_LINKED -> accounts.prepareLinkedTarget(AccountTargetPurpose.SWITCH_LINKED)
+                        else -> null
+                    }
+                    preparedTarget = (prepared as? AccountTargetPreparation.Ready)?.attempt?.operationId
+                    prepared
+                }
+                if (target is AccountTargetPreparation.Failed) { phase(AccountEntryPhase.FAILED, accountMessage(target.code)); return@launch }
+                if (action == AccountEntryAction.EXISTING_MERGE) {
+                    val prepared = accounts.prepareExistingAccount()
+                    if (prepared is LearningReply.Failed) { phase(AccountEntryPhase.FAILED, accountMessage(prepared.code)); return@launch }
+                }
+                if (!current()) return@launch
+                val activity = accountActivity.get()?.takeUnless { it.isFinishing || it.isDestroyed } ?: run {
+                    phase(AccountEntryPhase.UNAVAILABLE, "보이는 차량 화면에서 다시 연결해 주세요"); return@launch
+                }
+                phase(AccountEntryPhase.AUTHENTICATING)
+                when (val credential = accountCredentials.request(activity)) {
+                    is io.github.driveenglishlab.pleos.accountcredential.GoogleCredentialResult.Credential -> {
+                        if (!current()) return@launch
+                        phase(AccountEntryPhase.VERIFYING)
+                        cancelPendingSelection(); learning.cancelEffects(); controller?.pause()
+                        val result = when (action) {
+                            AccountEntryAction.NEW_LINK -> accounts.linkNewGoogle(credential.idToken, credential.nonce, ::current)
+                            AccountEntryAction.EXISTING_MERGE -> accounts.signInExistingGoogle(credential.idToken, credential.nonce, ::current)
+                            else -> accounts.signInLinkedTargetGoogle(requireNotNull((target as? AccountTargetPreparation.Ready)?.attempt).operationId, credential.idToken, credential.nonce, ::current)
+                        }
+                        if (generation != accountGeneration) return@launch
+                        if (result is LearningReply.Failed) phase(AccountEntryPhase.FAILED, accountMessage(result.code))
+                        else { phase(AccountEntryPhase.COMPLETE, "서버에서 계정 기록을 확인했어요. 학습은 직접 이어서 시작해 주세요"); connectProfile() }
+                    }
+                    is io.github.driveenglishlab.pleos.accountcredential.GoogleCredentialResult.Cancelled -> phase(AccountEntryPhase.CANCELLED, "계정 선택을 취소했어요. 기존 기록은 유지돼요")
+                    is io.github.driveenglishlab.pleos.accountcredential.GoogleCredentialResult.Unavailable -> phase(AccountEntryPhase.UNAVAILABLE, accountMessage(credential.code))
+                    is io.github.driveenglishlab.pleos.accountcredential.GoogleCredentialResult.Failed -> phase(AccountEntryPhase.FAILED, accountMessage(credential.code))
+                }
+            } catch (cancelled: CancellationException) { throw cancelled }
+              catch (_: Exception) { phase(AccountEntryPhase.FAILED, accountMessage("ACCOUNT_FAILED")) }
+            finally {
+                withContext(NonCancellable) {
+                    preparedTarget?.let { id -> accounts.cancelLinkedTarget(id) }
+                    val pending = accounts.pendingLinkedTarget() != null
+                    if (generation == accountGeneration || presentation.value.accountEntry.phase == AccountEntryPhase.CANCELLED)
+                        presentation.update { it.copy(accountEntry = it.accountEntry.copy(canRetryTransition = pending)) }
+                }
+                if (generation == accountGeneration && presentation.value.accountEntry.busy)
+                    phase(AccountEntryPhase.CANCELLED, "계정 연결을 멈췄어요. 보이는 주차 화면에서 다시 시도해 주세요")
+            }
+        }
+    }
+
     suspend fun handle(intent: UiIntent) {
         val view = coordinator.snapshot()
         if (intent.origin.owner != view.owner) return
@@ -433,7 +569,13 @@ class ProductSessionHost @Inject constructor(@param:ApplicationContext private v
             (intent.origin.preparedWork == null && view.preparedListening == null || intent.origin.preparedWork?.sameWork(view.preparedListening) == true)
         val currentPresentation = intent.origin.navigationGeneration == view.navigationGeneration && sameWork && intent.origin.task == view.task && intent.origin.lessonId == view.lessonId
         if (!currentPresentation && intent !is UiIntent.Stop && !(intent is UiIntent.PlayPause && !intent.wantPlay)) return
+        if (accountJob?.isActive == true && intent !is UiIntent.AccountEntry && intent !is UiIntent.Stop &&
+            intent !is UiIntent.Navigate && !(intent is UiIntent.PlayPause && !intent.wantPlay)) return
         try {
+            if (intent is UiIntent.AccountEntry) { startAccountEntry(intent.action); return }
+            if (intent is UiIntent.Navigate || intent is UiIntent.Logout || intent is UiIntent.DeleteHistory || intent is UiIntent.Stop) {
+                if (accountJob?.isActive == true) cancelAccountEntry()
+            }
             if (intent is UiIntent.Stop || intent is UiIntent.PlayPause && !intent.wantPlay ||
                 intent is UiIntent.Navigate && intent.screen != view.screen || intent is UiIntent.OpenArticleQuestion ||
                 intent is UiIntent.StartPractice || intent is UiIntent.Logout || intent is UiIntent.DeleteHistory) cancelPendingSelection()
@@ -534,7 +676,7 @@ class ProductSessionHost @Inject constructor(@param:ApplicationContext private v
                 is UiIntent.PreviewSettings -> reviewTools.preview()
                 is UiIntent.RetryFollowup -> pendingPreparedPhase?.let { preparedPhaseEnded(it) }
                 is UiIntent.SkipFollowup -> pendingPreparedPhase?.let { preparedPhaseEnded(it, true) }
-                is UiIntent.Refresh -> { if (controller == null) connectMedia(); connectProfile() }
+                is UiIntent.Refresh -> { if (controller == null) connectMedia(); connectProfile(allowCreation = false) }
                 is UiIntent.Navigate -> {
                     if (coordinator.state.value.practiceModal?.visible == true) {
                         learning.handle(UiIntent.FinishPractice(intent.origin))
@@ -942,7 +1084,7 @@ class ProductSessionHost @Inject constructor(@param:ApplicationContext private v
         changeSettingsDraft { value -> value.draft?.let(edit)?.takeIf { it.topics.size <= 20 }?.let { value.copy(draft = it, notice = null, draftRevision = value.draftRevision + 1) } ?: value }
     }
 
-    private suspend fun connectProfile() {
+    private suspend fun connectProfile(allowCreation: Boolean = true) {
         val ticket = coordinator.beginOperation(SessionOperationKind.PROFILE, coordinator.state.value.owner) ?: return
         try {
             if (BuildConfig.LEARNING_API_ORIGIN.isBlank()) {
@@ -953,9 +1095,13 @@ class ProductSessionHost @Inject constructor(@param:ApplicationContext private v
                 val deleted = accounts.retryDeletion()
                 if (deleted is LearningReply.Failed) { presentation.update { it.copy(deletionPending = true, recovery = "학습 기록 삭제를 서버에 확인하고 있어요") }; return }
             }
+            val targetRecovery = accounts.recoverLinkedTarget()
+            if (targetRecovery is LearningReply.Failed) {
+                presentation.update { it.copy(accountEntry = AccountEntryState(AccountEntryPhase.FAILED, message = "저장된 계정 전환을 다시 확인해 주세요", canRetryTransition = true)) }; return
+            }
             val merge = accounts.recoverMerge()
             if (merge is LearningReply.Failed) { presentation.update { it.copy(recovery = "기존 기록을 보존한 채 계정 연결을 다시 확인하고 있어요") }; return }
-            when (val reply = profiles.connect()) {
+            when (val reply = profiles.connect(allowCreation)) {
                 is LearningReply.Failed -> presentation.update { it.copy(recovery = failure(reply.code)) }
                 is LearningReply.Stored -> {
                     val current = profiles.current() ?: return
