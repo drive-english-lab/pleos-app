@@ -1,5 +1,20 @@
 # Pleos Android app
 
+## 뉴디 · 현재 After
+
+관심 뉴스로 영어 듣기·말하기를 연습하는 Pleos Connect 앱입니다. 앱 내부의 기존 표시명은 Drive English입니다.
+
+[조익성_뉴디_release.apk 다운로드](https://github.com/drive-english-lab/pleos-app/releases/download/submission-after-9500a81/%EC%A1%B0%EC%9D%B5%EC%84%B1_%EB%89%B4%EB%94%94_release.apk) · [After Release/실행 안내](https://github.com/drive-english-lab/pleos-app/releases/tag/submission-after-9500a81)
+
+- APK 빌드source: `9500a81036c199a2b8def2c1ff64fda810d3f64c`. 이README만추가한최종제출commit과APK빌드source를구분한다. 기존Before release/소스/영상은아래에보존했다.
+- 공식파일명은사용자가확정한APK접두어와앱명을반영한다. 71,559,776bytes, SHA256 `92c69039fa11eefac6dcfd1c5cb42e5cf511c8569b30e47721b12ffaa05616a5`. 실제새After APK이며Before재명명이아니다.
+- release·debuggable=false·기존개발인증서서명·signature/설치/Main시작/설치SHA일치를확인했다. 운영/Play인증서를뜻하지않는다.
+- Pleos_Connect_v2_1(Android14/API34),2560×1440/160dpi; 앱0.1.0/code1,minSDK28/target35/compile36. JDK17·AndroidSDK36 및 아래환경설정으로빌드한다.
+- **실행제한:** release의HTTPS `LEARNING_API_ORIGIN`은미설정이고 debug전용TTSscope는비활성이다. 식별/학습연결준비상태만확인했으며실제기사낭독·차량/음성학습성공은미확인이다. 보호API를쓰려면유효한HTTPS주소·Supabase공개클라이언트설정·차량SDK/프로젝트권한을마련해다시빌드한다. 비밀값은소스에넣지않는다.
+
+관심뉴스·기록·설정과같은기사질문/말하기표현을보유하지만미연결기능을성공으로꾸미지않는다. 실제원본과합성UI샘플은구별한다. 참가정보/동의/서명을대신생성하거나이메일발송하지않았다.
+
+
 ## Before 제출 스냅샷 · 서명 release
 
 [서명 APK 다운로드](https://github.com/drive-english-lab/pleos-app/releases/download/submission-before-6d9927f/pleos-app-before-0.1.0-6d9927f-release.apk) · [Before prerelease/실행 안내·체크섬](https://github.com/drive-english-lab/pleos-app/releases/tag/submission-before-6d9927f)
