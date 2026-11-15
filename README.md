@@ -2,6 +2,12 @@
 
 Pleos Connect용 Android 앱이다. 기본 진입은 실제 프로필·catalog·대본·단일 기사 미디어 port에 연결한 제품 화면이다. 실제 전원 사실과 화면·미디어·직접 입력·Gleo의 허용 조건을 각각 확인한다. 연결 점검은 별도 destination으로 보존한다. schema5·Room5와 기사 질문·연습의 제품 연결 코드를 갖추며 실제 음성·전원·자료 승인을 별도 확인한다.
 
+## 실제 Main 진입·빈 관심 분야 요청 보완 · 2026-11-15
+
+같은 설치·기존 owner의 실제 Main에서 온보딩→연결 점검→뒤로와 HOME→재진입을 확인했다. 관심 분야가 비어 있을 때 Ktor가 빈 배열을 bare `topics` query key로 보내 서버에서 `validation_failed`로 거절되던 경로는 해당 키를 생략하도록 고쳤다. 비어 있지 않은 분야는 OpenAPI의 반복 키 전송을 유지한다.
+
+최종 실제 추가 GET은 Stored·분류6개·적격 기사0개였다. 정상 Main 복원 때 보호 세션 파일은 갱신됐으며 owner·설정·outbox는 같았다. 추가 GET 전후에는 보호 파일까지 모두 같았다. 기존 소유를 초기화하거나 온보딩 완료·권리·모델 승인을 채우지 않았다. 실제 HTTP 요청 URI 회귀2개, 별도 opt-in 원세션 GET 진단1개, debug/release·앱/data 테스트 APK·lint(error0/warning37)를 확인했다. 진단 성공은 실제 뉴스 재생·설정 적용·온보딩 완료·Gleo/직접 입력·실차 전체 통과가 아니다. 앞선 전체 회귀를 새로 실행한 것으로 합산하지 않는다.
+
 ## 현재 구현 · R7 기능별 허용과 음성 초기화
 
 원시 전원 UNKNOWN을 그대로 유지하며 Details는 실제 P·UXR·보이는 창·현재 owner로 판단한다. AUDIO/MEDIA와 MIC의 현재 값·출처 세대·권한 세대를 분리해 마이크 변경이 뉴스 재생을 취소하지 않게 했다. 실제 매체 포커스와 원 재생 명령은 별도로 검사한다. Suspend·STOP·입력 중단 뒤 늦은 저장·재생 준비가 자동 재개하지 않으며, 실제 출력 완료 사실은 원 owner/회차/저장소에 보존한다. 실제 background 실행 근거가 없는 경로는 계속 대기한다.
@@ -12,7 +18,7 @@ SDK3.3.1의 초기화 전에 listener를 등록하던 오류를 실제 호출로
 
 검증은 domain90, data156개 중155통과/실연동 기본 제외1, 플랫폼 고유30개(기존28+정리 결함2), renderer UI34개 중32통과/기본 제외 진단2다. 플랫폼28과 UI32는 전체 실행 뒤 실패에 관련된 사례만 선별 확인한 고유 결과이며 단일 전체 실행 통과가 아니다. 별도 opt-in 실제 차량·식별정보 읽기 각1과 중립 음성1도 통과했다. 마지막 debug/release·테스트 APK 빌드와 lint(error0/warning37), 계약 동기화4개를 확인했다.
 
-실제 target35 앱/SDK34에서 P·UXR 및 AUDIO/MEDIA/MIC current 정책과 저장 세션·소유·암호문 존재를 확인했다. raw power는 UNKNOWN, RECORD_AUDIO는 미허용이다. Main 실행 신호는 성공했으나 캡처에 OEM 화면만 남고 top-resumed timeout/REMOVE_TASK가 관찰돼 정상 Main/전체 흐름은 미확인이다. 합성 캡처·격리 SDK 결과로 대체하지 않는다. [통합 검증·현재 캡처](../docs/verification/learning-review-20261115/README.md).
+실제 target35 앱/SDK34에서 P·UXR 및 AUDIO/MEDIA/MIC current 정책과 저장 세션·소유·암호문 존재를 확인했다. raw power는 UNKNOWN, RECORD_AUDIO는 미허용이다. 초기 Main 시도는 OEM 화면과 top-resumed timeout/REMOVE_TASK만 관찰돼 미확인이었다. 후속 실제 Main 온보딩·진단 복귀는 위와 같이 확인했고, 전체 학습 흐름은 아직 미확인이다. 합성 캡처·격리 SDK 결과로 대체하지 않는다. [통합 검증·현재 캡처](../docs/verification/learning-review-20261115/README.md).
 
 ## 현재 제품 범위 · R6 Google 계정 제공 보류
 

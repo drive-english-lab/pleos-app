@@ -48,7 +48,9 @@ internal class KtorLearningTransport(origin: String, allowLocalHttp: Boolean = f
                 if (name == "topics" && path == "/v2/content/catalog") {
                     val topics = learningJson.parseToJsonElement(value).jsonArray
                     require(topics.all { it is JsonPrimitive && it.isString })
-                    parameters.appendAll(name, topics.map { it.jsonPrimitive.content })
+                    // Ktor retains an empty list as a bare query key. Omit it so the server
+                    // receives the OpenAPI default empty array, rather than an empty enum item.
+                    if (topics.isNotEmpty()) parameters.appendAll(name, topics.map { it.jsonPrimitive.content })
                 } else parameters.append(name, value)
             } }
             headers { headers.forEach { (name, value) -> append(name, value) } }
