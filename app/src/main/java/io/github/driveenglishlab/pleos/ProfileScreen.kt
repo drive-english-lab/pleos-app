@@ -44,7 +44,7 @@ fun ProfileScreen(state: ProductScreenState, send: (UiIntent) -> Unit) {
     Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(24.dp)) {
         Text("내 학습 기록", style = MaterialTheme.typography.headlineMedium)
         IdentityRecoveryNotice(state)
-        Text("로그인 없이 함께 쓰면 같은 기록으로 남아요. 계정 전환은 주차 중에 할 수 있어요", style = MaterialTheme.typography.bodySmall)
+        Text("이 차량에서 같은 학습 프로필을 함께 쓰면 같은 기록으로 남아요. 식별정보가 사라지거나 서버에 전송하지 못한 기록이 기기에서 사라지면 복구를 보장할 수 없어요", style = MaterialTheme.typography.bodySmall)
         LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(24.dp)) {
             item { Text("내가 말할 수 있게 된 내용", style = MaterialTheme.typography.titleLarge) }
             if (records.loading && records.page == null) item { ProductNotice("말·표현 기록을 불러오고 있어요") }
@@ -169,14 +169,15 @@ private fun SpeakingRecordDetail(state: ProductScreenState, record: WireProgress
 
 @Composable
 internal fun IdentityRecoveryNotice(state: ProductScreenState, allowUnbound: Boolean = false) {
-    state.identityRecovery?.takeIf { it.owner == null || it.owner == state.session.owner ||
-        (allowUnbound && state.session.owner == null && it.state != IdentityRecoveryState.RESTORED) }?.let { recovery ->
+    state.identityRecovery?.takeIf { (it.state != IdentityRecoveryState.RESTORED || state.session.access.ownerValid) &&
+        (it.owner == null || it.owner == state.session.owner ||
+        (allowUnbound && state.session.owner == null && it.state != IdentityRecoveryState.RESTORED)) }?.let { recovery ->
         ProductNotice(when (recovery.state) {
             IdentityRecoveryState.RESTORED -> "서버에 저장된 기록이 연결됐어요. 다른 기기에서 아직 전송하지 않은 기록은 포함되지 않을 수 있어요"
             IdentityRecoveryState.SYNC_PENDING -> "학습 기록의 동기화를 확인하고 있어요"
             IdentityRecoveryState.RECOVERY_RETRYABLE -> "같은 기록의 연결을 다시 시도하고 있어요"
             IdentityRecoveryState.IDENTITY_UNAVAILABLE -> "이 기기의 식별 정보를 확인할 수 없어요. 이전 미로그인 기록의 복구는 보장되지 않아요"
-            IdentityRecoveryState.ACCOUNT_SIGN_IN_REQUIRED -> "기존 계정의 기록을 연결하려면 로그인이 필요해요"
+            IdentityRecoveryState.ACCOUNT_SIGN_IN_REQUIRED -> "기존 연결을 확인하지 못했어요. 보호된 자료를 유지하며 연결 확인을 기다려요"
         })
     }
 }

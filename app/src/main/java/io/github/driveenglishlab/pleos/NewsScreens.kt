@@ -53,7 +53,7 @@ fun NewsScreens(state: ProductScreenState, send: (UiIntent) -> Unit, onDiagnosti
                         item { IdentityRecoveryNotice(state, allowUnbound = true) }
                         item { ProductStatus("이어서 이용할 준비를 확인해 주세요", state.recovery ?: "차량과 학습 연결을 확인하고 있어요",
                             loading = SessionOperationKind.PROFILE in state.session.activeOperations) {
-                            Text("저장된 연결만 다시 확인해요. 계정 선택이나 새 미로그인 프로필 생성은 하지 않아요",
+                            Text("저장된 식별정보와 같은 학습 연결을 다시 확인해요",
                                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             FlowRow(horizontalArrangement = Arrangement.spacedBy(24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                                 if (state.deletionPending) ProductButton("삭제 상태 다시 확인", { send(UiIntent.RetryDeletion(state.origin)) })
@@ -395,13 +395,13 @@ private fun SettingsPage(state: ProductScreenState, send: (UiIntent) -> Unit, di
             }
             if (!onboarding) item {
                 Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                    Text("학습 기록과 계정", style = MaterialTheme.typography.titleMedium)
+                    Text("학습 기록", style = MaterialTheme.typography.titleMedium)
                     AccountEntryPanel(state, send)
                     ProductButton("학습 기록 삭제", { deleteConfirmation = true }, enabled = !state.busy && !state.accountEntry.busy, secondary = true)
-                    ProductButton("이 차량에서 로그아웃", { logoutConfirmation = true }, enabled = !state.busy && !state.accountEntry.busy, secondary = true)
+                    if (io.github.driveenglishlab.pleos.data.CurrentAccountScope.accountActionsEnabled) ProductButton("이 차량에서 로그아웃", { logoutConfirmation = true }, enabled = !state.busy && !state.accountEntry.busy, secondary = true)
                 }
             }
-            item { Text("로그인 없이도 이 차량의 학습 기록을 이어갈 수 있어요", style = MaterialTheme.typography.bodySmall,
+            item { Text("같은 설치에서 식별정보가 유지되면 학습을 이어갈 수 있어요. 앱 재설치·차량 교체로 식별정보가 사라지면 기록 복구를 보장할 수 없어요. 서버에 전송하지 못한 기록은 기기에서 사라지면 복구할 수 없어요", style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant) }
         }
         FlowRow(horizontalArrangement = Arrangement.spacedBy(24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -415,10 +415,10 @@ private fun SettingsPage(state: ProductScreenState, send: (UiIntent) -> Unit, di
     }
     if (deleteConfirmation && state.canRead) AlertDialog(onDismissRequest = { deleteConfirmation = false },
         title = { Text("학습 기록을 삭제할까요?") },
-        text = { Text("현재 사용자 프로필의 모든 기기에서 듣기·연습 기록, 답변과 피드백, 이어하기를 삭제해요. 로그인과 관심 설정은 유지돼요") },
+        text = { Text("현재 사용자 프로필의 모든 기기에서 듣기·연습 기록, 답변과 피드백, 이어하기를 삭제해요. 현재 연결과 관심 설정은 유지돼요") },
         confirmButton = { ProductButton("학습 기록 삭제", { deleteConfirmation = false; send(UiIntent.DeleteHistory(state.origin)) }) },
         dismissButton = { ProductButton("취소", { deleteConfirmation = false }, secondary = true) })
-    if (logoutConfirmation && state.canRead) AlertDialog(onDismissRequest = { logoutConfirmation = false },
+    if (io.github.driveenglishlab.pleos.data.CurrentAccountScope.accountActionsEnabled && logoutConfirmation && state.canRead) AlertDialog(onDismissRequest = { logoutConfirmation = false },
         title = { Text("이 차량에서 로그아웃할까요?") },
         text = { Text("다른 기기의 로그인과 학습 기록은 유지해요. 이 차량은 새 미로그인 프로필로 바뀌어요") },
         confirmButton = { ProductButton("로그아웃", { logoutConfirmation = false; send(UiIntent.Logout(state.origin)) }) },

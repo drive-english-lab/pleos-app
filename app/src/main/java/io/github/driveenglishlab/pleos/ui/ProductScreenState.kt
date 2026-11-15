@@ -25,10 +25,11 @@ enum class AccountEntryPhase { IDLE, CHECKING_PROVIDER, PREPARING, AUTHENTICATIN
 data class AccountEntryState(val phase: AccountEntryPhase = AccountEntryPhase.IDLE, val action: AccountEntryAction? = null,
     val message: String? = null, val linked: Boolean = false, val hasSession: Boolean = false,
     val canLaunch: Boolean = false, val canRetryTransition: Boolean = false) {
-    val busy get() = phase in setOf(AccountEntryPhase.CHECKING_PROVIDER, AccountEntryPhase.PREPARING, AccountEntryPhase.AUTHENTICATING, AccountEntryPhase.VERIFYING, AccountEntryPhase.RECOVERING)
+    val busy get() = io.github.driveenglishlab.pleos.data.CurrentAccountScope.accountActionsEnabled && phase in setOf(AccountEntryPhase.CHECKING_PROVIDER, AccountEntryPhase.PREPARING, AccountEntryPhase.AUTHENTICATING, AccountEntryPhase.VERIFYING, AccountEntryPhase.RECOVERING)
     val canCancel get() = busy
 }
 fun accountEntryAllowed(view: SessionView, requireFocus: Boolean = true): Boolean =
+    io.github.driveenglishlab.pleos.data.CurrentAccountScope.accountActionsEnabled &&
     view.access.power == PowerAvailability.ALLOWED && view.access.safety.position == VehiclePosition.PARKED &&
         view.access.safety.uxKnown && view.access.safety.detailsAllowed && view.access.safety.directInputAllowed && !view.access.safety.systemBlocked &&
         view.access.window.visible && (!requireFocus || view.access.window.focused) &&
@@ -156,3 +157,14 @@ data class LearningPresentation(val owner: OwnerContext? = null, val articleTitl
     val questionOrigin: QuestionOrigin? = null, val questionStatus: LoadStatus = LoadStatus.NOT_REQUESTED,
     val questionAnswer: String? = null, val questionNotice: String? = null, val titleConfirmationUsed: Boolean = false,
     val microphonePermissionNeeded: Boolean = false)
+
+/** R6 current product admission; the retained account SDK/repository is future-only. */
+fun currentProductIntentAllowed(intent: UiIntent): Boolean =
+    io.github.driveenglishlab.pleos.data.CurrentAccountScope.accountActionsEnabled ||
+        (intent !is UiIntent.AccountEntry && intent !is UiIntent.Logout)
+
+fun protectedConnectionMessage(reason: String): String = when (reason) {
+    "ACCOUNT_TRANSITION_PRESERVED" -> "이전에 시작한 연결 변경을 보존하고 있어요. 기존 기록을 유지한 채 연결 확인을 기다려요"
+    "PROTECTED_IDENTITY_UNAVAILABLE" -> "저장된 식별정보를 확인하지 못했어요. 기존 자료를 보존하고 있어요. 식별정보가 사라진 경우 기록 복구를 보장할 수 없어요"
+    else -> "저장된 연결을 확인하지 못했어요. 기존 기록을 보존하고 있으니 연결 상태를 확인한 뒤 다시 시도해 주세요"
+}

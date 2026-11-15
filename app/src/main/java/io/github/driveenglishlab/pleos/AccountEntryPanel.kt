@@ -23,12 +23,34 @@ import io.github.driveenglishlab.pleos.ui.UiIntent
 import io.github.driveenglishlab.pleos.ui.accountEntryAllowed
 import io.github.driveenglishlab.pleos.ui.components.ProductButton
 
+/** Current storage status. No account controls are offered in R6. */
+@Composable
+internal fun AccountEntryPanel(state: ProductScreenState, send: (UiIntent) -> Unit) {
+    if (io.github.driveenglishlab.pleos.data.CurrentAccountScope.accountActionsEnabled) {
+        FutureAccountEntryPanel(state, send)
+        return
+    }
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        Text("저장과 동기화", style = MaterialTheme.typography.titleMedium,
+            modifier = Modifier.semantics { heading() })
+        Text(if (state.accountEntry.linked) "현재 연결된 프로필의 기록을 유지해요" else "현재 학습 프로필의 기록을 유지해요",
+            style = MaterialTheme.typography.bodyMedium)
+        Text("기기에 저장한 기록은 연결이 확인되면 같은 프로필로 서버와 동기화해요",
+            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text("같은 설치에서 식별정보가 유지되면 학습을 이어갈 수 있어요. 앱을 다시 설치하거나 차량을 바꿔 식별정보가 사라지면 기록 복구를 보장할 수 없어요",
+            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text("서버에 전송하지 못한 기록이 기기에서 사라지면 복구할 수 없어요",
+            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
+
+/** Retained future renderer. The current product never admits its actions. */
 /** Presentation only: launch is an explicit intent, never a credential or owner admission.
  * Uses the host's same current physical/input gate. Source-less restore omits ownerValid
  * only; it cannot relax vehicle/window/power or an in-progress voice/input restriction. */
 @Composable
 @OptIn(ExperimentalLayoutApi::class)
-internal fun AccountEntryPanel(state: ProductScreenState, send: (UiIntent) -> Unit) {
+private fun FutureAccountEntryPanel(state: ProductScreenState, send: (UiIntent) -> Unit) {
     val entry = state.accountEntry
     val physicalInput = accountEntryAllowed(state.session)
     val sourceReady = entry.hasSession && state.session.owner != null && state.session.access.ownerValid &&
