@@ -1,5 +1,19 @@
 # Pleos Android app
 
+## Before 제출 스냅샷 · 서명 release
+
+[서명 APK 다운로드](https://github.com/drive-english-lab/pleos-app/releases/download/submission-before-6d9927f/pleos-app-before-0.1.0-6d9927f-release.apk) · [Before prerelease/실행 안내·체크섬](https://github.com/drive-english-lab/pleos-app/releases/tag/submission-before-6d9927f)
+
+- APK 빌드 source: [`6d9927f9ee9ed29772a9c015e95661715617c0ec`](https://github.com/drive-english-lab/pleos-app/tree/6d9927f9ee9ed29772a9c015e95661715617c0ec). 이 README 연결만 추가한 후속 commit과 APK 빌드 SHA를 구분한다. After 비교안은 포함하지 않는다.
+- 임시 파일명: `pleos-app-before-0.1.0-6d9927f-release.apk` — 확정 팀명/최종 제출 파일명이 아니다. 71,543,392bytes, SHA-256 `c732aa8724ef0d5788b3447dd50268d79823af99510cd01d52656795e35a61eb`. 로그인 없이 익명 HTTP206 다운로드와 원격 asset digest 일치를 확인했다.
+- 실제 release variant·debuggable=false·기존 개발 인증서로 서명했다. APK signature 검증과 교체 설치/정상 Main 시작을 확인했으며 별도 운영/Play 서명 인증서를 뜻하지 않는다. keystore/비밀번호·서버키·개인 기록은 공유하지 않는다.
+- 검증 환경: Pleos_Connect_v2_1·Android14/API34·2560×1440, Pleos TTS/STT SDK3.3.1. 앱은 minSDK28/targetSDK35/compileSDK36, version0.1.0/code1이다. 빌드는 JDK17·Android SDK36 및 아래 로컬 설정을 사용한다.
+- **현재 기능 제한:** release의 `LEARNING_API_ORIGIN`이 미설정이라 보호 학습 API 연결은 준비 상태다. debug의 로컬 API 주소와 R8 개발 전용 원문 TTS scope를 release에 적용하지 않았다. 실제 CarService ANR/서비스 부재로 차량 조건·원문 낭독·실차 동작은 미확인이다. 설치/시작 성공을 온라인 학습이나 음성 기능 성공으로 표시하지 않는다.
+- 보호 API를 실제 제공하려면 로컬 환경에 유효한 HTTPS `LEARNING_API_ORIGIN`과 README의 Supabase 공개 클라이언트 설정을 마련하고 다시 빌드해야 한다. 차량 SDK·프로젝트 권한·자료/음성 준비도 별도다. 키를 소스에 넣거나 권한/차량 상태·기록을 가짜로 채우지 않는다.
+
+이 prerelease는 PUBLIC 저장소의 고정 Before 배포 자산이며 main merge·기본 branch·공개범위 변경·이메일 제출은 수행하지 않았다.
+
+
 ## Product UI port · 2026-11-15
 
 `refactor/6-product-ui`는 제품 `1811d7e`에서 분리한 UI 개선이다. 단일 대본·실제 구간 중앙 추적·하단 중앙 재생/이전·다음 구간·현재 기사 메뉴·펼치는 설정을 실제 Compose 화면에 반영한다. 과거 debug 샘플 서비스를 병합하지 않는다. [변경 범위·렌더러 검증·제품 합류](docs/ui-product/README.md)를 따른다. 제품의 후속 음성 커밋과 합류한 실제 앱/촬영 결과는 별도 검증 대상이다.
