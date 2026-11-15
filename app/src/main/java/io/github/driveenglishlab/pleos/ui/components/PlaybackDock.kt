@@ -21,12 +21,12 @@ private fun time(value: Long): String { val s = value.coerceAtLeast(0) / 1000; r
 fun PlaybackDock(state: ProductScreenState, send: (UiIntent) -> Unit, modifier: Modifier = Modifier) {
     val work = state.session.listening
     val duration = work?.durationMs
-    val available = state.mediaAllowed && work?.stage != ListeningStage.ARTICLE_OFFER && !state.busy
+    // Legacy time-only media has no authoritative segment boundaries. Keep segment actions disabled.
     val pause = state.session.mediaPlaying || state.session.intent == PlaybackIntent.PLAY
     val transport: @Composable () -> Unit = {
         Row(horizontalArrangement = Arrangement.spacedBy(24.dp), verticalAlignment = Alignment.CenterVertically) {
-            IconButton({ send(UiIntent.Seek(state.origin, -10_000)) }, Modifier.size(ProductMetrics.touch), enabled = available) {
-                Icon(painterResource(R.drawable.news_rotate_ccw), "10초 전", Modifier.size(32.dp))
+            IconButton({}, Modifier.size(ProductMetrics.touch), enabled = false) {
+                Icon(painterResource(R.drawable.news_skip_back), "이전 구간", Modifier.size(32.dp))
             }
             FilledIconButton({ send(UiIntent.PlayPause(state.origin, !pause)) }, Modifier.size(ProductMetrics.play),
                 enabled = state.session.mediaConnected && (pause || state.mediaAllowed && work?.stage != ListeningStage.ARTICLE_OFFER && !state.busy), shape = CircleShape,
@@ -34,8 +34,8 @@ fun PlaybackDock(state: ProductScreenState, send: (UiIntent) -> Unit, modifier: 
                 Icon(painterResource(if (pause) R.drawable.news_pause else R.drawable.news_play),
                     if (pause) "일시정지" else "재생", Modifier.size(36.dp))
             }
-            IconButton({ send(UiIntent.Seek(state.origin, 10_000)) }, Modifier.size(ProductMetrics.touch), enabled = available) {
-                Icon(painterResource(R.drawable.news_rotate_cw), "10초 후", Modifier.size(32.dp))
+            IconButton({}, Modifier.size(ProductMetrics.touch), enabled = false) {
+                Icon(painterResource(R.drawable.news_skip_forward), "다음 구간", Modifier.size(32.dp))
             }
         }
     }
@@ -50,7 +50,7 @@ fun PlaybackDock(state: ProductScreenState, send: (UiIntent) -> Unit, modifier: 
         }
     }
     Surface(modifier.fillMaxWidth(), color = MaterialTheme.colorScheme.surfaceContainerLowest) {
-        BoxWithConstraints(Modifier.padding(24.dp)) {
+        BoxWithConstraints(Modifier.padding(horizontal = 24.dp, vertical = 12.dp)) {
             if (maxWidth >= 1050.dp) Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) { position() }
                 transport()

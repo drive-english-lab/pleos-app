@@ -44,9 +44,10 @@ fun Source6ProfileScreen(state: ProductScreenState, send: (UiIntent) -> Unit) {
     } }.toSet()
     Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(24.dp)) {
         Text("내 학습 기록", style = MaterialTheme.typography.headlineMedium)
-        IdentityRecoveryNotice(state)
-        Text("이 차량에서 같은 학습 프로필을 함께 쓰면 같은 기록으로 남아요. 식별정보가 사라지거나 서버에 전송하지 못한 기록이 기기에서 사라지면 복구를 보장할 수 없어요", style = MaterialTheme.typography.bodySmall)
         LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(24.dp)) {
+            item { IdentityRecoveryNotice(state) }
+            item { Text("이 차량에서 같은 학습 프로필을 함께 쓰면 같은 기록으로 남아요. 식별정보가 사라지거나 서버에 전송하지 못한 기록이 기기에서 사라지면 복구를 보장할 수 없어요",
+                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
             item { Text("내가 말할 수 있게 된 내용", style = MaterialTheme.typography.titleLarge) }
             if (records.loading) item { ProductNotice("말·표현 기록을 불러오고 있어요") }
             if (records.failed) item { ProductNotice("말·표현 기록을 불러오지 못했어요. 기존 기록은 유지돼요") }

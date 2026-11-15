@@ -42,7 +42,10 @@ android {
         targetSdk = 35
         versionCode = 1
         versionName = "0.1.0"
-        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        // Explicit renderer fixtures can run without starting the production SDK/Auth graph.
+        // Default/integration tests continue to use the real Application.
+        testInstrumentationRunner = if (providers.gradleProperty("rendererOnlyTests").orNull == "true")
+            "io.github.driveenglishlab.pleos.RendererTestRunner" else "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("String", "LEARNING_API_ORIGIN", "\"$releaseLearningOrigin\"")
         buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", "\"$googleWebClientId\"")
     }

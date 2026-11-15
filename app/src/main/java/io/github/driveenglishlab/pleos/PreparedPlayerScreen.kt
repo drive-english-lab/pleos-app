@@ -44,48 +44,18 @@ internal fun PreparedPlayerScreen(state: ProductScreenState, send: (UiIntent) ->
         if (state.session.reviewPolicy.context?.selectionId == work.selectionId && state.session.reviewPolicy.effectiveEndPolicy == ReviewEndPolicy.MANUAL_HISTORY)
             Text("기록에서 다시 듣는 기사예요. 다음 뉴스는 직접 골라 주세요", style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant)
-        BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
-            val wide = maxWidth >= 1200.dp
-            Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(24.dp)) {
-                Column(Modifier.weight(if (wide) 2.25f else 1f), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                    if (!wide) PreparedActions(state, send, onFormat)
-                    if (state.followupWaiting) {
-                        ProductStatus("후속 듣기 자료를 확인하고 있어요", "같은 기사와 듣던 단계는 유지돼요. 다시 확인하거나 후속 듣기를 건너뛸 수 있어요",
-                            Modifier.weight(1f), loading = state.busy) {
-                            FlowRow(horizontalArrangement = Arrangement.spacedBy(24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                                ProductButton("다시 확인", { send(UiIntent.RetryFollowup(state.origin)) }, busy = state.busy)
-                                ProductButton("후속 듣기 건너뛰기", { send(UiIntent.SkipFollowup(state.origin)) }, enabled = !state.busy, secondary = true)
-                            }
-                        }
-                    } else PreparedReader(state, script, Modifier.weight(1f).fillMaxWidth())
-                }
-                if (wide) Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(24.dp)) {
-                    PreparedActions(state, send, onFormat)
-                    Text("기사 질문은 차량에서 확인된 입력 경로로 이용해요", style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+        ArticleActions(state, send, onFormat, prepared = true)
+        if (state.followupWaiting) {
+            ProductStatus("후속 듣기 자료를 확인하고 있어요", "같은 기사와 듣던 단계는 유지돼요. 다시 확인하거나 후속 듣기를 건너뛸 수 있어요",
+                Modifier.weight(1f), loading = state.busy) {
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    ProductButton("다시 확인", { send(UiIntent.RetryFollowup(state.origin)) }, busy = state.busy)
+                    ProductButton("후속 듣기 건너뛰기", { send(UiIntent.SkipFollowup(state.origin)) }, enabled = !state.busy, secondary = true)
                 }
             }
-        }
+        } else PreparedReader(state, script, Modifier.weight(1f).fillMaxWidth())
         if (work.stage == ListeningStage.ARTICLE_OFFER) PreparedOffer(state, send)
         PreparedPlaybackDock(state, send)
-    }
-}
-
-@Composable
-@OptIn(ExperimentalLayoutApi::class)
-private fun PreparedActions(state: ProductScreenState, send: (UiIntent) -> Unit, onFormat: (ListeningMode) -> Unit) {
-    val mode = state.session.preparedListening?.content?.listeningMode
-    FlowRow(horizontalArrangement = Arrangement.spacedBy(24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        ProductButton(if (state.listenOnlyActive) "기본 진행으로 돌아가기" else "오늘은 듣기만", {
-            send(UiIntent.ListeningOnly(state.origin, !state.listenOnlyActive))
-        }, enabled = !state.busy, secondary = true)
-        ProductButton("기사 정보", { send(UiIntent.Navigate(state.origin, SessionScreen.ARTICLE_INFO)) }, secondary = true)
-        ProductButton("문장 도움", { send(UiIntent.LoadSentences(state.origin)) }, enabled = !state.busy, secondary = true)
-        ProductButton(if (state.formatPendingMode != null) "형식 변경 다시 확인" else if (mode == ListeningMode.BRIEFING) "원문으로 듣기" else "브리핑으로 듣기", {
-            onFormat(state.formatPendingMode ?: if (mode == ListeningMode.BRIEFING) ListeningMode.ORIGINAL_FULL else ListeningMode.BRIEFING)
-        }, enabled = !state.busy, secondary = true)
-        ProductButton("말하기 연습", { send(UiIntent.StartPractice(state.origin)) }, enabled = !state.busy, secondary = true)
-        ProductButton("기사에 질문하기", { send(UiIntent.OpenArticleQuestion(state.origin)) }, enabled = !state.busy, secondary = true)
     }
 }
 
@@ -99,8 +69,6 @@ private fun PreparedOffer(state: ProductScreenState, send: (UiIntent) -> Unit) {
     }
 }
 
-private data class PreparedReaderLine(val key: String, val text: String, val current: Boolean)
-
 @Composable
 private fun PreparedReader(state: ProductScreenState, script: SourcePublicScript?, modifier: Modifier) {
     val work = state.session.preparedListening ?: return
@@ -111,26 +79,24 @@ private fun PreparedReader(state: ProductScreenState, script: SourcePublicScript
             ProductStatus(if (state.readerStatus == LoadStatus.LOADING) "대본을 불러오고 있어요" else "이 대본을 지금 확인할 수 없어요",
                 "선택한 기사와 구간은 유지돼요. 다른 대본으로 바꾸지 않아요", loading = state.readerStatus == LoadStatus.LOADING)
         } else key(state.session.owner, script.scriptId, script.textHash) {
-            val lines = remember(script.scriptId, script.textHash, script.manifest, currentIndex) {
+            val lines = remember(script.scriptId, script.textHash, script.manifest) {
                 val manifest = script.manifest?.takeIf { it.scriptId == script.scriptId.toString() && it.scriptHash == script.textHash &&
                     it.manifestId == work.cursor.manifestId.toString() && it.manifestHash == work.cursor.manifestHash &&
                     it.segmentsVersion == work.cursor.manifestVersion.toLong() }
                 val count = script.text.codePointCount(0, script.text.length).toLong()
                 if (manifest != null && manifest.segments.all { it.startCp >= 0 && it.endCp > it.startCp && it.endCp <= count }) {
-                    manifest.segments.map { segment -> PreparedReaderLine(segment.segmentId,
+                    manifest.segments.map { segment -> TranscriptLine(segment.segmentId,
                         script.text.substring(script.text.offsetByCodePoints(0, segment.startCp.toInt()),
-                            script.text.offsetByCodePoints(0, segment.endCp.toInt())), segment.order == currentIndex?.toLong()) }
-                } else script.text.split(Regex("\n\\s*\n")).filter { it.isNotBlank() }
-                    .mapIndexed { index, text -> PreparedReaderLine("paragraph/$index", text, false) }
+                            script.text.offsetByCodePoints(0, segment.endCp.toInt()))) }
+                } else script.text.split(Regex("""\n\s*\n""")).filter { it.isNotBlank() }
+                    .mapIndexed { index, text -> TranscriptLine("paragraph/$index", text) }
             }
-            LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(horizontal = 32.dp, vertical = 28.dp),
-                verticalArrangement = Arrangement.spacedBy(24.dp)) {
-                itemsIndexed(lines, key = { _, line -> line.key }) { _, line ->
-                    Text(line.text, style = MaterialTheme.typography.bodyLarge,
-                        modifier = Modifier.fillMaxWidth().then(if (line.current) Modifier.background(MaterialTheme.colorScheme.primaryContainer) else Modifier)
-                            .semantics { if (line.current) stateDescription = "현재 구간" })
-                }
-            }
+            val manifest = script.manifest?.takeIf { it.scriptId == script.scriptId.toString() && it.scriptHash == script.textHash &&
+                it.manifestId == work.cursor.manifestId.toString() && it.manifestHash == work.cursor.manifestHash &&
+                it.segmentsVersion == work.cursor.manifestVersion.toLong() }
+            val active = currentIndex?.let { index -> manifest?.segments?.firstOrNull { it.order == index.toLong() }?.segmentId }
+                ?.let { id -> lines.indexOfFirst { it.key == id }.takeIf { it >= 0 } }
+            FocusedTranscript("${script.scriptId}/${script.textHash}/${work.cursor.manifestId}", lines, active, Modifier.fillMaxSize())
         }
     }
 }
@@ -151,7 +117,7 @@ internal fun PreparedPlaybackDock(state: ProductScreenState, send: (UiIntent) ->
     val transport: @Composable () -> Unit = {
         Row(horizontalArrangement = Arrangement.spacedBy(24.dp), verticalAlignment = Alignment.CenterVertically) {
             IconButton({ send(UiIntent.Seek(state.origin, -1)) }, Modifier.size(ProductMetrics.touch), enabled = available && index != null && index > 0) {
-                Icon(painterResource(R.drawable.news_rotate_ccw), "이전 구간", Modifier.size(32.dp))
+                Icon(painterResource(R.drawable.news_skip_back), "이전 구간", Modifier.size(32.dp))
             }
             FilledIconButton({ send(UiIntent.PlayPause(state.origin, !playing)) }, Modifier.size(ProductMetrics.play),
                 enabled = playing || available, shape = CircleShape,
@@ -159,7 +125,7 @@ internal fun PreparedPlaybackDock(state: ProductScreenState, send: (UiIntent) ->
                 Icon(painterResource(if (playing) R.drawable.news_pause else R.drawable.news_play), if (playing) "일시정지" else "재생", Modifier.size(36.dp))
             }
             IconButton({ send(UiIntent.Seek(state.origin, 1)) }, Modifier.size(ProductMetrics.touch), enabled = available && index != null && count != null && index < count - 1) {
-                Icon(painterResource(R.drawable.news_rotate_cw), "다음 구간", Modifier.size(32.dp))
+                Icon(painterResource(R.drawable.news_skip_forward), "다음 구간", Modifier.size(32.dp))
             }
         }
     }
@@ -180,7 +146,7 @@ internal fun PreparedPlaybackDock(state: ProductScreenState, send: (UiIntent) ->
         }, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
     Surface(Modifier.fillMaxWidth(), color = MaterialTheme.colorScheme.surfaceContainerLowest) {
-        BoxWithConstraints(Modifier.padding(24.dp)) {
+        BoxWithConstraints(Modifier.padding(horizontal = 24.dp, vertical = 12.dp)) {
             if (maxWidth >= 1050.dp) Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) { position() }
                 transport()

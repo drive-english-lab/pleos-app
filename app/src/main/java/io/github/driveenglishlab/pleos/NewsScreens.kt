@@ -42,7 +42,7 @@ fun NewsScreens(state: ProductScreenState, send: (UiIntent) -> Unit, onDiagnosti
         navigate(if ((state.session.listening == null && state.session.preparedListening == null) || state.session.screen in setOf(SessionScreen.PLAYER, SessionScreen.ARTICLE_OFFER))
             SessionScreen.NEWS else SessionScreen.PLAYER)
     }
-    Column(Modifier.fillMaxSize().safeDrawingPadding().padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+    Column(Modifier.fillMaxSize().safeDrawingPadding().padding(24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         ProductHeader(state, onNews = { navigate(SessionScreen.NEWS) }, onHistory = { navigate(SessionScreen.HISTORY) },
             onSettings = { navigate(SessionScreen.SETTINGS) })
         state.notice?.let { ProductNotice(it) }
@@ -95,7 +95,7 @@ fun NewsScreens(state: ProductScreenState, send: (UiIntent) -> Unit, onDiagnosti
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(24.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text("같은 기사로 말하기", style = MaterialTheme.typography.titleLarge,
                         modifier = Modifier.weight(1f).semantics { heading() })
-                    ProductButton("닫기", { send(UiIntent.FinishPractice(state.origin)) }, secondary = true)
+                    ProductButton("기사로 돌아가기", { send(UiIntent.FinishPractice(state.origin)) }, secondary = true)
                 }
                 Box(Modifier.weight(1f).fillMaxWidth()) { PracticeScreen(state, send, onMicrophonePermission) }
             }
@@ -130,15 +130,17 @@ private fun ProductHeader(state: ProductScreenState, onNews: () -> Unit, onHisto
         }
     }
     BoxWithConstraints(Modifier.fillMaxWidth()) {
-        if (maxWidth >= 900.dp) Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
+        if (maxWidth >= 760.dp) Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(24.dp)) {
             brand(); Spacer(Modifier.weight(1f))
-            if (navigation) { ProductButton("뉴스", onNews, secondary = true); ProductButton("기록", onHistory, secondary = true) }
+            if (navigation) { ProductNavigationChoice("뉴스", state.session.screen !in setOf(SessionScreen.HISTORY, SessionScreen.SAVED, SessionScreen.SETTINGS), onNews)
+                ProductNavigationChoice("기록", state.session.screen in setOf(SessionScreen.HISTORY, SessionScreen.SAVED), onHistory) }
             settings()
         } else Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) { brand(); Spacer(Modifier.weight(1f)); settings() }
             if (navigation) Row(horizontalArrangement = Arrangement.spacedBy(24.dp)) {
-                ProductButton("뉴스", onNews, secondary = true); ProductButton("기록", onHistory, secondary = true)
+                ProductNavigationChoice("뉴스", state.session.screen !in setOf(SessionScreen.HISTORY, SessionScreen.SAVED, SessionScreen.SETTINGS), onNews)
+                ProductNavigationChoice("기록", state.session.screen in setOf(SessionScreen.HISTORY, SessionScreen.SAVED), onHistory)
             }
         }
     }
@@ -255,40 +257,11 @@ private fun PlayerPage(state: ProductScreenState, send: (UiIntent) -> Unit, onFo
             Text(if (source.status == "verified") "원문 자료 수준 · ${source.band ?: "미확인"}" else "원문 자료 수준은 아직 확인되지 않았어요", style = MaterialTheme.typography.bodySmall)
             if (!frozen.canPractice) ProductNotice("영어 듣기는 가능해요. 이 단계의 말하기 질문을 준비하고 있어요")
         }
-        BoxWithConstraints(Modifier.weight(1f)) {
-            val wide = maxWidth >= 1200.dp
-            Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(24.dp)) {
-                Column(Modifier.weight(if (wide) 2.25f else 1f), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                    if (!wide) PlayerActions(state, send, onFormat, compact = true)
-                    NewsReader(state, Modifier.weight(1f).fillMaxWidth())
-                }
-                if (wide) Column(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(24.dp)) {
-                    PlayerActions(state, send, onFormat)
-                    if (work.stage != ListeningStage.ARTICLE_OFFER) Text("기사 질문은 차량에서 확인된 입력 경로로 이용해요", style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-            }
-        }
+        ArticleActions(state, send, onFormat, prepared = false)
+        NewsReader(state, Modifier.weight(1f).fillMaxWidth())
         if (work.stage == ListeningStage.ARTICLE_OFFER) OfferActions(state, send, compact = true)
         PlaybackDock(state, send)
     }
-}
-
-@Composable
-@OptIn(ExperimentalLayoutApi::class)
-private fun PlayerActions(state: ProductScreenState, send: (UiIntent) -> Unit, onFormat: (ListeningMode) -> Unit, compact: Boolean = false) {
-    val mode = state.session.listening?.content?.listeningMode
-    val actions: @Composable () -> Unit = {
-        ProductButton(if (state.listenOnlyActive) "말하기 제안 다시 받기" else "오늘은 듣기만", { send(UiIntent.ListeningOnly(state.origin, !state.listenOnlyActive)) }, secondary = true)
-        ProductButton("기사 정보", { send(UiIntent.Navigate(state.origin, SessionScreen.ARTICLE_INFO)) }, secondary = true)
-        ProductButton(if (state.formatPendingMode != null) "형식 변경 다시 확인" else if (mode == ListeningMode.BRIEFING) "원문으로 듣기" else "브리핑으로 듣기", {
-            onFormat(state.formatPendingMode ?: if (mode == ListeningMode.BRIEFING) ListeningMode.ORIGINAL_FULL else ListeningMode.BRIEFING)
-        }, enabled = !state.busy, secondary = true)
-        ProductButton("말하기 연습", { send(UiIntent.StartPractice(state.origin)) }, enabled = !state.busy, secondary = true)
-        ProductButton("기사에 질문하기", { send(UiIntent.OpenArticleQuestion(state.origin)) }, enabled = !state.busy, secondary = true)
-    }
-    if (compact) FlowRow(horizontalArrangement = Arrangement.spacedBy(24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) { actions() }
-    else Column(verticalArrangement = Arrangement.spacedBy(16.dp)) { actions() }
 }
 
 @Composable
@@ -344,6 +317,8 @@ private fun SettingsPage(state: ProductScreenState, send: (UiIntent) -> Unit, di
     var deleteConfirmation by remember(state.session.owner) { mutableStateOf(false) }
     var logoutConfirmation by remember(state.session.owner) { mutableStateOf(false) }
     val onboarding = !draft.original.onboardingComplete
+    var openSections by remember(state.session.owner, onboarding) { mutableStateOf(if (onboarding) setOf("topics") else emptySet<String>()) }
+    fun toggleSection(id: String) { openSections = if (id in openSections) openSections - id else openSections + id }
     val categories = state.categoryConfig?.categories?.takeIf { it.size == 6 && it.map { category -> category.id }.distinct().size == 6 &&
         it.map { category -> category.displayOrder }.toSet() == (0L..5L).toSet() }?.sortedBy { it.displayOrder }.orEmpty()
     val topics = categories.filter { it.active }
@@ -352,7 +327,8 @@ private fun SettingsPage(state: ProductScreenState, send: (UiIntent) -> Unit, di
         Text(if (onboarding) "어떤 뉴스를 들을까요?" else "듣기 설정", style = MaterialTheme.typography.headlineMedium,
             modifier = Modifier.semantics { heading() })
         LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-            item { Text("관심 분야", style = MaterialTheme.typography.titleMedium) }
+            item { SettingsSectionHeader("관심 분야", topics.filter { it.id in draft.topics }.joinToString(" · ") { it.displayName }.ifBlank { "하나 이상 선택해 주세요" }, "topics" in openSections) { toggleSection("topics") } }
+            if ("topics" in openSections) {
             if (categories.isEmpty()) item {
                 ProductNotice("관심 분야 설정을 확인하지 못했어요. 기존 선택은 유지돼요")
                 ProductButton("관심 분야 다시 확인", { send(UiIntent.Refresh(state.origin)) }, busy = state.busy, secondary = true)
@@ -366,15 +342,21 @@ private fun SettingsPage(state: ProductScreenState, send: (UiIntent) -> Unit, di
                     description = if (categories.isEmpty()) "분야 설정을 확인할 때까지 기존 선택을 유지해요"
                     else "기존 선택을 유지하고 있어요. 현재 선택할 수 있는 관심 분야에는 없어요")
             }
-            item { Text("영어 듣기 형식", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 24.dp)) }
+            }
+            item { SettingsSectionHeader("영어 듣기 형식", if (draft.listeningMode == "briefing") "짧은 영어 브리핑" else "영어 원문 전체", "mode" in openSections) { toggleSection("mode") } }
+            if ("mode" in openSections) {
             item { ChoiceRow("영어 원문 전체", draft.listeningMode == "original_full", { send(UiIntent.Mode(state.origin, "original_full")) }, enabled = !state.busy) }
             item { ChoiceRow("짧은 영어 브리핑", draft.listeningMode == "briefing", { send(UiIntent.Mode(state.origin, "briefing")) }, enabled = !state.busy) }
-            item { Text("영어 기사 뒤에 들을 내용", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 24.dp)) }
+            }
+            item { SettingsSectionHeader("기사 뒤에 들을 내용", when (draft.followup) { "none" -> "추가 없이 듣기"; "en_summary" -> "영어 요약"; "ko_summary" -> "한국어 요약"; "ko_translation" -> "한국어 전체 번역"; else -> "선택해 주세요" }, "followup" in openSections) { toggleSection("followup") } }
+            if ("followup" in openSections) {
             items(listOf("none" to "추가 없이 듣기", "en_summary" to "영어 요약", "ko_summary" to "한국어 요약", "ko_translation" to "한국어 전체 번역")) { (value, label) ->
                 ChoiceRow(label, draft.followup == value, { send(UiIntent.FollowupChoice(state.origin, value)) },
                     description = if (value == "en_summary" && draft.listeningMode == "briefing") "브리핑을 들은 뒤에는 생략해요" else null, enabled = !state.busy)
             }
-            item { Text("다음 기사의 연습 단계", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 24.dp)) }
+            }
+            item { SettingsSectionHeader("다음 기사의 연습 단계", bandLabel(state.bandDraft ?: state.learningPreference.band), "band" in openSections) { toggleSection("band") } }
+            if ("band" in openSections) {
             items(LearningBand.entries) { band ->
                 ChoiceRow(bandLabel(band), (state.bandDraft ?: state.learningPreference.band) == band, { send(UiIntent.Band(state.origin, band)) },
                     description = "다음 새 기사부터 적용해요. 현재 기사와 연습은 유지돼요", enabled = !state.busy)
@@ -382,10 +364,13 @@ private fun SettingsPage(state: ProductScreenState, send: (UiIntent) -> Unit, di
             if (state.learningPreference.pending) item { ProductNotice("단계 선택을 기기에 저장했어요. 서버 동기화를 기다리고 있어요") }
             if (state.learningPreference.conflict) item { ProductNotice("다른 곳에서 단계가 바뀌었어요. 다음 기사 전에 현재 선택을 다시 확인해 주세요") }
             item { RecommendationSection(state, send) }
-            item { Text("화면 밝기", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 24.dp)) }
+            }
+            item { SettingsSectionHeader("화면 테마", when (state.appearanceDraft) { DeviceAppearance.SYSTEM -> "기기 설정에 맞추기"; DeviceAppearance.LIGHT -> "밝게"; DeviceAppearance.DARK -> "어둡게" }, "appearance" in openSections) { toggleSection("appearance") } }
+            if ("appearance" in openSections) {
             items(DeviceAppearance.entries) { theme ->
                 ChoiceRow(when (theme) { DeviceAppearance.SYSTEM -> "기기 설정에 맞추기"; DeviceAppearance.LIGHT -> "밝게"; DeviceAppearance.DARK -> "어둡게" },
                     state.appearanceDraft == theme, { send(UiIntent.Appearance(state.origin, theme)) }, enabled = !state.busy)
+            }
             }
             item {
                 ProductButton("설정 미리듣기", { send(UiIntent.PreviewSettings(state.origin)) },

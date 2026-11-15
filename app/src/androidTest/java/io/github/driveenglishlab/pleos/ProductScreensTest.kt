@@ -162,22 +162,21 @@ class ProductScreensTest {
         }
     }
 
-    @Test fun readerViewAndSeekSendTypedIntentsWithoutChangingPlaybackOrCreatingPractice() {
+    @Test fun readerLanguageAndPracticeKeepTypedIntentsWithoutLegacyTimeSeek() {
         val intents = mutableListOf<UiIntent>(); render(mutableStateOf(Frame(player())), intents)
         rule.onNodeWithText("한국어").performClick()
-        rule.onNodeWithContentDescription("10초 후").performClick()
-        assertEquals(2, intents.size)
+        rule.onNodeWithContentDescription("다음 구간").assertIsNotEnabled()
+        assertEquals(1, intents.size)
         assertEquals(ReaderLanguage.KOREAN, (intents[0] as UiIntent.ReaderView).language)
-        assertEquals(10_000L, (intents[1] as UiIntent.Seek).offsetMs)
-        assertEquals(owner, intents[1].origin.owner)
+        assertFalse(intents.any { it is UiIntent.Seek })
         assertFalse(intents.any { it is UiIntent.StartPractice || it is UiIntent.StartAnswer || it is UiIntent.FinishAnswer })
         // This is now an implemented action. A deliberate tap requests the existing
         // practice flow, without implicitly starting capture or submitting an answer.
         rule.onNodeWithText("말하기 연습").assertIsEnabled().performClick()
-        assertEquals(3, intents.size)
-        assertTrue(intents[2] is UiIntent.StartPractice)
-        assertEquals(owner, intents[2].origin.owner)
-        assertEquals(work, intents[2].origin.work)
+        assertEquals(2, intents.size)
+        assertTrue(intents[1] is UiIntent.StartPractice)
+        assertEquals(owner, intents[1].origin.owner)
+        assertEquals(work, intents[1].origin.work)
         assertFalse(intents.any { it is UiIntent.StartAnswer || it is UiIntent.FinishAnswer })
         capture("reader-wide-light")
         rule.runOnIdle { rule.activity.onBackPressedDispatcher.onBackPressed() }
@@ -206,7 +205,7 @@ class ProductScreensTest {
         rule.onNode(hasScrollAction()).performScrollToNode(hasText("Last sentence remains above the playback dock."))
         rule.onNodeWithText("Last sentence remains above the playback dock.").assertIsDisplayed()
         rule.onNodeWithContentDescription("재생").assertIsDisplayed()
-        rule.onNodeWithContentDescription("10초 전").assertIsDisplayed()
+        rule.onNodeWithContentDescription("이전 구간").assertIsDisplayed()
         capture("reader-narrow-dark-large-text", fullDisplay = true)
         rule.runOnIdle { frame.value = Frame(player().copy(session = player().session.copy(screen = SessionScreen.NEWS),
             appearance = DeviceAppearance.DARK, catalogStatus = LoadStatus.READY), width = 900, height = 1100, scale = 1.3f) }

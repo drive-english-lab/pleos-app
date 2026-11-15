@@ -120,11 +120,11 @@ class PreparedProductScreensTest {
         codec.encode("preparation", "Discovery", discovery, WirePreparationDiscovery.serializer())
         codec.encode("preparation", "CategoryPublicProjection", categories, WirePreparationCategoryPublicProjection.serializer())
     }
-    private fun render(frame: State<ProductScreenState>, intents: MutableList<UiIntent>) {
+    private fun render(frame: State<ProductScreenState>, intents: MutableList<UiIntent>, width: Int = 1600, scale: Float = 1f) {
         rule.setContent {
-            CompositionLocalProvider(LocalDensity provides Density(1f, 1f)) {
+            CompositionLocalProvider(LocalDensity provides Density(1f, scale)) {
                 DriveEnglishTheme(frame.value.appearance) {
-                    Surface(Modifier.requiredSize(1600.dp, 1100.dp).testTag("prepared-test-frame")) {
+                    Surface(Modifier.requiredSize(width.dp, 1100.dp).testTag("prepared-test-frame")) {
                         NewsScreens(frame.value, { intents.add(it) }, {}, { _, _ -> })
                     }
                 }
@@ -145,6 +145,48 @@ class PreparedProductScreensTest {
             ?.forEach { it.copyTo(File(target, it.name), overwrite = true) }
     }
 
+    @Test fun currentSegmentFollowsInCenterButManualScrollWaitsForExplicitReturn() {
+        val frame = mutableStateOf(player()); val intents = mutableListOf<UiIntent>()
+        render(frame, intents)
+        fun assertCentered(text: String) {
+            val reader = rule.onNodeWithTag("focused-transcript").fetchSemanticsNode().boundsInRoot
+            val current = rule.onNodeWithText(text).fetchSemanticsNode().boundsInRoot
+            assertTrue("Current segment remains centered", kotlin.math.abs(reader.center.y - current.center.y) <= 2f)
+        }
+        assertCentered(fragments[1])
+        rule.onNodeWithTag("focused-transcript").performTouchInput { swipeUp() }
+        rule.onNodeWithText("현재 구간으로").assertIsDisplayed()
+        rule.runOnIdle {
+            val snapshot = requireNotNull(frame.value.segmentPlayback.snapshot)
+            frame.value = frame.value.copy(segmentPlayback = frame.value.segmentPlayback.copy(snapshot = snapshot.copy(
+                cursor = cursor.copy(segmentId = manifest.segments[2].segmentId, segmentIndex = 2))))
+        }
+        rule.onNodeWithText("현재 구간으로").assertIsDisplayed().performClick()
+        assertCentered(fragments[2])
+        rule.onNodeWithText("현재 구간으로").assertDoesNotExist()
+        capture("prepared-focused-reader-wide")
+        rule.onNodeWithText("기사 메뉴").performClick()
+        rule.onNodeWithText("문장 도움").assertIsDisplayed()
+        rule.onNodeWithText("기사 정보").performClick()
+        assertTrue(intents.single() is UiIntent.Navigate)
+        assertEquals(SessionScreen.ARTICLE_INFO, (intents.single() as UiIntent.Navigate).screen)
+    }
+
+    @Test fun compactDarkLargeTextKeepsReaderArticleActionsAndCenteredTransport() {
+        val frame = mutableStateOf(player().copy(appearance = DeviceAppearance.DARK)); val intents = mutableListOf<UiIntent>()
+        render(frame, intents, width = 900, scale = 1.3f)
+        rule.onNodeWithText("말하기 연습").assertIsDisplayed()
+        rule.onNodeWithText("기사에 질문하기").assertIsDisplayed()
+        rule.onNodeWithContentDescription("재생").assertIsDisplayed()
+        val reader = rule.onNodeWithTag("focused-transcript").fetchSemanticsNode().boundsInRoot
+        val play = rule.onNodeWithContentDescription("재생").fetchSemanticsNode().boundsInRoot
+        assertTrue(kotlin.math.abs(reader.center.x - play.center.x) <= 2f)
+        rule.onNodeWithTag("focused-transcript").performTouchInput { swipeUp() }
+        rule.onNodeWithText("현재 구간으로").assertIsDisplayed()
+        capture("prepared-focused-reader-narrow-dark-large", dialog = true)
+        assertTrue(intents.isEmpty())
+    }
+
     @Test fun samePlayerModalRendersQuestionThenFeedbackAndCloseOnlyFinishesPractice() {
         validateTypedSources()
         val frame = mutableStateOf(modal()); val intents = mutableListOf<UiIntent>()
@@ -162,7 +204,7 @@ class PreparedProductScreensTest {
         rule.onNodeWithText("합성 피드백: 두 지역을 연결한다는 내용을 담았어요").assertIsDisplayed()
         assertEquals(SessionScreen.PLAYER, frame.value.session.screen)
         capture("prepared-modal-feedback", dialog = true)
-        rule.onNodeWithText("닫기").performClick()
+        rule.onNodeWithText("기사로 돌아가기").performClick()
         assertEquals(1, intents.size)
         assertTrue(intents.single() is UiIntent.FinishPractice)
         assertEquals(lessonId, intents.single().origin.lessonId)
@@ -223,9 +265,10 @@ class PreparedProductScreensTest {
             catalog = listOf(irrelevantLegacy), draft = SettingsDraft(settings)) }
         val frame = mutableStateOf(initial); val intents = mutableListOf<UiIntent>()
         render(frame, intents)
+        rule.onNodeWithText("관심 분야").performClick()
         categories.categories.forEach { category ->
             rule.onNode(hasScrollAction()).performScrollToNode(hasText(category.displayName))
-            rule.onNodeWithText(category.displayName).assertIsDisplayed().performClick()
+            rule.onNode(hasText(category.displayName) and SemanticsMatcher.expectValue(androidx.compose.ui.semantics.SemanticsProperties.Role, androidx.compose.ui.semantics.Role.Checkbox)).assertIsDisplayed().performClick()
         }
         assertEquals(categories.categories.map { it.id }.toSet(), intents.filterIsInstance<UiIntent.Topic>().map { it.topic }.toSet())
         assertEquals(6, intents.size)
@@ -235,7 +278,7 @@ class PreparedProductScreensTest {
         rule.runOnIdle { frame.value = initial.copy(categoryConfig = categories.copy(categories = categories.categories.map {
             if (it.id == "culture") it.copy(active = false) else it }), draft = SettingsDraft(settings.copy(topics = listOf("technology", "culture")))) }
         rule.onNode(hasScrollAction()).performScrollToNode(hasText("문화"))
-        rule.onNodeWithText("문화").assertIsDisplayed().assertIsNotEnabled()
+        rule.onNode(hasText("문화") and SemanticsMatcher.expectValue(androidx.compose.ui.semantics.SemanticsProperties.Role, androidx.compose.ui.semantics.Role.Checkbox)).assertIsDisplayed().assertIsNotEnabled()
         rule.onNodeWithText("injected-legacy-tag").assertDoesNotExist()
         assertEquals(setOf("technology", "culture"), frame.value.draft?.topics)
         assertEquals(6, intents.size)

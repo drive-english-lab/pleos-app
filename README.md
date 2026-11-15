@@ -1,5 +1,9 @@
 # Pleos Android app
 
+## Product UI port · 2026-11-15
+
+`refactor/6-product-ui`는 제품 `1811d7e`에서 분리한 UI 개선이다. 단일 대본·실제 구간 중앙 추적·하단 중앙 재생/이전·다음 구간·현재 기사 메뉴·펼치는 설정을 실제 Compose 화면에 반영한다. 과거 debug 샘플 서비스를 병합하지 않는다. [변경 범위·렌더러 검증·제품 합류](docs/ui-product/README.md)를 따른다. 제품의 후속 음성 커밋과 합류한 실제 앱/촬영 결과는 별도 검증 대상이다.
+
 Pleos Connect용 Android 앱이다. 기본 진입은 실제 프로필·catalog·대본·단일 기사 미디어 port에 연결한 제품 화면이다. 실제 전원 사실과 화면·미디어·직접 입력·Gleo의 허용 조건을 각각 확인한다. 연결 점검은 별도 destination으로 보존한다. schema5·Room5와 기사 질문·연습의 제품 연결 코드를 갖추며 실제 음성·전원·자료 승인을 별도 확인한다.
 
 ## 차량 public I/O 수명 보완 · CAR-LIVE-01 · 2026-11-15

@@ -16,7 +16,7 @@ import io.github.driveenglishlab.pleos.ui.*
 fun NewsReader(state: ProductScreenState, modifier: Modifier = Modifier) {
     key(state.session.owner) {
         val holder = rememberSaveableStateHolder()
-        Surface(modifier, color = MaterialTheme.colorScheme.surfaceContainerLowest) {
+        Surface(modifier, shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.surfaceContainerLowest) {
         val reader = state.reader
         when {
             state.readerStatus == LoadStatus.LOADING -> ProductStatus("대본을 불러오고 있어요", "듣는 기사와 같은 대본을 확인하고 있어요", loading = true)
@@ -24,11 +24,14 @@ fun NewsReader(state: ProductScreenState, modifier: Modifier = Modifier) {
             else -> {
                 holder.SaveableStateProvider("${reader.script.scriptId}/${reader.script.textHash}/${reader.language}") {
                     val scroll = rememberLazyListState()
-                    val paragraphs = remember(reader.script.textHash) { reader.script.text.split(Regex("\n\\s*\n")).filter { it.isNotBlank() } }
-                    LazyColumn(Modifier.fillMaxSize().padding(horizontal = 32.dp), state = scroll,
+                    val paragraphs = remember(reader.script.textHash) { reader.script.text.split(Regex("""\n\s*\n""")).filter { it.isNotBlank() } }
+                    LazyColumn(Modifier.fillMaxSize(), state = scroll,
                         contentPadding = PaddingValues(vertical = 28.dp), verticalArrangement = Arrangement.spacedBy(24.dp)) {
                         itemsIndexed(paragraphs, key = { index, _ -> index }) { _, text ->
-                            Text(text, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.fillMaxWidth())
+                            Box(Modifier.fillMaxWidth(), contentAlignment = androidx.compose.ui.Alignment.TopCenter) {
+                                Text(text, style = MaterialTheme.typography.bodyLarge,
+                                    modifier = Modifier.widthIn(max = 1120.dp).fillMaxWidth().padding(horizontal = 32.dp))
+                            }
                         }
                     }
                 }
