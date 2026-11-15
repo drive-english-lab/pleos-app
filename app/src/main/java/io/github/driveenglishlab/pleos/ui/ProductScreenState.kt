@@ -111,6 +111,9 @@ sealed interface UiIntent {
     data class StartAnswer(override val origin: UiOrigin) : UiIntent
     data class FinishAnswer(override val origin: UiOrigin) : UiIntent
     data class CancelAnswer(override val origin: UiOrigin) : UiIntent
+    data class ConfirmCaptureLanguage(override val origin: UiOrigin, val captureId: UUID, val confirmationToken: UUID,
+        val choice: CaptureLanguageChoice) : UiIntent
+    data class RetryCaptureConfirmation(override val origin: UiOrigin, val captureId: UUID, val confirmationToken: UUID) : UiIntent
     data class RetryFeedback(override val origin: UiOrigin, val readOnly: Boolean = false) : UiIntent
     data class RetryAnswer(override val origin: UiOrigin) : UiIntent
     data class FinishPractice(override val origin: UiOrigin, val declineRetry: Boolean = false) : UiIntent

@@ -38,6 +38,9 @@ class InputLease {
 
     fun invalidate() { current = null; finalizing = false }
 
+    fun isCurrentFinalizing(lease: CaptureLease, access: AccessState, owner: OwnerContext?, task: PracticeRef?): Boolean =
+        current == lease && finalizing && valid(lease, access, owner, task)
+
     fun recheck(access: AccessState, owner: OwnerContext?, task: PracticeRef?) {
         val lease = current ?: return
         if (!valid(lease, access, owner, task)) invalidate()
@@ -49,8 +52,7 @@ class InputLease {
         val lease = current ?: return null
         if (captureId != lease.captureId || !finalizing) return null
         if (!valid(lease, access, owner, task) || capture.path != CapturePath.PARKED_STT) { invalidate(); return null }
-        val answer = text.trim()
-        if (answer.codePointCount(0, answer.length) !in 1..1200) { invalidate(); return null }
+        val answer = normalizeFinalAnswer(text) ?: run { invalidate(); return null }
         invalidate()
         return AcceptedAnswer(lease, answer, capture, helpReceived)
     }
@@ -60,3 +62,6 @@ class InputLease {
         lease.safetyGeneration == access.safety.generation && lease.windowGeneration == access.window.generation &&
         lease.componentGeneration == access.components.microphone.permissionGeneration
 }
+
+/** The same one-time trim/code-point boundary for unaccepted RAM and final persistence. */
+fun normalizeFinalAnswer(text: String): String? = text.trim().takeIf { it.codePointCount(0, it.length) in 1..1200 }

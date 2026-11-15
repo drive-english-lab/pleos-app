@@ -241,4 +241,80 @@ class PreparedProductScreensTest {
         assertEquals(6, intents.size)
         capture("prepared-settings-configured-topics")
     }
+    private fun captureConfirmation(phase: CaptureConfirmationPhase): ProductScreenState {
+        val base=modal();val id=UUID.randomUUID();val confirmation=CaptureConfirmationView(id,UUID.randomUUID(),phase)
+        val current=requireNotNull(base.session.practiceModal)
+        return base.copy(session=base.session.copy(access=base.session.access.copy(directReplyFocusAllowed=true),inputPhase=InputPhase.FINALIZING,
+            captureLease=CaptureLease(id,UUID.randomUUID(),owner,task,lessonId,0,0),captureConfirmation=confirmation,
+            practiceModal=current.copy(phase=PracticeModalPhase.CAPTURING,captureToken=id,captureReturnState=PracticeModalPhase.QUESTION)))
+    }
+    @Test fun captureLanguageQuestionKeepsArticleAndQuestionAndOnlySendsScopedChoices() {
+        val frame=mutableStateOf(captureConfirmation(CaptureConfirmationPhase.ASKING));val intents=mutableListOf<UiIntent>()
+        render(frame,intents)
+        rule.onNodeWithText(question).assertIsDisplayed()
+        rule.onNodeWithText("방금 답변을 영어로 했나요?").assertIsDisplayed()
+        val confirmation=requireNotNull(frame.value.session.captureConfirmation)
+        for((label,choice) in listOf("영어로 답했어요" to CaptureLanguageChoice.ENGLISH,
+            "한국어로 답했어요" to CaptureLanguageChoice.KOREAN,"잘 모르겠어요" to CaptureLanguageChoice.UNSURE)) {
+            val button=rule.onNodeWithText(label).assertIsDisplayed()
+            assertTrue(button.fetchSemanticsNode().boundsInRoot.height>=76f)
+            button.performClick()
+            val event=intents.last() as UiIntent.ConfirmCaptureLanguage
+            assertEquals(choice,event.choice);assertEquals(confirmation.captureId,event.captureId)
+            assertEquals(confirmation.confirmationToken,event.confirmationToken);assertEquals(frame.value.origin,event.origin)
+        }
+        rule.onNodeWithText("답변 시작").assertDoesNotExist()
+        rule.onNodeWithText("힌트",useUnmergedTree=true).assertDoesNotExist()
+        rule.onNodeWithText("저장 후 나가기").assertDoesNotExist()
+        capture("prepared-capture-language-asking",dialog=true)
+        rule.onNodeWithText("답변 취소").performClick();assertTrue(intents.last() is UiIntent.CancelAnswer)
+    }
+    @Test fun captureLanguageSendingAndExplicitRetryKeepSameIdentityWithoutShowingRecognizedQuote() {
+        val initial=captureConfirmation(CaptureConfirmationPhase.SENDING)
+        val frame=mutableStateOf(initial);val intents=mutableListOf<UiIntent>();render(frame,intents)
+        rule.onNodeWithText("답변 언어를 확인하고 있어요").assertIsDisplayed()
+        rule.onNodeWithText("영어로 답했어요").assertDoesNotExist()
+        rule.onNodeWithText("확인 연결 다시 시도").assertDoesNotExist()
+        assertTrue(intents.isEmpty())
+        val confirmation=requireNotNull(initial.session.captureConfirmation)
+        rule.runOnIdle { frame.value=initial.copy(appearance=DeviceAppearance.DARK,
+            session=initial.session.copy(captureConfirmation=confirmation.copy(phase=CaptureConfirmationPhase.RETRYABLE))) }
+        rule.onNodeWithText("확인 연결을 마치지 못했어요").assertIsDisplayed()
+        rule.onNodeWithText(question).assertIsDisplayed()
+        capture("prepared-capture-language-retry-dark",dialog=true)
+        rule.onNodeWithText("확인 연결 다시 시도").performClick()
+        val retry=intents.single() as UiIntent.RetryCaptureConfirmation
+        assertEquals(confirmation.captureId,retry.captureId);assertEquals(confirmation.confirmationToken,retry.confirmationToken)
+    }
+    @Test fun captureLanguageControlsDisappearWhenParkOrWindowBecomesUnavailable() {
+        val original=captureConfirmation(CaptureConfirmationPhase.ASKING)
+        val frame=mutableStateOf(original);val intents=mutableListOf<UiIntent>();render(frame,intents)
+        rule.onNodeWithText("방금 답변을 영어로 했나요?").assertIsDisplayed()
+        rule.runOnIdle { frame.value=original.copy(session=original.session.copy(access=allowed.copy(
+            safety=allowed.safety.copy(position=VehiclePosition.UNKNOWN,generation=1)))) }
+        rule.onNodeWithText("방금 답변을 영어로 했나요?").assertDoesNotExist()
+        rule.onNodeWithText("영어로 답했어요").assertDoesNotExist();assertTrue(intents.isEmpty())
+    }
+
+    @Test fun captureLanguageNarrowComponentWithLargeTextKeepsChoicesVisibleAndSeparateFromQuestion() {
+        val base=captureConfirmation(CaptureConfirmationPhase.ASKING)
+        val state=base.copy(appearance=DeviceAppearance.DARK,learning=base.learning.copy(practice=base.learning.practice!!.copy(questionEn=question.repeat(6))))
+        val intents=mutableListOf<UiIntent>()
+        rule.setContent {
+            CompositionLocalProvider(LocalDensity provides Density(1f,1.3f)) {
+                DriveEnglishTheme(state.appearance) {
+                    Surface(Modifier.requiredSize(980.dp,1000.dp).testTag("prepared-test-frame")) {
+                        PracticeScreen(state,{intents.add(it)},{})
+                    }
+                }
+            }
+        }
+        for(label in listOf("영어로 답했어요","한국어로 답했어요","잘 모르겠어요","답변 취소")) {
+            val node=rule.onNodeWithText(label);node.assertIsDisplayed()
+            assertTrue(node.fetchSemanticsNode().boundsInRoot.height>=76f)
+        }
+        assertTrue(intents.isEmpty())
+        capture("prepared-capture-language-narrow-large-text")
+    }
+
 }

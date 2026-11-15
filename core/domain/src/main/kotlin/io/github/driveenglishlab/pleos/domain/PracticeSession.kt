@@ -68,3 +68,14 @@ data class FeedbackPresentationWitness(val owner: OwnerContext, val lessonId: UU
     init { require(mode in setOf("parked_visible", "voice_output_completed", "explicit_user_action")); requireReference(evidenceRef) }
 }
 fun interface FeedbackPresentationVerifier { suspend fun verify(witness: FeedbackPresentationWitness): Boolean }
+
+/** Presentation metadata only: unaccepted text remains in the coordinator's RAM candidate. */
+enum class CaptureConfirmationPhase { ASKING, SENDING, RETRYABLE }
+enum class CaptureLanguageChoice { ENGLISH, KOREAN, UNSURE }
+data class CaptureConfirmationView(val captureId: UUID, val confirmationToken: UUID,
+    val phase: CaptureConfirmationPhase = CaptureConfirmationPhase.ASKING)
+data class CaptureConfirmationCandidate(val lease: CaptureLease, val text: String, val originalCapture: Capture,
+    val confirmationToken: UUID, val navigationGeneration: Long, val intentGeneration: Long)
+fun requiresCaptureLanguageConfirmation(capture: Capture): Boolean = capture.path == CapturePath.PARKED_STT &&
+    capture.spokenLanguage == SpokenLanguage.UNKNOWN && capture.englishEvidence == EnglishEvidence.UNVERIFIED &&
+    capture.formFidelity == CaptureFidelity.UNKNOWN && capture.languageEvidenceRef == null

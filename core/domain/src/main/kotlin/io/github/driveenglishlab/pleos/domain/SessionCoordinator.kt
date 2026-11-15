@@ -50,6 +50,7 @@ data class SessionView(
     val offerRuntime: ReviewOfferRuntime? = null,
     val practiceModal: PracticeModalSession? = null,
     val requiresExplicitMediaResume:Boolean=false,
+    val captureConfirmation: CaptureConfirmationView? = null,
 )
 
 /** Process-scoped reducer. All callbacks use the same serialized lane. */
@@ -57,7 +58,13 @@ class SessionCoordinator {
     private val mutex = Mutex()
     private val input = InputLease()
     private var gleoLease: CaptureLease? = null
-    private fun invalidateInput() { input.invalidate(); gleoLease = null }
+    private var confirmationCandidate: CaptureConfirmationCandidate? = null
+    private var confirmationHelper: CaptureLanguageConfirmation? = null
+    private fun clearConfirmationLocked(publish: Boolean = true) {
+        confirmationCandidate = null; confirmationHelper = null
+        if (publish && view.captureConfirmation != null) view = view.copy(captureConfirmation = null)
+    }
+    private fun invalidateInput() { input.invalidate(); gleoLease = null; clearConfirmationLocked() }
     private val clock = DialogueClock()
     private val issuedOutputs = linkedMapOf<UUID, OutputExpectation>()
     private data class OutputAccessStamp(val source:Long,val safety:Long,val window:Long)
@@ -82,6 +89,7 @@ class SessionCoordinator {
         val previous=view.access
         val closingSettings = !access.detailsOpen && view.screen == SessionScreen.SETTINGS
         input.recheck(access, view.owner, view.task)
+        if (input.phase == InputPhase.IDLE && confirmationCandidate != null) dropConfirmationInputLocked()
         if (closingSettings) invalidateOfferLocked(ReviewOfferEvent.SettingsForcedClosed)
         if (!access.detailsOpen) closeModalLocked(PracticeModalCloseReason.RESTRICTED)
         val suspendEdge=access.suspending && !previous.suspending
@@ -113,6 +121,7 @@ class SessionCoordinator {
             view.screen == SessionScreen.RESTRICTED -> restrictedReturn ?: SessionScreen.SAVED
             else -> view.screen
         })
+        confirmationCandidate?.let { currentConfirmationLocked(it.lease.captureId, it.confirmationToken) }
         view
     }
 
@@ -314,11 +323,88 @@ class SessionCoordinator {
         input.finish(captureId).also { if (it) view = view.copy(inputPhase = InputPhase.FINALIZING) }
     }
 
+    suspend fun beginCaptureConfirmation(captureId: UUID, text: String, capture: Capture,
+        currentRoute: () -> Boolean = { true }): CaptureConfirmationView? = mutex.withLock {
+        val lease = view.captureLease ?: return@withLock null
+        if (confirmationCandidate != null || lease.captureId != captureId || !requiresCaptureLanguageConfirmation(capture) ||
+            !input.isCurrentFinalizing(lease, view.access, view.owner, view.task)) return@withLock null
+        if (!currentRoute()) { dropConfirmationInputLocked(); return@withLock null }
+        val normalized = normalizeFinalAnswer(text) ?: return@withLock null
+        val original = capture.copy(uncertainSpans = capture.uncertainSpans.toList())
+        val helper = CaptureLanguageConfirmation(captureId, original)
+        if (!helper.request()) return@withLock null
+        val token = UUID.randomUUID()
+        confirmationCandidate = CaptureConfirmationCandidate(lease, normalized, original, token, view.navigationGeneration, view.intentGeneration)
+        confirmationHelper = helper
+        CaptureConfirmationView(captureId, token).also { view = view.copy(captureConfirmation = it) }
+    }
+
+    private fun currentConfirmationLocked(captureId: UUID, token: UUID): CaptureConfirmationCandidate? {
+        val candidate = confirmationCandidate ?: return null
+        if (candidate.lease.captureId != captureId || candidate.confirmationToken != token) return null
+        if (candidate.navigationGeneration != view.navigationGeneration || candidate.intentGeneration != view.intentGeneration ||
+            candidate.lease.lessonId != view.lessonId || !input.isCurrentFinalizing(candidate.lease, view.access, view.owner, view.task)) {
+            dropConfirmationInputLocked(); return null
+        }
+        return candidate
+    }
+    private fun dropConfirmationInputLocked() {
+        val modal = view.practiceModal
+        val restored = modal?.captureToken?.let { PracticeModalReducer.reduce(modal, PracticeModalEvent.CaptureCancelled(it), view.access, view.owner).session }
+        invalidateInput()
+        view = view.copy(inputPhase = InputPhase.IDLE, captureLease = null, practiceModal = restored ?: modal,
+            screen = if (view.access.detailsOpen) { if (modal?.visible == true) SessionScreen.PLAYER else SessionScreen.QUESTION } else SessionScreen.RESTRICTED)
+    }
+    suspend fun cancelCaptureConfirmation(captureId: UUID, token: UUID): Boolean = mutex.withLock {
+        val candidate = confirmationCandidate ?: return@withLock false
+        if (candidate.lease.captureId != captureId || candidate.confirmationToken != token) return@withLock false
+        dropConfirmationInputLocked(); true
+    }
+    suspend fun captureConfirmationCandidate(captureId: UUID, token: UUID): CaptureConfirmationCandidate? = mutex.withLock {
+        currentConfirmationLocked(captureId, token)
+    }
+    suspend fun chooseCaptureConfirmation(captureId: UUID, token: UUID): CaptureConfirmationCandidate? = mutex.withLock {
+        if (view.captureConfirmation?.phase != CaptureConfirmationPhase.ASKING) return@withLock null
+        currentConfirmationLocked(captureId, token)?.also {
+            view = view.copy(captureConfirmation = CaptureConfirmationView(captureId, token, CaptureConfirmationPhase.SENDING))
+        }
+    }
+    suspend fun retryCaptureConfirmation(captureId: UUID, token: UUID): CaptureConfirmationCandidate? = mutex.withLock {
+        if (view.captureConfirmation?.phase != CaptureConfirmationPhase.RETRYABLE) return@withLock null
+        currentConfirmationLocked(captureId, token)?.also {
+            view = view.copy(captureConfirmation = CaptureConfirmationView(captureId, token, CaptureConfirmationPhase.SENDING))
+        }
+    }
+    suspend fun confirmationFailed(captureId: UUID, token: UUID): Boolean = mutex.withLock {
+        if (currentConfirmationLocked(captureId, token) == null || view.captureConfirmation?.phase != CaptureConfirmationPhase.SENDING) return@withLock false
+        view = view.copy(captureConfirmation = CaptureConfirmationView(captureId, token, CaptureConfirmationPhase.RETRYABLE)); true
+    }
+    suspend fun acceptConfirmedFinal(captureId: UUID, token: UUID, receiptRef: String,
+        currentRoute: () -> Boolean = { true }, persist: suspend (AcceptedAnswer) -> Unit): AcceptedAnswer? = mutex.withLock {
+        val candidate = currentConfirmationLocked(captureId, token) ?: return@withLock null
+        if (view.captureConfirmation?.phase != CaptureConfirmationPhase.SENDING || receiptRef != "clc1:$captureId") return@withLock null
+        if (!currentRoute()) { dropConfirmationInputLocked(); return@withLock null }
+        val capture = confirmationHelper?.confirm(captureId, SpokenLanguage.EN, receiptRef) ?: return@withLock null
+        acceptFinalLocked(captureId, candidate.text, capture, persist)
+    }
+    suspend fun acceptUnverifiedFinal(captureId: UUID, token: UUID,
+        currentRoute: () -> Boolean = { true }, persist: suspend (AcceptedAnswer) -> Unit): AcceptedAnswer? = mutex.withLock {
+        val candidate = currentConfirmationLocked(captureId, token) ?: return@withLock null
+        if (view.captureConfirmation?.phase != CaptureConfirmationPhase.ASKING) return@withLock null
+        if (!currentRoute()) { dropConfirmationInputLocked(); return@withLock null }
+        acceptFinalLocked(captureId, candidate.text, candidate.originalCapture, persist)
+    }
     suspend fun acceptFinal(captureId: java.util.UUID, text: String, capture: Capture,
-                            persist: suspend (AcceptedAnswer) -> Unit): AcceptedAnswer? = mutex.withLock {
+        persist: suspend (AcceptedAnswer) -> Unit): AcceptedAnswer? = mutex.withLock {
+        if (confirmationCandidate != null) return@withLock null
+        acceptFinalLocked(captureId, text, capture, persist)
+    }
+    private suspend fun acceptFinalLocked(captureId: UUID, text: String, capture: Capture,
+        persist: suspend (AcceptedAnswer) -> Unit): AcceptedAnswer? {
         val answer = input.finalText(captureId, text, view.access, view.owner, view.task, capture, view.helpReceived)
+        clearConfirmationLocked(publish = false)
         if (answer == null) {
-            view = view.copy(inputPhase = if (view.pendingAnswer != null) InputPhase.ACCEPTED else input.phase)
+            view = view.copy(captureConfirmation = null, inputPhase = if (view.pendingAnswer != null) InputPhase.ACCEPTED else input.phase)
             if (view.inputPhase == InputPhase.IDLE && view.task != null) {
                 val modal = view.practiceModal
                 val returned = modal?.captureToken?.takeIf { it == captureId }?.let { PracticeModalReducer.reduce(modal,
@@ -326,26 +412,26 @@ class SessionCoordinator {
                 view = view.copy(practiceModal = returned ?: modal,
                     screen = if (view.access.detailsOpen) { if (returned?.visible == true) SessionScreen.PLAYER else SessionScreen.QUESTION } else SessionScreen.RESTRICTED)
             }
-            return@withLock null
+            return null
         }
         // Local transaction + receipt projection complete together even if the UI caller closes.
         // This callback must only persist locally; network work belongs after acceptance.
         withContext(NonCancellable) {
             try {
                 persist(answer)
-                view = view.copy(pendingAnswer = answer, inputPhase = InputPhase.ACCEPTED,
+                view = view.copy(captureConfirmation = null, pendingAnswer = answer, inputPhase = InputPhase.ACCEPTED,
                                  dataState = SessionDataState.DEVICE_ONLY, screen = if (view.practiceModal?.visible == true) SessionScreen.PLAYER else SessionScreen.FEEDBACK,
                                  practiceModal = view.practiceModal?.takeIf { it.visible }?.let { modal -> PracticeModalReducer.reduce(modal,
                                      PracticeModalEvent.AnswerAccepted(modal.token, captureId, PracticeModalLesson(PracticeModalPhase.PROCESSING, modal.lesson.revision,
                                          answer.lease.attemptId, modal.lesson.retryUsed, modal.lesson.complete)), view.access, view.owner).session } ?: view.practiceModal,
                                  lastCapture = capture, captureLease = null)
             } catch (error: Exception) {
-                view = view.copy(inputPhase = InputPhase.IDLE, dataState = SessionDataState.FAILED,
-                                 screen = if (view.access.detailsOpen) SessionScreen.QUESTION else SessionScreen.RESTRICTED)
+                dropConfirmationInputLocked()
+                view = view.copy(dataState = SessionDataState.FAILED)
                 throw error
             }
         }
-        answer
+        return answer
     }
 
     suspend fun stop(): SessionView = mutex.withLock {
@@ -420,8 +506,8 @@ class SessionCoordinator {
         true
     }
 
-    suspend fun cancelCapture(owner: OwnerContext): Boolean = mutex.withLock {
-        if (view.owner != owner || view.pendingAnswer != null) return@withLock false
+    suspend fun cancelCapture(owner: OwnerContext, captureId: UUID? = null): Boolean = mutex.withLock {
+        if (view.owner != owner || view.pendingAnswer != null || captureId != null && view.captureLease?.captureId != captureId) return@withLock false
         val modal = view.practiceModal
         val restored = modal?.captureToken?.let { capture -> PracticeModalReducer.reduce(modal, PracticeModalEvent.CaptureCancelled(capture), view.access, view.owner).session }
         invalidateInput(); clock.cancel(); waitRoute = null

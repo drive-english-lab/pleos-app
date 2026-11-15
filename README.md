@@ -221,3 +221,11 @@ Room2→3 명시 migration은8개 feature cache/journal을 더하고 기존 payl
 `AudioAccessRepository`는 고정 asset의 URI credential만 갱신하며 기사/위치/run을 선택하지 않는다. 최초 요청을 재시도할 때 같은 operation을 유지하고 긴 재생·seek/resume의 force refresh와 확정 만료 뒤에는 새 operation을 쓴다. 프로세스 내 monotonic4분 refresh hint는 출력 허용/차량 시각이 아니며 재실행으로 복원하지 않는다. 같은 owner/content의 동시 응답은 같은 원래 receipt를 공유하고 owner/session 변경 뒤 이전 URI는 반환하지 않는다. URI/hash/duration/Storage origin을 검증하고 URL의 toString은 redacted다. 서버가 권리/원본 object metadata를 재검사한다. 이미 받은 byte의 즉시 철회는 보장하지 않는다.
 
 검증: JVM48개, AVD 데이터59개 통과/실연동 전용1개 기본 skip(runner60개), 별도 실제 SDK/Auth·공개 catalog GET·설정 API/DB1개 통과. debug/release/lint(error0/warning27), 두 contract generator check 통과. malformed URI/date·해시/고정 snapshot·캐시 격리·credential 만료/재시도/동시 요청을 확인했다. 화면/조작 변경이 없어 pleos-sites-preview 기준 Sites 갱신은 제외했다. 실제 Media3/차량/제품 화면 연결은 후속 task다.
+
+## 같은 답변의 원언어 확인 · T036-E1 · 2026-11-15
+
+주차 중 직접 입력의 final이 원언어 미확인·형태 unknown일 때 같은 연습 화면에서 한 번만 “방금 답변을 영어로 했나요?”를 묻는다. 영어 선택은 원래 capture/owner/epoch/질문과 묶인 독립 확인 명령을 journal에 저장한 뒤 서버 receipt를 요청한다. receipt만으로 답변을 수락하지 않으며 현재 입력 권한·포커스·세대와 원문 hash를 다시 검사하고 기존 답변/outbox와 확인 intent를 한 transaction으로 수락한다. 한국어·모름 선택은 원래 미확인 입력 경로를 유지한다.
+
+전송 실패는 같은 명령의 명시 재시도만 허용한다. 취소·이동·권한/포커스/owner/epoch 변경 뒤 늦은 응답은 새 답변이 되지 않는다. 아직 수락하지 않은 인식 문장은 RAM에만 두며 화면에 인용하지 않는다. 재시작 시 남은 metadata intent는 orphan 처리하고 녹음/후보를 복원하지 않는다. 기존 closed 계약·Room 테이블/버전·음성 승인 설정은 유지했다.
+
+검증: 최종 domain103개, AVD 데이터 경계8개와 화면 renderer4개, 서버 Python241개·격리 SQL52개를 구분해 확인했다. 로컬 묶음 debug/release/lint(error0/warning37) 후 최종 경합 guard에 필요한 domain/debug/test APK만 갱신했고 최종 release/lint는 PR CI로 확인한다. 실제 STT/Gleo 입력·정상 원격 receipt·실차·학습 품질 검증은 남아 있다. Sites는 같은 프로젝트용 정적 캡처3장과 범위 설명만 로컬 반영했으며 interactive mock 연결·배포는 하지 않았다.

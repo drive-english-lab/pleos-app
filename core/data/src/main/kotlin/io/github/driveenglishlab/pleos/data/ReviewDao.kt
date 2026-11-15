@@ -47,7 +47,7 @@ abstract class ReviewDao {
     @Query("UPDATE review_context SET version=:version,payloadJson=:json,payloadHash=:hash WHERE profileId=:profile AND privacyEpoch=:epoch AND selectionId=:selection AND version=:previous")
     protected abstract suspend fun advanceContext(profile: String, epoch: Long, selection: String, previous: Long, version: Long, json: String, hash: String): Int
     @Query("SELECT * FROM review_operation WHERE operationId=:id") abstract suspend fun operation(id: String): LocalReviewOperation?
-    @Query("SELECT * FROM review_operation WHERE profileId=:profile AND privacyEpoch=:epoch AND ownerRevision=:revision AND status='pending' ORDER BY rowid")
+    @Query("SELECT * FROM review_operation WHERE profileId=:profile AND privacyEpoch=:epoch AND ownerRevision=:revision AND status='pending' AND kind!='capture_language_confirmation_v1' ORDER BY rowid")
     abstract suspend fun pending(profile: String, epoch: Long, revision: Long): List<LocalReviewOperation>
     @Query("SELECT * FROM review_operation WHERE profileId=:profile AND privacyEpoch=:epoch AND kind='qa_delivery_unverified' AND status IN ('pending','isolated') ORDER BY rowid")
     abstract suspend fun unresolvedQuestionDeliveries(profile:String,epoch:Long):List<LocalReviewOperation>
@@ -86,7 +86,7 @@ abstract class ReviewDao {
     @Query("DELETE FROM fresh_practice_intent WHERE profileId=:profile") protected abstract suspend fun clearFresh(profile: String)
     @Query("DELETE FROM preparation_waiter WHERE profileId=:profile") protected abstract suspend fun clearWaiters(profile: String)
     @Query("DELETE FROM settings_draft WHERE profileId=:profile") protected abstract suspend fun clearDrafts(profile: String)
-    @Query("UPDATE review_operation SET status='isolated' WHERE profileId=:profile AND status='pending'")
+    @Query("UPDATE review_operation SET status='isolated' WHERE profileId=:profile AND (status='pending' OR (kind='capture_language_confirmation_v1' AND status='receipt_ready'))")
     protected abstract suspend fun isolateOperations(profile:String)
     @Query("UPDATE preparation_waiter SET cancelled=1 WHERE profileId=:profile")
     protected abstract suspend fun isolateWaiters(profile:String)
@@ -121,15 +121,48 @@ abstract class ReviewDao {
         }
         insertOperation(value); return value
     }
+    @Query("SELECT * FROM review_operation WHERE profileId=:profile AND privacyEpoch=:epoch AND ownerRevision=:revision AND kind='capture_language_confirmation_v1' ORDER BY rowid")
+    abstract suspend fun captureConfirmations(profile:String,epoch:Long,revision:Long):List<LocalReviewOperation>
+    @Query("UPDATE review_operation SET status=:next,receiptJson=:receipt WHERE operationId=:id AND payloadHash=:hash AND status=:previous AND kind='capture_language_confirmation_v1'")
+    protected abstract suspend fun advanceCaptureConfirmation(id:String,hash:String,previous:String,next:String,receipt:String?):Int
+    /** Dedicated monotonically reducing state CAS. Immutable wrapper bytes never change. */
+    @Transaction open suspend fun transitionCaptureConfirmation(owner:OwnerContext,expected:LocalReviewOperation,next:String,receipt:String?=expected.receiptJson):LocalReviewOperation {
+        requireOwner(owner);require(owned(expected,owner) && expected.kind=="capture_language_confirmation_v1")
+        val previous=requireNotNull(operation(expected.operationId));require(previous==expected && previous.payloadHash==LearningJson.hash(previous.payloadJson))
+        require(next in setOf("pending","receipt_ready","accepted","cancelled","orphaned","isolated"))
+        if(previous.receiptJson!=null)require(receipt==previous.receiptJson)
+        val valid=next==previous.status || when(previous.status) {
+            "pending" -> next in setOf("receipt_ready","cancelled","orphaned","isolated")
+            "receipt_ready" -> next in setOf("accepted","cancelled","orphaned","isolated")
+            else -> false
+        }
+        require(valid);if(next in setOf("receipt_ready","accepted"))require(receipt!=null)
+        if(next==previous.status && receipt==previous.receiptJson)return previous
+        require(advanceCaptureConfirmation(previous.operationId,previous.payloadHash,previous.status,next,receipt)==1)
+        return previous.copy(status=next,receiptJson=receipt)
+    }
+    @Transaction open suspend fun storeCaptureConfirmationReceipt(owner:OwnerContext,id:String,hash:String,receipt:String,live:Boolean):LocalReviewOperation {
+        requireOwner(owner);val current=requireNotNull(operation(id))
+        require(owned(current,owner) && current.kind=="capture_language_confirmation_v1" && current.payloadHash==hash)
+        val next=if(current.status=="pending"){if(live)"receipt_ready" else "cancelled"}else current.status
+        return transitionCaptureConfirmation(owner,current,next,receipt)
+    }
+    @Transaction open suspend fun closeCaptureConfirmation(owner:OwnerContext,id:String,hash:String,orphaned:Boolean):LocalReviewOperation {
+        requireOwner(owner);val current=requireNotNull(operation(id))
+        require(owned(current,owner) && current.kind=="capture_language_confirmation_v1" && current.payloadHash==hash)
+        return if(current.status in setOf("pending","receipt_ready"))transitionCaptureConfirmation(owner,current,if(orphaned)"orphaned" else "cancelled") else current
+    }
     @Transaction open suspend fun queueBatch(owner:OwnerContext,values:List<LocalReviewOperation>):List<LocalReviewOperation> {
         requireOwner(owner);require(values.isNotEmpty() && values.map{it.operationId}.distinct().size==values.size)
         return values.map{queue(owner,it)}
     }
-    @Transaction open suspend fun queueAttemptAndFence(owner:OwnerContext,attempt:LocalReviewOperation,fence:LocalReviewOperation,deviceStreamId:String,throughSequence:Long) {
+    @Transaction open suspend fun queueAttemptAndFence(owner:OwnerContext,attempt:LocalReviewOperation,fence:LocalReviewOperation,deviceStreamId:String,throughSequence:Long,
+        confirmationAnswer:io.github.driveenglishlab.pleos.domain.AcceptedAnswer?=null) {
         requireOwner(owner)
         val existingAttempt=operation(attempt.operationId);val existingFence=operation(fence.operationId)
         if(existingAttempt==null || existingFence==null)require(throughSequence==frontier(owner.profileId.toString(),owner.privacyEpoch,deviceStreamId))
         queueBatch(owner,listOf(attempt,fence))
+        if(confirmationAnswer!=null)CaptureConfirmationCommit.accept(this,confirmationAnswer,CaptureConfirmationProtocol.SOURCE6)
     }
     @Transaction open suspend fun storeSource6(owner:OwnerContext,value:LocalSource6Record):Boolean {
         requireOwner(owner);require(value.profileId==owner.profileId.toString() && value.privacyEpoch==owner.privacyEpoch && value.version>=1)

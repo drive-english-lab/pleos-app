@@ -84,7 +84,7 @@ class Source6PracticeRepository(
             stableRecordId("source6-assistance-fence:${answer.lease.attemptId}").toString(), answer.lease.attemptId.toString(), deviceStreamId.toString(), throughSequence, attempt.payloadHash)
         val fenceJson = incrementalCanonical(codecs.parse("review", codecs.encode("review", "AssistanceFenceRequest", fence, WireReviewAssistanceFenceRequest.serializer())))
         val fenceRow = LocalReviewOperation(fence.operationId, attempt.profileId, attempt.privacyEpoch, attempt.ownerRevision, "fence", input.attemptId, fenceJson, LearningJson.hash(fenceJson))
-        dao.queueAttemptAndFence(current.owner, attempt, fenceRow, deviceStreamId.toString(), throughSequence)
+        dao.queueAttemptAndFence(current.owner, attempt, fenceRow, deviceStreamId.toString(), throughSequence,answer)
     }
 
     suspend fun submit(scope: LearningCallScope, current: PracticeSession, attemptId: UUID, channel: InteractionChannel,

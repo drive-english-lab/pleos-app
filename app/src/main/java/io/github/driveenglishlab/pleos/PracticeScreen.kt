@@ -28,6 +28,9 @@ import kotlinx.coroutines.launch
 @OptIn(ExperimentalLayoutApi::class)
 fun PracticeScreen(state: ProductScreenState, send: (UiIntent) -> Unit, requestMicrophone: () -> Unit) {
     val study = state.learning
+    val confirmation = state.session.captureConfirmation?.takeIf {
+        it.captureId == state.session.captureLease?.captureId && state.session.inputPhase == InputPhase.FINALIZING && state.session.access.canCapture
+    }
     val practice = study.practice
     if (practice == null || practice.owner != state.session.owner || study.owner != null && study.owner != state.session.owner) {
         ProductStatus("연습을 준비하고 있어요", "듣던 기사와 진행을 유지하고 있어요", loading = true)
@@ -55,6 +58,18 @@ fun PracticeScreen(state: ProductScreenState, send: (UiIntent) -> Unit, requestM
                 ObservedSupportText(binding) { send(UiIntent.SupportWitness(state.origin, it)) }
                 ProductButton("질문으로 돌아가기", { send(UiIntent.CloseSupport(state.origin)) }, secondary = true)
             } ?: when {
+                confirmation != null -> {
+                    Text(when (confirmation.phase) {
+                        CaptureConfirmationPhase.ASKING -> "방금 답변을 영어로 했나요?"
+                        CaptureConfirmationPhase.SENDING -> "답변 언어를 확인하고 있어요"
+                        CaptureConfirmationPhase.RETRYABLE -> "확인 연결을 마치지 못했어요"
+                    }, style = MaterialTheme.typography.titleMedium)
+                    Text(when (confirmation.phase) {
+                        CaptureConfirmationPhase.ASKING -> "방금 말한 언어를 골라 주세요. 답변은 아직 제출되지 않았어요"
+                        CaptureConfirmationPhase.SENDING -> "연결을 기다리는 동안 같은 질문을 유지해요"
+                        CaptureConfirmationPhase.RETRYABLE -> "같은 답변으로 다시 연결하거나 답변을 취소할 수 있어요"
+                    }, style = MaterialTheme.typography.bodySmall)
+                }
                 state.session.inputPhase in setOf(InputPhase.CAPTURING, InputPhase.FINALIZING) -> {
                     Text(if (state.session.inputPhase == InputPhase.FINALIZING) "답변을 확인하고 있어요" else "영어로 답해 주세요", style = MaterialTheme.typography.titleMedium)
                     Text("끝나면 ‘답변 마치기’를 눌러 주세요", style = MaterialTheme.typography.bodySmall)
@@ -80,6 +95,20 @@ fun PracticeScreen(state: ProductScreenState, send: (UiIntent) -> Unit, requestM
         }
         if (study.support == null) FlowRow(horizontalArrangement = Arrangement.spacedBy(24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             when {
+                confirmation != null -> {
+                    if (confirmation.phase == CaptureConfirmationPhase.ASKING) {
+                        listOf("영어로 답했어요" to CaptureLanguageChoice.ENGLISH,
+                            "한국어로 답했어요" to CaptureLanguageChoice.KOREAN,
+                            "잘 모르겠어요" to CaptureLanguageChoice.UNSURE).forEach { (label, choice) ->
+                            ProductButton(label, { send(UiIntent.ConfirmCaptureLanguage(state.origin,
+                                confirmation.captureId, confirmation.confirmationToken, choice)) }, secondary = choice != CaptureLanguageChoice.ENGLISH)
+                        }
+                    } else if (confirmation.phase == CaptureConfirmationPhase.RETRYABLE) {
+                        ProductButton("확인 연결 다시 시도", { send(UiIntent.RetryCaptureConfirmation(state.origin,
+                            confirmation.captureId, confirmation.confirmationToken)) })
+                    }
+                    ProductButton("답변 취소", { send(UiIntent.CancelAnswer(state.origin)) }, secondary = true)
+                }
                 state.session.inputPhase == InputPhase.CAPTURING -> {
                     ProductButton("답변 마치기", { send(UiIntent.FinishAnswer(state.origin)) })
                     ProductButton("답변 취소", { send(UiIntent.CancelAnswer(state.origin)) }, secondary = true)
@@ -102,7 +131,8 @@ fun PracticeScreen(state: ProductScreenState, send: (UiIntent) -> Unit, requestM
                 ProductButton("힌트", { send(UiIntent.RequestHelp(state.origin, HelpRequest.HINT)) }, secondary = true)
                 ProductButton("예문", { send(UiIntent.RequestHelp(state.origin, HelpRequest.EXAMPLE)) }, secondary = true)
             }
-            ProductButton("저장 후 나가기", { send(UiIntent.FinishPractice(state.origin)) }, enabled = !processing, secondary = true)
+            if (confirmation == null)
+                ProductButton("저장 후 나가기", { send(UiIntent.FinishPractice(state.origin)) }, enabled = !processing, secondary = true)
         }
         if (study.support != null && shownSupport == null) ProductButton("도움 닫기", { send(UiIntent.CloseSupport(state.origin)) }, secondary = true)
     }

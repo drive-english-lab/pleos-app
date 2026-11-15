@@ -9,6 +9,7 @@ import kotlinx.serialization.modules.plus
 
 /** Independent contract1/source6 codecs. Existing schema5/feature1 loaders are unchanged. */
 class IncrementalContractJson(context: Context) {
+    private val confirmation by lazy { LearningContractJson(context.applicationContext, "capture-confirmation-contracts", listOf("capture-confirmation.openapi.json")) }
     private val r7 by lazy { R7ContractJson(context.applicationContext) }
     private val loaders = listOf("review", "preparation", "source6").associateWith { bundle ->
         LearningContractJson(context, "$bundle-contracts", listOf("$bundle.schema.json", "$bundle.openapi.json"))
@@ -26,6 +27,11 @@ class IncrementalContractJson(context: Context) {
 
     fun validateDefinition(bundle: String, name: String, value: JsonElement) {
         if(bundle in R7ContractJson.bundles){r7.validateDefinition(bundle,name,value);return}
+        if(bundle=="capture-confirmation") {
+            confirmation.validate("capture-confirmation.openapi.json",confirmation.schema("capture-confirmation.openapi.json","#/components/schemas/$name"),value)
+            if(name=="ConfirmationRequest")CaptureConfirmationWireRules.request(value.jsonObject)
+            return
+        }
         val codec = loader(bundle)
         val file = "$bundle.schema.json"
         codec.validate(file, codec.schema(file, "#/\$defs/$name"), value)
@@ -78,5 +84,5 @@ class IncrementalContractJson(context: Context) {
     fun validateNextObservation(query:JsonObject,operationId:String,result:JsonObject)=r7.nextObservation(query,operationId,result)
     fun validateAssessmentLookup(query:JsonObject,result:JsonObject,targetId:String)=r7.assessmentLookup(query,result,targetId)
 
-    private fun loader(bundle: String): LearningContractJson = loaders[bundle] ?: throw LearningProtocolException()
+    private fun loader(bundle: String): LearningContractJson = if(bundle=="capture-confirmation")confirmation else loaders[bundle] ?: throw LearningProtocolException()
 }

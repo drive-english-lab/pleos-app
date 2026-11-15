@@ -399,6 +399,7 @@ class LearningStore internal constructor(private val database: LearningDatabase,
             OutboxRecord(lease.attemptId.toString(), owner.profileId.toString(), owner.privacyEpoch,
                          owner.revision, lease.attemptId.toString(), payload, hash))
             if (accepted) journalPracticeTime(database, answer, practiceClock.atAcceptance(answer))
+            CaptureConfirmationCommit.accept(database.review(),answer,CaptureConfirmationProtocol.LEGACY5)
             accepted
         }
     }

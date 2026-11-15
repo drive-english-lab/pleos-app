@@ -62,6 +62,9 @@ class DirectSpeechGateway(private val context: Context, private val approval: Sp
     private var focus: AudioFocusRequest? = null
     private var focusOwner: OwnerContext? = null
     private var focusGeneration = 0L
+    /** Read-only identity for a pending same-capture confirmation; never grants focus. */
+    val currentFocusGeneration: Long get() = focusGeneration
+    val currentCaptureGeneration: Long get() = captureGeneration
     fun acceptsEvent(owner: OwnerContext?, generation: Long): Boolean = !closed && generation == focusGeneration && (owner == null || owner == focusOwner)
 
     private fun certificateMatches(packageName: String, expected: String): Boolean = try {

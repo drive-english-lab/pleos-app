@@ -12,6 +12,8 @@ import io.github.driveenglishlab.pleos.ui.*
 import java.util.UUID
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 /** Read projections and adapter effects; the shared coordinator remains the only UI/input authority. */
 internal class ProductLearningController(private val context: Context, private val scope: CoroutineScope,
@@ -57,6 +59,14 @@ internal class ProductLearningController(private val context: Context, private v
                 it.inputPhase !in setOf(InputPhase.CAPTURING, InputPhase.FINALIZING) &&
                 (it.pendingAnswer == null || it.pendingAnswer?.lease?.attemptId == attempt) }
         })
+    private val captureConfirmations = CaptureConfirmationRepository(context, incremental, database)
+    private data class ConfirmationOrigin(val owner: OwnerContext, val captureId: UUID, val token: UUID)
+    private data class CaptureFocusOrigin(val owner: OwnerContext, val captureId: UUID, val generation: Long, val captureGeneration: Long)
+    private var captureFocusOrigin: CaptureFocusOrigin? = null
+    private var confirmationOrigin: ConfirmationOrigin? = null
+    private var confirmationJob: Job? = null
+    private var confirmationRecoveredOwner: OwnerContext? = null
+    private val confirmationRecovery = Mutex()
     private val preparedQuestions = Source6QuestionRepository(incremental, isCurrent = { owner, origin ->
         coordinator.state.value.owner == owner && mutable.value.questionOrigin == origin && questionContext?.matches(coordinator.state.value) == true
     })
@@ -109,7 +119,10 @@ internal class ProductLearningController(private val context: Context, private v
     private val completedOutputs = mutableSetOf<UUID>()
     private data class HintOutputOrigin(val owner:OwnerContext,val lesson:UUID,val prepared:Boolean)
     private val hintOutputOrigins=linkedMapOf<UUID,HintOutputOrigin>()
-    private val speech = DirectSpeechGateway(context, voices.direct) { event -> scope.launch { speechEvent(event) } }
+    private val speech = DirectSpeechGateway(context, voices.direct) { event ->
+        val confirmationAtArrival = coordinator.state.value.captureConfirmation
+        scope.launch { speechEvent(event, confirmationAtArrival) }
+    }
     private val presenter = SupportPresenter(current = { binding ->
         val view = coordinator.snapshot()
         support == binding && supportContext?.let { it.navigation==view.navigationGeneration && it.intent==view.intentGeneration && it.modal==view.practiceModal?.token &&
@@ -365,6 +378,21 @@ internal class ProductLearningController(private val context: Context, private v
             }
         }
         scope.launch { coordinator.state.collect { view ->
+            val previousConfirmation = confirmationOrigin
+            val currentConfirmation = view.captureConfirmation
+            if (previousConfirmation != null && (view.owner != previousConfirmation.owner ||
+                currentConfirmation?.captureId != previousConfirmation.captureId || currentConfirmation?.confirmationToken != previousConfirmation.token)) {
+                confirmationOrigin = null
+                if (view.pendingAnswer?.lease?.captureId != previousConfirmation.captureId) {
+                    confirmationJob?.cancel(); confirmationJob = null
+                    captureConfirmations.cancel(previousConfirmation.owner, previousConfirmation.captureId, previousConfirmation.token)
+                }
+            }
+            if (currentConfirmation != null && view.owner != null) confirmationOrigin = ConfirmationOrigin(requireNotNull(view.owner), currentConfirmation.captureId, currentConfirmation.confirmationToken)
+            if (confirmationRecoveredOwner != view.owner) {
+                confirmationRecoveredOwner = null
+                view.owner?.let { recoverConfirmationMetadata(it) }
+            }
             if (mutable.value.owner != view.owner) { speech.releaseFocus(); task = null; preparedManifest=null;preparedResumeSelected=false;preparedRequestActive=false;preparedRequestClock.clear()
                 preparedReadOnly=false;source6Binding=null;preparedQuestionResult=null;support = null;supportContext=null;completedOutputs.clear();hintOutputOrigins.clear(); questionReturn = null; questionContext = null; questionOutput = null; gleoInput = null; mutable.value = LearningPresentation(owner = view.owner) }
             if (speech.state.value.listening && !view.access.canCapture) speech.cancel()
@@ -389,6 +417,8 @@ internal class ProductLearningController(private val context: Context, private v
         when (intent) {
             is UiIntent.StartPractice -> startPractice(InteractionChannel.PARKED)
             is UiIntent.StartAnswer -> startAnswer()
+            is UiIntent.ConfirmCaptureLanguage -> confirmCaptureLanguage(intent)
+            is UiIntent.RetryCaptureConfirmation -> retryCaptureConfirmation(intent.captureId, intent.confirmationToken)
             is UiIntent.FinishAnswer -> coordinator.snapshot().captureLease?.let { if (coordinator.finishAnswer(it.captureId)) speech.finish(it) }
             is UiIntent.CancelAnswer -> coordinator.snapshot().owner?.let { speech.cancel(); coordinator.cancelCapture(it) }
             is UiIntent.RetryFeedback -> mutable.value.lastAttemptId?.let { evaluate(it, mutable.value.channel, intent.readOnly) }
@@ -610,21 +640,42 @@ internal class ProductLearningController(private val context: Context, private v
         if(view.practiceModal?.visible!=true)return
         if (source6(value) && (!preparedResumeSelected || preparedReadOnly)) return
         if (value.progress?.nextTurn == null || value.progress?.pendingFeedbackAttemptId != null || support != null) return
+        if (confirmationRecoveredOwner != view.owner) {
+            val recovered = view.owner?.let { recoverConfirmationMetadata(it) } == true
+            notice(if (recovered) "답변 상태를 확인했어요. 답변 시작을 다시 눌러 주세요" else "저장된 답변 상태를 확인하지 못했어요. 연결 후 답변 시작을 다시 눌러 주세요")
+            return
+        }
         if (!speech.state.value.approved) { notice("이 차량의 직접 음성 입력 경로를 확인하고 있어요. 현재 질문은 유지돼요"); return }
         if (!microphoneGranted) { mutable.update { it.copy(microphonePermissionNeeded = true) }; return }
         if (!speech.acquireFocus(requireNotNull(view.owner))) { notice("지금은 마이크를 사용할 수 없어요. 잠시 후 다시 눌러 주세요"); return }
         accessChanged()
         if (view.owner != coordinator.state.value.owner) return
         val lease = coordinator.startAnswer() ?: return
-        if (!speech.start(lease, coordinator.state.value.access)) { coordinator.cancelCapture(lease.owner); notice("답변 입력을 시작하지 못했어요. 다시 눌러 주세요") }
+        if (!speech.start(lease, coordinator.state.value.access)) { coordinator.cancelCapture(lease.owner, lease.captureId); notice("답변 입력을 시작하지 못했어요. 다시 눌러 주세요") }
+        else captureFocusOrigin = CaptureFocusOrigin(lease.owner, lease.captureId, speech.currentFocusGeneration, speech.currentCaptureGeneration)
     }
     /** A permission result changes availability only; it never opens a capture. */
     suspend fun permissionResult() { mutable.update { it.copy(microphonePermissionNeeded = false) }; accessChanged() }
-    private suspend fun speechEvent(event: DirectSpeechEvent) {
+    private suspend fun speechEvent(event: DirectSpeechEvent, confirmationAtArrival: CaptureConfirmationView? = null) {
         when (event) {
             is DirectSpeechEvent.Final -> {
+                if (coordinator.state.value.captureLease != event.lease) return
+                val focusOrigin = captureFocusOrigin?.takeIf { it.owner == event.lease.owner && it.captureId == event.lease.captureId }
+                if (focusOrigin == null || !speech.acceptsEvent(focusOrigin.owner, focusOrigin.generation) || focusOrigin.captureGeneration != speech.currentCaptureGeneration || !speech.state.value.focusGranted) {
+                    coordinator.cancelCapture(event.lease.owner, event.lease.captureId); return
+                }
                 coordinator.finishAnswer(event.lease.captureId)
-                if(!flushQuestionDeliveries()){coordinator.cancelCapture(event.lease.owner);notice("도움 제공 기록을 확인한 뒤 같은 질문에 다시 답해 주세요");return}
+                if(!flushQuestionDeliveries()){coordinator.cancelCapture(event.lease.owner, event.lease.captureId);notice("도움 제공 기록을 확인한 뒤 같은 질문에 다시 답해 주세요");return}
+                if (focusOrigin.captureGeneration != speech.currentCaptureGeneration || !speech.acceptsEvent(focusOrigin.owner, focusOrigin.generation) || !speech.state.value.focusGranted) {
+                    coordinator.cancelCapture(event.lease.owner, event.lease.captureId); return
+                }
+                if (requiresCaptureLanguageConfirmation(event.capture)) {
+                    val prompt = coordinator.beginCaptureConfirmation(event.lease.captureId, event.text, event.capture,
+                        currentRoute = { captureFocusMatches(event.lease.owner, event.lease.captureId) })
+                    if (prompt == null && coordinator.state.value.captureConfirmation == null &&
+                        coordinator.state.value.captureLease?.captureId == event.lease.captureId) coordinator.cancelCapture(event.lease.owner, event.lease.captureId)
+                    return
+                }
                 val answer = coordinator.acceptFinal(event.lease.captureId, event.text, event.capture, ::persistAnswer) ?: return
                 scope.launch { evaluate(answer.lease.attemptId, InteractionChannel.PARKED) }
             }
@@ -638,8 +689,104 @@ internal class ProductLearningController(private val context: Context, private v
             }
             is DirectSpeechEvent.Interrupted -> {
                 val view = coordinator.snapshot()
-                if (speech.acceptsEvent(event.owner, event.focusGeneration) && event.owner == view.owner &&
-                    event.captureId != null && event.captureId == view.captureLease?.captureId) coordinator.cancelCapture(event.owner)
+                if (speech.acceptsEvent(event.owner, event.focusGeneration) && event.owner == view.owner) {
+                    confirmationAtArrival?.let { coordinator.cancelCaptureConfirmation(it.captureId, it.confirmationToken) }
+                    if (event.captureId != null) coordinator.cancelCapture(event.owner, event.captureId)
+                }
+            }
+        }
+    }
+    private suspend fun recoverConfirmationMetadata(owner: OwnerContext): Boolean = confirmationRecovery.withLock {
+        if (confirmationRecoveredOwner == owner) return@withLock true
+        if (coordinator.state.value.owner != owner) return@withLock false
+        try {
+            captureConfirmations.orphanUnaccepted(owner)
+            if (coordinator.state.value.owner != owner) return@withLock false
+            confirmationRecoveredOwner = owner; true
+        } catch (cancelled: CancellationException) { throw cancelled }
+        catch (_: Exception) { false }
+    }
+    private suspend fun confirmCaptureLanguage(intent: UiIntent.ConfirmCaptureLanguage) {
+        if (intent.choice != CaptureLanguageChoice.ENGLISH) {
+            val answer = coordinator.acceptUnverifiedFinal(intent.captureId, intent.confirmationToken,
+                currentRoute = { captureFocusMatches(requireNotNull(intent.origin.owner), intent.captureId) }, persist = ::persistAnswer) ?: return
+            scope.launch { evaluate(answer.lease.attemptId, InteractionChannel.PARKED) }
+            return
+        }
+        val candidate = coordinator.chooseCaptureConfirmation(intent.captureId, intent.confirmationToken) ?: return
+        prepareAndLaunchCaptureConfirmation(candidate)
+    }
+    private suspend fun prepareAndLaunchCaptureConfirmation(candidate: CaptureConfirmationCandidate) {
+        val call = try { profiles.current()?.takeIf { it.owner == candidate.lease.owner } }
+        catch (cancelled: CancellationException) { throw cancelled }
+        catch (_: Exception) {
+            coordinator.confirmationFailed(candidate.lease.captureId, candidate.confirmationToken); return
+        }
+        if (call == null) {
+            coordinator.cancelCaptureConfirmation(candidate.lease.captureId, candidate.confirmationToken); return
+        }
+        val prepared = captureConfirmations.prepare(call, candidate.lease, candidate.originalCapture, candidate.text,
+            candidate.confirmationToken, if (source6(candidate.lease.owner, candidate.lease.lessonId, candidate.lease.task))
+                CaptureConfirmationProtocol.SOURCE6 else CaptureConfirmationProtocol.LEGACY5)
+        if (prepared is LearningReply.Failed) {
+            if (coordinator.confirmationFailed(candidate.lease.captureId, candidate.confirmationToken))
+                notice("확인 내용을 저장하지 못했어요. 같은 질문에서 다시 연결하거나 답변을 취소할 수 있어요")
+            return
+        }
+        // The transport coroutine captures only identity. Unaccepted text stays in coordinator RAM.
+        launchCaptureConfirmation(candidate.lease.owner, candidate.lease.captureId, candidate.confirmationToken)
+    }
+    private suspend fun retryCaptureConfirmation(captureId: UUID, token: UUID) {
+        val candidate = coordinator.retryCaptureConfirmation(captureId, token) ?: return
+        prepareAndLaunchCaptureConfirmation(candidate)
+    }
+    /** Synchronous original-route check; also called inside coordinator's final local admission lock. */
+    private fun captureFocusMatches(owner: OwnerContext, captureId: UUID): Boolean {
+        val focus = captureFocusOrigin ?: return false
+        return focus.owner == owner && focus.captureId == captureId && speech.acceptsEvent(owner, focus.generation) &&
+            focus.captureGeneration == speech.currentCaptureGeneration && speech.state.value.focusGranted
+    }
+    private suspend fun currentConfirmationFocus(owner: OwnerContext, captureId: UUID, token: UUID): Boolean {
+        if (!captureFocusMatches(owner, captureId)) {
+            coordinator.cancelCaptureConfirmation(captureId, token); return false
+        }
+        val current = coordinator.captureConfirmationCandidate(captureId, token) ?: return false
+        if (!captureFocusMatches(owner, current.lease.captureId)) {
+            coordinator.cancelCaptureConfirmation(captureId, token); return false
+        }
+        return true
+    }
+    private fun launchCaptureConfirmation(owner: OwnerContext, captureId: UUID, token: UUID) {
+        confirmationJob = scope.launch {
+            try {
+                val call = profiles.current()?.takeIf { it.owner == owner }
+                if (call == null) {
+                    coordinator.cancelCaptureConfirmation(captureId, token)
+                    captureConfirmations.cancel(owner, captureId, token)
+                    if (coordinator.state.value.owner == owner) notice("연결 상태를 확인하지 못했어요. 같은 질문에 새로 답할 수 있어요")
+                    return@launch
+                }
+                when (val result = captureConfirmations.issue(call, captureId, token,
+                    mayAct = { currentConfirmationFocus(owner, captureId, token) })) {
+                    is LearningReply.Failed -> {
+                        if (coordinator.confirmationFailed(captureId, token)) notice("답변 언어 확인을 연결하지 못했어요. 질문은 유지돼요")
+                    }
+                    is LearningReply.Stored -> {
+                        if (!currentConfirmationFocus(owner, captureId, token)) {
+                            captureConfirmations.cancel(owner, captureId, token); return@launch
+                        }
+                        val answer = coordinator.acceptConfirmedFinal(captureId, token, result.value.confirmationRef,
+                            currentRoute = { captureFocusMatches(owner, captureId) }, persist = ::persistAnswer)
+                        if (answer != null) scope.launch { evaluate(answer.lease.attemptId, InteractionChannel.PARKED) }
+                        else captureConfirmations.cancel(owner, captureId, token)
+                    }
+                }
+            } catch (cancelled: CancellationException) {
+                withContext(NonCancellable) { captureConfirmations.cancel(owner, captureId, token) }
+                throw cancelled
+            } catch (_: Exception) {
+                withContext(NonCancellable) { captureConfirmations.cancel(owner, captureId, token, orphaned = true) }
+                if (coordinator.cancelCaptureConfirmation(captureId, token)) notice("답변을 저장하지 못했어요. 같은 질문에 새로 답해 주세요")
             }
         }
     }
