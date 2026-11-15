@@ -39,13 +39,13 @@ data class GleoLearningPreferenceLease(
     val navigationGeneration:Long,val intentGeneration:Long,
     val listening:ListeningWorkRef?,val preparedListening:PreparedListeningWorkRef?,
     val modalToken:PracticeModalToken?,
+    val gleoPermissionGeneration:Long=0,
 ) {
-    fun matches(view:SessionView):Boolean=owner==view.owner && task==view.task && lessonId==view.lessonId &&
+    fun matches(view:SessionView):Boolean=owner==view.owner && gleoPermissionGeneration==view.access.gleoPermissionGeneration && task==view.task && lessonId==view.lessonId &&
         navigationGeneration==view.navigationGeneration && intentGeneration==view.intentGeneration && modalToken==view.practiceModal?.token &&
         (listening==null && view.listening==null || listening?.sameWork(view.listening)==true) &&
         (preparedListening==null && view.preparedListening==null || preparedListening?.sameWork(view.preparedListening)==true)
-    fun mayAct(view:SessionView):Boolean=matches(view) && view.access.ownerValid &&
-        view.access.power==PowerAvailability.ALLOWED && view.access.audioAllowsReply
+    fun mayAct(view:SessionView):Boolean=matches(view) && view.access.gleoAllowed
 }
 data class GleoLearningPreferenceRequest(val command:GleoLearningPreferenceCommand,val lease:GleoLearningPreferenceLease,
     val recommendationBasis:GleoRecommendationBasis?=null)

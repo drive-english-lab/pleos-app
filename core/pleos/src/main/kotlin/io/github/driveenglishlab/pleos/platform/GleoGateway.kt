@@ -12,6 +12,10 @@ interface GleoProjectAdapter {
     val callback: GleoTransportPort
     val schemaApproval: Capability
     val actionParamJsonVerified: Boolean
+    /** Actual project/environment vehicle scope and registration lifetime, never inferred from schema approval. */
+    val vehicleScopeApproval: Capability get() = Capability.Unavailable("gleo_vehicle_scope_not_verified")
+    val permissionGeneration: Long? get() = null
+    fun allowsVehicle(safety: SafetyState): Boolean = false
     /** Each additional pending-choice enum needs actual project schema approval of its own. */
     fun pendingChoiceCommandVerified(command:String):Boolean=false
     fun acceptsSender(uid: Int, packageName: String?): Boolean
@@ -22,11 +26,13 @@ interface GleoProjectAdapter {
     fun captureFor(action: GleoProductAction): GleoCaptureBinding?
 }
 sealed interface GleoRuntimeEvent {
-    data class InputStarted(val owner: OwnerContext, val lessonId: UUID?, val inputId: UUID) : GleoRuntimeEvent
-    data class InputChanged(val owner: OwnerContext, val activity: VoiceInputActivity, val atMs: Long) : GleoRuntimeEvent
-    data class OutputEnded(val owner: OwnerContext, val outputId: UUID, val atMs: Long, val evidenceRef: String) : GleoRuntimeEvent
-    data class ReplyAvailability(val owner: OwnerContext, val allowed: Boolean) : GleoRuntimeEvent
-    data class Interrupted(val owner: OwnerContext) : GleoRuntimeEvent
+    /** Actual adapter/route lifetime. Omitted legacy events cannot grant a current permission. */
+    val permissionGeneration: Long?
+    data class InputStarted(val owner: OwnerContext, val lessonId: UUID?, val inputId: UUID, override val permissionGeneration: Long? = null) : GleoRuntimeEvent
+    data class InputChanged(val owner: OwnerContext, val activity: VoiceInputActivity, val atMs: Long, override val permissionGeneration: Long? = null) : GleoRuntimeEvent
+    data class OutputEnded(val owner: OwnerContext, val outputId: UUID, val atMs: Long, val evidenceRef: String, override val permissionGeneration: Long? = null) : GleoRuntimeEvent
+    data class ReplyAvailability(val owner: OwnerContext, val allowed: Boolean, override val permissionGeneration: Long? = null) : GleoRuntimeEvent
+    data class Interrupted(val owner: OwnerContext, override val permissionGeneration: Long? = null) : GleoRuntimeEvent
 }
 data class GleoCaptureBinding(val inputId: UUID, val capture: Capture)
 

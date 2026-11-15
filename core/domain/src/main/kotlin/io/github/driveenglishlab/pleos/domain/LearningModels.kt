@@ -159,6 +159,7 @@ data class OwnerContext(
 }
 
 enum class VehiclePosition { PARKED, DRIVE_STOPPED, MOVING_OR_REVERSE_NEUTRAL, UNKNOWN }
+/** Raw-only compatibility: ALLOWED denotes actually observed AWAKE, never component approval. */
 enum class PowerAvailability { UNKNOWN, ALLOWED, DISALLOWED, SUSPENDING, SUSPENDED }
 
 data class SafetyState(
@@ -185,13 +186,28 @@ data class AccessState(
     val inputArbitrationVerified: Boolean = false,
     val audioAllowsReply: Boolean = false,
     val ownerValid: Boolean = false,
+    val components: ComponentPolicies = ComponentPolicies(),
+    val mediaRouteAvailable:Boolean=false,
+    val mediaFocusAllowed:Boolean=false,
+    val backgroundMediaAllowed:Boolean=false,
+    val gleoRouteAvailable:Boolean=false,
+    val gleoVehicleAllowed:Boolean=false,
+    val parkedOutputAvailable:Boolean=false,
+    val gleoPermissionGeneration:Long=0,
+    val gleoReplyFocusAllowed:Boolean=false,
+    val directReplyFocusAllowed:Boolean=false,
 ) {
-    val detailsOpen: Boolean get() = ownerValid && safety.position == VehiclePosition.PARKED &&
-        safety.uxKnown && safety.detailsAllowed && !safety.systemBlocked && window.visible &&
-        power == PowerAvailability.ALLOWED
-
-    val canCapture: Boolean get() = detailsOpen && safety.directInputAllowed && window.focused &&
-        microphoneGranted && directProviderVerified && inputArbitrationVerified && audioAllowsReply
+    val suspending:Boolean get()=power in setOf(PowerAvailability.SUSPENDING,PowerAvailability.SUSPENDED)
+    val detailsOpen:Boolean get()=FeatureAccessEvaluator.evaluate(FeatureScope.DETAILS,this).allowed
+    val canCapture:Boolean get()=FeatureAccessEvaluator.evaluate(FeatureScope.DIRECT_CAPTURE,this).allowed
+    val mediaReady:Boolean get()=FeatureAccessEvaluator.evaluate(FeatureScope.MEDIA,this,requireFocus=false).allowed
+    val mediaAllowed:Boolean get()=FeatureAccessEvaluator.evaluate(FeatureScope.MEDIA,this).allowed
+    val gleoReady:Boolean get()=FeatureAccessEvaluator.evaluate(FeatureScope.GLEO,this,requireFocus=false).allowed
+    val gleoAllowed:Boolean get()=FeatureAccessEvaluator.evaluate(FeatureScope.GLEO,this).allowed
+    val parkedReplyReady:Boolean get()=detailsOpen && components.audio.current(components.generation) && components.audio.allowed && parkedOutputAvailable
+    val parkedReplyAllowed:Boolean get()=parkedReplyReady && directReplyFocusAllowed
+    val persistenceAllowed:Boolean get()=FeatureAccessEvaluator.evaluate(FeatureScope.PERSISTENCE,this).allowed
+    val noticeAllowed:Boolean get()=FeatureAccessEvaluator.evaluate(FeatureScope.NOTICE,this).allowed
 }
 
 enum class PlaybackIntent { PLAY, USER_PAUSED, STOPPED }

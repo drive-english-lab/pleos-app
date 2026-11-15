@@ -78,7 +78,7 @@ data class ProductScreenState(val session: SessionView = SessionView(), val prof
     }
     val canRead get() = session.access.detailsOpen
     val mediaAllowed get() = session.ownerBinding == OwnerBindingStatus.VERIFIED && session.mediaConnected &&
-        session.task == null && session.access.ownerValid && session.access.power == PowerAvailability.ALLOWED && (session.listening != null || session.preparedListening != null)
+        session.task == null && session.access.mediaReady && (session.listening != null || session.preparedListening != null)
 }
 
 sealed interface UiIntent {

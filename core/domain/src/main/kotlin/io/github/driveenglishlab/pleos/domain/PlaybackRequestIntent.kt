@@ -54,8 +54,9 @@ data class PlaybackRequestIntent(val binding: PlaybackRequestBinding, val admiss
     }
 }
 data class PlaybackActivationGuard(val owner: OwnerContext?, val contextToken: UUID?, val processToken: UUID,
-    val elapsedMs: Long, val utcNow: Instant?, val outputAllowed: Boolean, val sameArticleAndFormat: Boolean = true) {
+    val elapsedMs: Long, val utcNow: Instant?, val outputAllowed: Boolean, val sameArticleAndFormat: Boolean = true, val access:AccessState?=null) {
     init { require(elapsedMs >= 0) }
+    val allowsMediaAdmission:Boolean get()=outputAllowed && (access==null || access.mediaReady)
 }
 sealed interface PlaybackActivationDecision {
     data class Claimed(val intent: PlaybackRequestIntent) : PlaybackActivationDecision
@@ -83,7 +84,7 @@ object PlaybackRequestPolicy {
     /** Poll count and the original local/server deadlines bound observation independently of jobs. */
     fun reservePoll(intent: PlaybackRequestIntent, guard: PlaybackActivationGuard, maxPolls: Int = 5): PlaybackRequestIntent? {
         require(maxPolls in 1..20)
-        if (intent.state != PlaybackRequestState.ACTIVE || intent.polls >= maxPolls || !guard.outputAllowed || !guard.sameArticleAndFormat || !sameLocalIntent(intent, guard) || expired(intent, guard)) return null
+        if (intent.state != PlaybackRequestState.ACTIVE || intent.polls >= maxPolls || !guard.allowsMediaAdmission || !guard.sameArticleAndFormat || !sameLocalIntent(intent, guard) || expired(intent, guard)) return null
         return intent.copy(polls = intent.polls + 1)
     }
     fun remainingMs(intent: PlaybackRequestIntent, guard: PlaybackActivationGuard): Long {
@@ -96,7 +97,7 @@ object PlaybackRequestPolicy {
     fun claim(intent: PlaybackRequestIntent, guard: PlaybackActivationGuard, claimId: UUID): PlaybackActivationDecision {
         if (intent.state != PlaybackRequestState.ACTIVE) return PlaybackActivationDecision.StateOnly(intent, intent.state.name)
         if (expired(intent, guard)) return PlaybackActivationDecision.StateOnly(expire(intent), "ORIGINAL_DEADLINE_EXPIRED")
-        if (!sameLocalIntent(intent, guard) || !guard.outputAllowed || !guard.sameArticleAndFormat || guard.utcNow == null)
+        if (!sameLocalIntent(intent, guard) || !guard.allowsMediaAdmission || !guard.sameArticleAndFormat || guard.utcNow == null)
             return PlaybackActivationDecision.StateOnly(intent, "EXPLICIT_RESUME_REQUIRED")
         if (intent.admission?.selectionIntentId == null || intent.outcome !in setOf(PlaybackRequestOutcome.SELECTED, PlaybackRequestOutcome.RESUMED))
             return PlaybackActivationDecision.StateOnly(intent, "NOT_SELECTED")

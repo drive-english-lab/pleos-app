@@ -15,7 +15,8 @@ class GleoLearningPreferenceTest {
     private val input=UUID.randomUUID()
     private val lease=GleoLearningPreferenceLease(owner,input,null,null,4,8,null,null,null)
     private val view=SessionView(owner=owner,navigationGeneration=4,intentGeneration=8,
-        access=AccessState(ownerValid=true,power=PowerAvailability.ALLOWED,audioAllowsReply=true))
+        access=AccessState(ownerValid=true,power=PowerAvailability.UNKNOWN,audioAllowsReply=false,gleoReplyFocusAllowed=true,
+            gleoRouteAvailable=true,gleoVehicleAllowed=true))
     private fun admits(extra:Boolean=true,schema:Boolean=true,parameters:Boolean=true,inputVerified:Boolean=true,
         arbitration:Boolean=true,capture:UUID?=input,current:SessionView=view)=GleoLearningPreferencePolicy.admits(
         extra,schema,parameters,inputVerified,arbitration,capture,lease,current)
@@ -31,9 +32,14 @@ class GleoLearningPreferenceTest {
         assertFalse(admits(current=view.copy(owner=owner.copy(presentationToken=UUID.randomUUID()))))
         assertFalse(admits(current=view.copy(navigationGeneration=5)))
         assertFalse(admits(current=view.copy(intentGeneration=9)))
+        assertFalse(admits(current=view.copy(access=view.access.copy(gleoPermissionGeneration=1))))
         assertFalse(admits(current=view.copy(lessonId=UUID.randomUUID())))
-        assertFalse(admits(current=view.copy(access=view.access.copy(power=PowerAvailability.UNKNOWN))))
-        assertFalse(admits(current=view.copy(access=view.access.copy(audioAllowsReply=false))))
+        // Synthetic environment contract: raw UNKNOWN is neither a grant nor a blanket denial.
+        assertTrue(admits(current=view.copy(access=view.access.copy(power=PowerAvailability.UNKNOWN))))
+        assertFalse(admits(current=view.copy(access=view.access.copy(power=PowerAvailability.SUSPENDING))))
+        assertFalse(admits(current=view.copy(access=view.access.copy(gleoRouteAvailable=false))))
+        assertFalse(admits(current=view.copy(access=view.access.copy(gleoVehicleAllowed=false))))
+        assertFalse(admits(current=view.copy(access=view.access.copy(gleoReplyFocusAllowed=false))))
     }
 
     @Test fun cachedReadyOrCallbackTextWithoutReviewedPortCannotAuthorizeAnyRecommendationAction()=runBlocking {

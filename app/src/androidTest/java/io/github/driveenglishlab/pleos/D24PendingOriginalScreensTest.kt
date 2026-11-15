@@ -36,8 +36,13 @@ import org.junit.Test
 class D24PendingOriginalScreensTest {
     @get:Rule val rule=createAndroidComposeRule<ComponentActivity>()
     private val owner=OwnerContext(UUID.randomUUID(),0,1,UUID.randomUUID())
+    // Explicit renderer-only component/route evidence; not real output permission.
+    private val component=ComponentAccess(known=true,allowed=true,sourceGeneration=0)
+    private val components=ComponentPolicies(generation=0,audio=component,media=component,microphone=component)
     private val allowed=AccessState(SafetyState(VehiclePosition.PARKED,true,true,true),WindowState(true,true),
-        PowerAvailability.ALLOWED,true,true,true,true,true)
+        PowerAvailability.ALLOWED,true,true,true,true,true,components=components,
+        mediaRouteAvailable=true,mediaFocusAllowed=true,backgroundMediaAllowed=true,
+        gleoRouteAvailable=true,gleoVehicleAllowed=true,parkedOutputAvailable=true)
     private val bArticle=UUID.randomUUID()
     private val bSnapshot=UUID.randomUUID()
     private val bTitle="Synthetic B: pending original story"
@@ -153,6 +158,10 @@ class D24PendingOriginalScreensTest {
         rule.onNodeWithText("준비 중인 기사 · $bTitle").assertDoesNotExist()
         rule.onNodeWithContentDescription("듣기 설정").assertDoesNotExist()
         rule.runOnIdle{state.value=state.value.copy(session=state.value.session.copy(access=allowed.copy(power=PowerAvailability.UNKNOWN)))}
+        assertTrue(state.value.canRead)
+        assertPendingButton()
+        capture("r7-pending-original-raw-unknown-readable")
+        rule.runOnIdle{state.value=state.value.copy(session=state.value.session.copy(access=allowed.copy(power=PowerAvailability.SUSPENDING)))}
         rule.onNodeWithText("선택한 기사 원문 듣기").assertDoesNotExist()
         rule.onNodeWithText("준비 중인 기사 · $bTitle").assertDoesNotExist();capture("r8-pending-original-restricted")
         assertTrue(intents.isEmpty())

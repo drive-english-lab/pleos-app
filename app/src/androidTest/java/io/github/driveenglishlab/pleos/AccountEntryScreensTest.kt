@@ -24,12 +24,14 @@ import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
 
-/** R6 renderer/admission fixtures. Synthetic access never changes actual vehicle power or identity. */
+/** R7 renderer/admission fixtures. Raw UNKNOWN does not close details; component approval
+ * remains independent. No synthetic value changes actual vehicle power or identity. */
 class AccountEntryScreensTest {
     @get:Rule val rule = createAndroidComposeRule<ComponentActivity>()
     private val owner = OwnerContext(UUID.randomUUID(), 0, 1, UUID.randomUUID())
     private val access = AccessState(SafetyState(VehiclePosition.PARKED, true, true, true),
-        WindowState(true, true), PowerAvailability.ALLOWED, ownerValid = true)
+        WindowState(true, true), PowerAvailability.UNKNOWN, ownerValid = true)
+    // No audio/media/microphone policy or output-route approval is needed to read settings.
     private fun settings() = ProductScreenState(
         session = SessionView(screen = SessionScreen.SETTINGS, owner = owner,
             ownerBinding = OwnerBindingStatus.VERIFIED, access = access),
@@ -75,6 +77,8 @@ class AccountEntryScreensTest {
         val state = mutableStateOf(settings()); val intents = mutableListOf<UiIntent>(); render(state, intents)
         scrollButton("학습 기록 삭제").assertIsEnabled()
         assertNoAccountControls(); assertTrue(intents.isEmpty())
+        assertEquals(PowerAvailability.UNKNOWN, state.value.session.access.power)
+        assertTrue(state.value.canRead); assertFalse(state.value.session.access.mediaReady)
         rule.onNodeWithText("저장과 동기화").assertExists()
         rule.runOnIdle { state.value = settings().copy(profileLabel = "연결된 프로필의 학습",
             accountEntry = AccountEntryState(hasSession = true, linked = true, canLaunch = true)) }
@@ -102,7 +106,7 @@ class AccountEntryScreensTest {
     @Test fun oldBusyPendingAndLaunchProjectionsNeverReintroduceAccountControlsUnderAnyPhysicalGate() {
         val state = mutableStateOf(recovery()); val intents = mutableListOf<UiIntent>(); render(state, intents, panelOnly = true)
         for (phase in AccountEntryPhase.entries) {
-            for (gate in listOf(access, access.copy(power = PowerAvailability.UNKNOWN),
+            for (gate in listOf(access, access.copy(power = PowerAvailability.ALLOWED),
                 access.copy(safety = access.safety.copy(position = VehiclePosition.DRIVE_STOPPED)),
                 access.copy(window = WindowState(false, false)))) {
                 rule.runOnIdle { state.value = recovery().copy(session = recovery().session.copy(access = gate),
@@ -126,6 +130,16 @@ class AccountEntryScreensTest {
         assertTrue(bounds.width >= 76f); assertTrue(bounds.height >= 76f)
         assertNoAccountControls(); assertTrue(intents.isEmpty())
         capture("protected-narrow-large-type-unknown-light")
+    }
+    @Test fun microphonePolicyDenialDoesNotHideSettingsOrReintroduceAccountEntry() {
+        val deniedMic = ComponentAccess(known = true, allowed = false, sourceGeneration = 0)
+        val state = mutableStateOf(settings().copy(session = settings().session.copy(
+            access = access.copy(components = ComponentPolicies(generation = 0, microphone = deniedMic)))))
+        val intents = mutableListOf<UiIntent>(); render(state, intents)
+        assertTrue(state.value.canRead); assertFalse(state.value.session.access.canCapture)
+        scrollButton("학습 기록 삭제").assertIsEnabled()
+        rule.onNodeWithText("저장과 동기화").assertExists(); assertNoAccountControls()
+        assertTrue(intents.isEmpty())
     }
     @Test fun heldKnownOwnerHidesCachedRestoredAndSettingsUntilTheSameConnectionIsVerified() {
         val state = mutableStateOf(settings().copy(

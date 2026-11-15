@@ -13,7 +13,7 @@ class LearningPolicyTest {
         WindowState(true, true, 4), PowerAvailability.ALLOWED,
         microphoneGranted = true, directProviderVerified = true, inputArbitrationVerified = true,
         audioAllowsReply = true, ownerValid = true,
-    )
+    ).withSyntheticFeatureRoutes()
 
     @Test fun eightFollowupCombinationsUseActualMain() {
         assertEquals(listOf("original_en_summary", "original_ko_summary", "original_ko_translation", null),
@@ -34,7 +34,8 @@ class LearningPolicyTest {
         }
         assertFalse(allowed().copy(safety = allowed().safety.copy(uxKnown = false)).detailsOpen)
         assertFalse(allowed().copy(safety = allowed().safety.copy(systemBlocked = true)).detailsOpen)
-        assertFalse(allowed().copy(power = PowerAvailability.UNKNOWN).canCapture)
+        assertTrue(allowed().copy(power = PowerAvailability.UNKNOWN).canCapture)
+        assertFalse(allowed().copy(components=ComponentPolicies()).canCapture)
     }
     @Test fun microphoneNeedsExplicitStartFinishAndMatchingFinal() {
         val input = InputLease(); val owner = owner(); val task = task(); val access = allowed()

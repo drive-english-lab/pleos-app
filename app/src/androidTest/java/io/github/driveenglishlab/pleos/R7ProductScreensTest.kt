@@ -33,8 +33,14 @@ import org.junit.Test
 class R7ProductScreensTest {
     @get:Rule val rule = createAndroidComposeRule<ComponentActivity>()
     private val owner = OwnerContext(UUID.randomUUID(), 0, 1, UUID.randomUUID())
+    // Synthetic component/route evidence is explicit; raw AWAKE never supplies approval.
+    private val component = ComponentAccess(known = true, allowed = true, sourceGeneration = 0)
+    private val components = ComponentPolicies(generation = 0, audio = component, media = component, microphone = component)
     private val allowed = AccessState(SafetyState(VehiclePosition.PARKED, true, true, true), WindowState(true, true),
-        PowerAvailability.ALLOWED, true, true, true, true, true)
+        PowerAvailability.ALLOWED, true, true, true, true, true,
+        components = components, mediaRouteAvailable = true, mediaFocusAllowed = true,
+        backgroundMediaAllowed = true, gleoRouteAvailable = true, gleoVehicleAllowed = true,
+        parkedOutputAvailable = true)
     private val content = PreparedContentRef(UUID.randomUUID(), UUID.randomUUID(), "a".repeat(64), UUID.randomUUID(),
         UUID.randomUUID(), UUID.randomUUID(), "b".repeat(64), ListeningMode.ORIGINAL_FULL)
     private val task = PreparedPracticeRef(content, UUID.randomUUID(), UUID.randomUUID(), "synthetic-r7")

@@ -14,7 +14,7 @@ class ProductSessionBoundaryTest {
     private val key get() = NewsPlaybackKey(owner, work.selectionId, work.checkpointId, content,
         content.listeningScriptId, requireNotNull(work.assetId), 60_000, work.runId, "main")
     private fun access() = AccessState(SafetyState(VehiclePosition.PARKED, true, true, true), WindowState(true, true),
-        PowerAvailability.ALLOWED, true, true, true, true, true)
+        PowerAvailability.ALLOWED, true, true, true, true, true).withSyntheticFeatureRoutes()
     private suspend fun ready() = SessionCoordinator().also { c ->
         c.activate(owner, null); c.updateAccess(access()); c.setMediaConnected(true)
         val ticket = requireNotNull(c.beginOperation(SessionOperationKind.SELECTION, owner))
@@ -41,11 +41,11 @@ class ProductSessionBoundaryTest {
         assertNull(c.snapshot().listening); assertEquals(PlaybackIntent.STOPPED, c.snapshot().intent)
     }
 
-    @Test fun closingTheWindowDoesNotStopMediaButUnknownPowerClosesPlaybackPermission() = runBlocking {
+    @Test fun closingTheWindowDoesNotStopAllowedBackgroundMediaButActualSuspendClosesPlaybackPermission() = runBlocking {
         val c = ready(); c.requestMediaIntent(owner, PlaybackIntent.PLAY)
         c.updateAccess(access().copy(window = WindowState(false, false)))
         assertFalse(c.snapshot().access.detailsOpen); assertTrue(c.mediaPermission(key))
-        c.updateAccess(access().copy(power = PowerAvailability.UNKNOWN))
+        c.updateAccess(access().copy(power = PowerAvailability.SUSPENDED))
         assertFalse(c.mediaPermission(key)); assertFalse(c.requestMediaIntent(owner, PlaybackIntent.PLAY))
         assertEquals(SessionScreen.RESTRICTED, c.snapshot().screen)
     }
@@ -53,12 +53,12 @@ class ProductSessionBoundaryTest {
     @Test fun transitionFreezePreservesIntentButExplicitPauseWinsOverArticleFollowup() = runBlocking {
         val c = ready(); c.requestMediaIntent(owner, PlaybackIntent.PLAY)
         val generation = c.snapshot().intentGeneration
-        assertTrue(c.observeMedia(key, 400, false, false, "transition"))
+        assertTrue(c.observeMedia(key, 400, false, false, "transition",generation))
         assertEquals(PlaybackIntent.PLAY, c.snapshot().intent); assertEquals(generation, c.snapshot().intentGeneration)
         val ticket = requireNotNull(c.beginOperation(SessionOperationKind.SELECTION, owner))
         val followup = work.copy(stage = ListeningStage.FOLLOWUP, assetId = UUID.randomUUID())
         assertTrue(c.admitListening(RepositoryCompletion(ticket, followup), 0, true))
-        assertFalse(c.observeMedia(key, 60_000, false, false, "user"))
+        assertFalse(c.observeMedia(key, 60_000, false, false, "user",generation))
         assertEquals(PlaybackIntent.USER_PAUSED, c.snapshot().intent)
         assertTrue(c.snapshot().intentGeneration > generation)
     }

@@ -219,7 +219,7 @@ class AuxiliaryPlayback(private val speech: SegmentSpeechPort, private val lease
     }
     private suspend fun permitted(value: Active): Boolean {
         val access = access()
-        if (closed || desired != value.binding.token || currentOwner() != value.binding.owner || !access.detailsOpen || !access.window.focused || !access.audioAllowsReply) return false
+        if (closed || desired != value.binding.token || currentOwner() != value.binding.owner || !access.detailsOpen || !access.window.focused || !access.mediaReady) return false
         val preview = value.binding as? AuxiliaryBinding.Preview
         if (preview != null && !preview.manifest.approved(nowEpochMs())) return false
         return authorized(value.binding)

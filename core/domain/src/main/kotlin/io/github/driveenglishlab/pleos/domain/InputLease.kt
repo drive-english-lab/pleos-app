@@ -10,6 +10,7 @@ data class CaptureLease(
     val lessonId: UUID,
     val safetyGeneration: Long,
     val windowGeneration: Long,
+    val componentGeneration:Long=0,
 )
 
 data class AcceptedAnswer(val lease: CaptureLease, val text: String, val capture: Capture, val helpReceived: HelpSnapshot)
@@ -24,7 +25,7 @@ class InputLease {
     fun start(owner: OwnerContext, task: PracticeRef, lessonId: UUID, access: AccessState): CaptureLease? {
         if (!access.canCapture || current != null) return null
         return CaptureLease(UUID.randomUUID(), UUID.randomUUID(), owner, task, lessonId,
-                            access.safety.generation, access.window.generation).also {
+                            access.safety.generation, access.window.generation, access.components.microphone.permissionGeneration).also {
             current = it; finalizing = false
         }
     }
@@ -56,5 +57,6 @@ class InputLease {
 
     private fun valid(lease: CaptureLease, access: AccessState, owner: OwnerContext?, task: PracticeRef?) =
         access.canCapture && lease.owner == owner && lease.task == task &&
-        lease.safetyGeneration == access.safety.generation && lease.windowGeneration == access.window.generation
+        lease.safetyGeneration == access.safety.generation && lease.windowGeneration == access.window.generation &&
+        lease.componentGeneration == access.components.microphone.permissionGeneration
 }

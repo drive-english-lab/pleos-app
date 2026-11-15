@@ -6,6 +6,8 @@ import android.os.Build
 import android.os.Looper
 import android.view.View
 import io.github.driveenglishlab.pleos.domain.PowerAvailability
+import io.github.driveenglishlab.pleos.domain.ComponentPolicies
+import io.github.driveenglishlab.pleos.domain.ComponentAccess
 import io.github.driveenglishlab.pleos.domain.SafetyState
 import io.github.driveenglishlab.pleos.domain.WindowState
 import kotlinx.coroutines.CoroutineScope
@@ -21,12 +23,15 @@ data class VehicleSnapshot(
     val componentPolicy: PowerAvailability = PowerAvailability.UNKNOWN,
     val actualPower: VehiclePowerState = VehiclePowerState.UNKNOWN,
     val status: String = "not_started",
+    val components: ComponentPolicies = ComponentPolicies(),
+    val diagnostics: VehicleSignalDiagnostics = VehicleSignalDiagnostics(),
 ) {
     val effectivePower: PowerAvailability get() = when (actualPower) {
         VehiclePowerState.UNKNOWN -> PowerAvailability.UNKNOWN
         VehiclePowerState.SUSPENDING -> PowerAvailability.SUSPENDING
         VehiclePowerState.SUSPENDED -> PowerAvailability.SUSPENDED
-        VehiclePowerState.AWAKE -> componentPolicy
+        // This is raw observed power only, never the aggregate component policy.
+        VehiclePowerState.AWAKE -> PowerAvailability.ALLOWED
     }
 }
 
@@ -50,7 +55,8 @@ class PublicVehicleStateSource(private val context: Context, private val scope: 
         monitor = current
         collection = scope.launch {
             current.state.collect { value ->
-                mutable.value = VehicleSnapshot(value.safety, value.componentPolicy, VehiclePowerState.UNKNOWN, value.status)
+                mutable.value = VehicleSnapshot(safety = value.safety, actualPower = VehiclePowerState.UNKNOWN,
+                    status = value.status, components = value.components, diagnostics = value.diagnostics)
             }
         }
         current.start()
@@ -61,7 +67,13 @@ class PublicVehicleStateSource(private val context: Context, private val scope: 
         collection?.cancel(); collection = null
         if (Build.VERSION.SDK_INT >= 34) monitor?.close()
         monitor = null
-        mutable.value = VehicleSnapshot(safety = SafetyState(generation = mutable.value.safety.generation + 1), status = "closed")
+        val previous = mutable.value
+        fun reset(value: ComponentAccess) = ComponentAccess(permissionGeneration = value.permissionGeneration + 1)
+        mutable.value = VehicleSnapshot(safety = SafetyState(generation = previous.safety.generation + 1), status = "closed",
+            components = ComponentPolicies(generation = previous.components.generation + 1,
+                audio = reset(previous.components.audio), media = reset(previous.components.media), microphone = reset(previous.components.microphone)),
+            diagnostics = VehicleSignalDiagnostics(sourceGeneration = previous.diagnostics.sourceGeneration + 1,
+                gear = "closed", speed = "closed", ux = "closed", components = "closed"))
     }
 }
 

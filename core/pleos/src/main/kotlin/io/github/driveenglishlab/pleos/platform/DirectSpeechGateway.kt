@@ -52,6 +52,7 @@ class DirectSpeechGateway(private val context: Context, private val approval: Sp
     private var tts: TextToSpeech? = null
     private var lease: CaptureLease? = null
     private var output: Pair<OwnerContext, UUID>? = null
+    private var outputAudioPermissionGeneration: Long? = null
     private var ready = false
     private var captureGeneration = 0L
     private var closed = false
@@ -155,7 +156,7 @@ class DirectSpeechGateway(private val context: Context, private val approval: Sp
         return granted
     }
     fun start(value: CaptureLease, access: AccessState): Boolean {
-        if (!access.canCapture || !mutable.value.approved || lease != null || !mutable.value.focusGranted || closed) return false
+        if (!access.canCapture || !mutable.value.approved || lease != null || !mutable.value.focusGranted || focusOwner != value.owner || closed) return false
         output = null; tts?.stop(); lease = value
         return try {
             recognizer?.destroy()
@@ -167,16 +168,29 @@ class DirectSpeechGateway(private val context: Context, private val approval: Sp
         } catch (_: Exception) { lease = null; false }
     }
     fun finish(value: CaptureLease) { if (lease == value) recognizer?.stopListening() }
+    val speaking: Boolean get() = output != null
+    fun outputAllowed(access: AccessState): Boolean {
+        val owner = output?.first ?: return false
+        return outputAudioPermissionGeneration == access.components.audio.permissionGeneration && permitsOutput(owner, access)
+    }
+    private fun permitsOutput(owner: OwnerContext, access: AccessState): Boolean {
+        val actualOutput = access.copy(parkedOutputAvailable = mutable.value.approved && ready,
+            directReplyFocusAllowed = mutable.value.focusGranted && focusOwner == owner)
+        return !closed && access.detailsOpen && access.window.focused && actualOutput.parkedReplyAllowed &&
+            ready && mutable.value.focusGranted && focusOwner == owner && lease == null
+    }
     fun speak(owner: OwnerContext, id: UUID, text: String, language: String, access: AccessState): Boolean {
-        if (!access.detailsOpen || !access.window.focused || !ready || !mutable.value.focusGranted || lease != null || closed) return false
+        // Select this reviewed engine/certificate route, independently from the news output route.
+        if (!permitsOutput(owner, access)) return false
         val voice = tts ?: return false
         val locale = if (language == "en") Locale.US else Locale.KOREAN
         if (voice.isLanguageAvailable(locale) < TextToSpeech.LANG_AVAILABLE || voice.setLanguage(locale) < TextToSpeech.LANG_AVAILABLE) return false
         output = owner to id
+        outputAudioPermissionGeneration = access.components.audio.permissionGeneration
         if (voice.speak(text, TextToSpeech.QUEUE_FLUSH, Bundle(), id.toString()) != TextToSpeech.SUCCESS) { output = null; return false }
         return true
     }
-    fun cancel() { captureGeneration++; lease = null; output = null; recognizer?.cancel(); tts?.stop(); mutable.value = mutable.value.copy(listening = false) }
+    fun cancel() { captureGeneration++; lease = null; output = null; outputAudioPermissionGeneration = null; recognizer?.cancel(); tts?.stop(); mutable.value = mutable.value.copy(listening = false) }
     fun releaseFocus() {
         val previous = focus
         focusGeneration++; focus = null; focusOwner = null

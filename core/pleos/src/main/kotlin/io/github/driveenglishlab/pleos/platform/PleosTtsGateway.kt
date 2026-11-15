@@ -51,7 +51,8 @@ class PleosTtsGateway(private val context: Context, private val scope: Coroutine
     private val approval: PleosTtsProjectApproval? = null,
     private val registration: suspend () -> PleosTtsRegistration? = { null },
     private val permitted: suspend (SegmentRun) -> Boolean = { false },
-    private val appVisible: () -> Boolean = { false }, private val initializationTimeoutMs: Long = 15_000) : SegmentSpeechPort {
+    private val appVisible: () -> Boolean = { false }, private val initializationTimeoutMs: Long = 15_000,
+    private val outputPermitted: suspend (SegmentRun) -> Boolean = permitted) : SegmentSpeechPort {
     private val audio = context.getSystemService(AudioManager::class.java)
     private val handler = Handler(Looper.getMainLooper())
     private val mutable = MutableStateFlow(PleosTtsReadiness())
@@ -63,7 +64,18 @@ class PleosTtsGateway(private val context: Context, private val scope: Coroutine
     private var invocation: Invocation? = null
     private var closed = false
     private var stopUnverified = false
-    val quiescent: Boolean get() = invocation == null && !stopUnverified
+    private var blockedCleanup: Invocation? = null
+    private enum class CleanupStatus { NOT_APPLICABLE, NOT_ATTEMPTED, SUCCEEDED, FAILED, UNCONFIRMED }
+    private data class CleanupResult(val status: CleanupStatus, val exceptionClass: String? = null)
+    private data class CleanupObservation(val instanceId: UUID, val run: SegmentRun,
+        var listenerRemoval: CleanupResult, var release: CleanupResult, var focusReturn: CleanupResult,
+        val initializationSettled: Boolean, val stopUnverified: Boolean) {
+        val confirmed: Boolean get() = initializationSettled && !stopUnverified &&
+            listOf(listenerRemoval, release, focusReturn).all { it.status in setOf(CleanupStatus.NOT_APPLICABLE, CleanupStatus.SUCCEEDED) }
+    }
+    // Retain failed/unknown original facts; a cleanup exception is never an availability grant.
+    private val cleanupObservations = mutableListOf<CleanupObservation>()
+    val quiescent: Boolean get() = invocation == null && blockedCleanup == null && !stopUnverified
     private val focus = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)
         .setAudioAttributes(AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_MEDIA).setContentType(AudioAttributes.CONTENT_TYPE_SPEECH).build())
         .setOnAudioFocusChangeListener({ change ->
@@ -81,6 +93,13 @@ class PleosTtsGateway(private val context: Context, private val scope: Coroutine
         val terminal = AtomicBoolean(false)
         val stopped = AtomicBoolean(false)
         val stopObserved = CompletableDeferred<Unit>()
+        val initializationReported = AtomicBoolean(false)
+        val instanceId: UUID = UUID.randomUUID()
+        var initializationRequested = false
+        var focusRequested = false
+        var focusReturned = false
+        var initialized = false
+        var listenerRegistered = false
         var timeout: Job? = null
         var synthesisRequested = false
         override fun toString() = "PleosTtsInvocation(content=redacted)"
@@ -88,6 +107,7 @@ class PleosTtsGateway(private val context: Context, private val scope: Coroutine
 
     override suspend fun request(run: SegmentRun, text: String, language: SegmentLanguage): SegmentSpeechAdmission = withContext(Dispatchers.Main.immediate) {
         val reviewed = approval ?: return@withContext SegmentSpeechAdmission.Unavailable("PLEOS_TTS_PROJECT_NOT_REVIEWED")
+        if (blockedCleanup != null) return@withContext SegmentSpeechAdmission.Unavailable("PLEOS_TTS_CLEANUP_UNCONFIRMED")
         if (stopUnverified) return@withContext SegmentSpeechAdmission.Unavailable("PLEOS_TTS_PREVIOUS_STOP_UNVERIFIED")
         if (closed || invocation != null) return@withContext SegmentSpeechAdmission.Unavailable("PLEOS_TTS_BUSY")
         require(initializationTimeoutMs in 1_000..60_000)
@@ -127,37 +147,62 @@ class PleosTtsGateway(private val context: Context, private val scope: Coroutine
             } }
             original = Invocation(run, sdk, eventProxy, reviewed.mode, language, text)
             invocation = original
+            original.focusRequested = true
             val granted = audio.requestAudioFocus(focus) == AudioManager.AUDIOFOCUS_REQUEST_GRANTED
             mutable.value = mutable.value.copy(sdkPresent = true, focusGranted = granted, initialized = false, serverConnected = false, reason = null)
             if (!granted) { dispose(original); return@withContext SegmentSpeechAdmission.Unavailable("PLEOS_TTS_AUDIO_FOCUS_DENIED") }
-            type.getMethod("addEventListener", listenerType).invoke(sdk, eventProxy)
             val initializationType = Class.forName("ai.pleos.playground.tts.listener.OnInitializeListener")
             val initialization = listenerProxy(initializationType) { name, _ -> scope.launch(Dispatchers.Main.immediate) {
-                if (!active(original)) return@launch
+                if (name !in setOf("onSuccess", "onFailure") ||
+                    !original.initializationReported.compareAndSet(false, true)) return@launch
+                original.initialized = name == "onSuccess"
+                if (!active(original)) {
+                    // A late initialization cannot start output. Retire only its original instance.
+                    if (invocation === original || blockedCleanup === original) dispose(original)
+                    return@launch
+                }
                 if (name == "onSuccess") {
                     mutable.value = mutable.value.copy(initialized = true)
                     initialized(original, credentials)
-                } else if (name == "onFailure") finish(original, SegmentSpeechEventKind.ERROR, "pleos-tts-initialization-failed")
+                } else finish(original, SegmentSpeechEventKind.ERROR, "pleos-tts-initialization-failed")
             } }
             original.timeout = scope.launch(Dispatchers.Main.immediate) {
                 delay(initializationTimeoutMs)
-                if (active(original) && (!mutable.value.initialized || original.mode != PleosTtsMode.ON_DEVICE && !mutable.value.serverConnected))
+                if (active(original) && !original.synthesisRequested)
                     finish(original, SegmentSpeechEventKind.ERROR, "pleos-tts-initialization-deadline")
             }
+            original.initializationRequested = true
             type.getMethod("initialize", initializationType).invoke(sdk, initialization)
             SegmentSpeechAdmission.Preparing
-        } catch (cancelled: CancellationException) { throw cancelled }
-          catch (_: Exception) {
+        } catch (cancelled: CancellationException) {
+            withContext(NonCancellable) { invocation?.takeIf { it.run == run }?.let { stop(it.run) } }
+            throw cancelled
+        } catch (_: Exception) {
             invocation?.takeIf { it.run == run }?.let { dispose(it) }
             mutable.value = mutable.value.copy(reason = "PLEOS_TTS_SDK_OR_SERVICE_UNAVAILABLE")
             SegmentSpeechAdmission.Unavailable("PLEOS_TTS_SDK_OR_SERVICE_UNAVAILABLE")
         }
     }
 
+    /** Actual focus belongs to this exact live SDK invocation, never to a prior run or availability flag. */
+    fun ownsOutputFocus(run: SegmentRun): Boolean = invocation?.let {
+        it.run == run && active(it) && mutable.value.focusGranted
+    } == true
+
     private fun active(value: Invocation) = !closed && invocation === value && !value.terminal.get()
+    /** Every asynchronous permission callback must return to this same initialized invocation. */
+    private suspend fun currentOutput(value: Invocation): Boolean {
+        if (!active(value) || !value.initialized || !ownsOutputFocus(value.run)) return false
+        if (!permitted(value.run) || !active(value) || !ownsOutputFocus(value.run)) return false
+        return outputPermitted(value.run) && active(value) && ownsOutputFocus(value.run)
+    }
     private suspend fun initialized(value: Invocation, credentials: PleosTtsRegistration?) {
-        if (!active(value) || !permitted(value.run)) { finish(value, SegmentSpeechEventKind.UNKNOWN, "pleos-tts-access-changed-before-output"); return }
+        if (!currentOutput(value)) { finish(value, SegmentSpeechEventKind.UNKNOWN, "pleos-tts-access-changed-before-output"); return }
         try {
+            // SDK 3.3.1 initializes its delegate asynchronously; listener methods require onSuccess.
+            val listenerType = Class.forName("ai.pleos.playground.tts.listener.EventListener")
+            value.sdk.javaClass.getMethod("addEventListener", listenerType).invoke(value.sdk, value.listener)
+            value.listenerRegistered = true
             value.sdk.javaClass.getMethod("setAudioAttributes", AudioAttributes::class.java).invoke(value.sdk,
                 AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_MEDIA).setContentType(AudioAttributes.CONTENT_TYPE_SPEECH).build())
             value.sdk.javaClass.getMethod("setLocale", Locale::class.java).invoke(value.sdk, if (value.language == SegmentLanguage.EN) Locale.US else Locale.KOREA)
@@ -179,7 +224,7 @@ class PleosTtsGateway(private val context: Context, private val scope: Coroutine
           catch (_: Exception) { finish(value, SegmentSpeechEventKind.ERROR, "pleos-tts-configuration-unavailable") }
     }
     private suspend fun synthesize(value: Invocation) {
-        if (!active(value) || !mutable.value.focusGranted || !permitted(value.run) ||
+        if (!currentOutput(value) || !value.listenerRegistered ||
             !appVisible() && approval?.backgroundEvidence == null) {
             finish(value, SegmentSpeechEventKind.UNKNOWN, "pleos-tts-access-changed-before-speak"); return
         }
@@ -201,10 +246,14 @@ class PleosTtsGateway(private val context: Context, private val scope: Coroutine
         original.terminal.set(true)
         original.timeout?.cancel()
         try {
-            original.sdk.javaClass.getMethod("stop").invoke(original.sdk)
-            if (original.synthesisRequested && withTimeoutOrNull(1_000) { original.stopObserved.await(); true } != true) {
-                stopUnverified = true
-                mutable.value = mutable.value.copy(reason = "PLEOS_TTS_STOP_COMPLETION_UNVERIFIED")
+            // Before synthesis there is no physical output to stop and no onStop to claim.
+            // In particular SDK.stop() is not legal before initialize/onSuccess.
+            if (original.synthesisRequested) {
+                original.sdk.javaClass.getMethod("stop").invoke(original.sdk)
+                if (withTimeoutOrNull(1_000) { original.stopObserved.await(); true } != true) {
+                    stopUnverified = true
+                    mutable.value = mutable.value.copy(reason = "PLEOS_TTS_STOP_COMPLETION_UNVERIFIED")
+                }
             }
         } catch (cancelled: CancellationException) { throw cancelled }
           catch (_: Exception) {
@@ -212,14 +261,50 @@ class PleosTtsGateway(private val context: Context, private val scope: Coroutine
             mutable.value = mutable.value.copy(reason = "PLEOS_TTS_STOP_UNAVAILABLE")
         } finally { dispose(original) }
     }
+    private fun cleanupFailure(error: Exception): CleanupResult {
+        var cause: Throwable = error
+        while (cause is java.lang.reflect.InvocationTargetException && cause.targetException !== cause)
+            cause = cause.targetException ?: break
+        return CleanupResult(CleanupStatus.FAILED, cause.javaClass.name)
+    }
     private fun dispose(value: Invocation) {
         value.timeout?.cancel(); value.timeout = null
-        if (invocation !== value) return
+        if (invocation !== value && blockedCleanup !== value) return
+        value.terminal.set(true)
+        val observation = CleanupObservation(value.instanceId, value.run,
+            CleanupResult(if (value.listenerRegistered) CleanupStatus.NOT_ATTEMPTED else CleanupStatus.NOT_APPLICABLE),
+            CleanupResult(CleanupStatus.NOT_ATTEMPTED),
+            CleanupResult(if (!value.focusRequested) CleanupStatus.NOT_APPLICABLE else if (value.focusReturned) CleanupStatus.SUCCEEDED else CleanupStatus.NOT_ATTEMPTED),
+            !value.initializationRequested || value.initializationReported.get(), stopUnverified)
+        cleanupObservations += observation
+        if (value.listenerRegistered) {
+            observation.listenerRemoval = try {
+                value.sdk.javaClass.getMethod("removeEventListener", Class.forName("ai.pleos.playground.tts.listener.EventListener")).invoke(value.sdk, value.listener)
+                value.listenerRegistered = false
+                CleanupResult(CleanupStatus.SUCCEEDED)
+            } catch (error: Exception) { cleanupFailure(error) }
+        }
+        observation.release = try {
+            value.sdk.javaClass.getMethod("release").invoke(value.sdk)
+            // Returning before an outstanding initialize callback cannot prove resource quiescence.
+            CleanupResult(if (observation.initializationSettled) CleanupStatus.SUCCEEDED else CleanupStatus.UNCONFIRMED)
+        } catch (error: Exception) { cleanupFailure(error) }
+        if (value.focusRequested && !value.focusReturned) {
+            observation.focusReturn = try {
+                when (audio.abandonAudioFocusRequest(focus)) {
+                    AudioManager.AUDIOFOCUS_REQUEST_GRANTED -> { value.focusReturned = true; CleanupResult(CleanupStatus.SUCCEEDED) }
+                    AudioManager.AUDIOFOCUS_REQUEST_FAILED -> CleanupResult(CleanupStatus.FAILED)
+                    else -> CleanupResult(CleanupStatus.UNCONFIRMED)
+                }
+            } catch (error: Exception) { cleanupFailure(error) }
+        }
         invocation = null
-        try { value.sdk.javaClass.getMethod("removeEventListener", Class.forName("ai.pleos.playground.tts.listener.EventListener")).invoke(value.sdk, value.listener) } catch (_: Exception) { }
-        try { value.sdk.javaClass.getMethod("release").invoke(value.sdk) } catch (_: Exception) { }
-        audio.abandonAudioFocusRequest(focus)
-        mutable.value = mutable.value.copy(initialized = false, serverConnected = false, focusGranted = false)
+        blockedCleanup = if (observation.confirmed) null else value
+        mutable.value = mutable.value.copy(
+            initialized = if (observation.release.status == CleanupStatus.SUCCEEDED) false else mutable.value.initialized,
+            serverConnected = if (observation.release.status == CleanupStatus.SUCCEEDED) false else mutable.value.serverConnected,
+            focusGranted = if (value.focusReturned) false else mutable.value.focusGranted,
+            reason = if (observation.confirmed) mutable.value.reason else "PLEOS_TTS_CLEANUP_UNCONFIRMED")
     }
     suspend fun close() = withContext(Dispatchers.Main.immediate) {
         closed = true

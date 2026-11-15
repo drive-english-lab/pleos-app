@@ -13,7 +13,7 @@ import org.junit.Test
 class AsyncMediaAdmissionTest {
     private val owner=OwnerContext(UUID.randomUUID(),0,1,UUID.randomUUID())
     private fun access()=AccessState(SafetyState(VehiclePosition.PARKED,true,true,true),WindowState(true,true),
-        PowerAvailability.ALLOWED,true,true,true,true,true)
+        PowerAvailability.ALLOWED,true,true,true,true,true).withSyntheticFeatureRoutes()
     private suspend fun coordinator()=SessionCoordinator().also {
         it.activate(owner,null);it.updateAccess(access());it.setMediaConnected(true)
     }
@@ -181,6 +181,90 @@ class AsyncMediaAdmissionTest {
             assertTrue(current.segmentOutputPermission(fixture.snapshot.program,fresh){verifications++;true})
             assertEquals(2,verifications)
         }
+    }
+
+    @Test fun segmentFocusBootstrapUsesReadinessButFinalRightsAwaitCannotOutliveItsActualFocusLease()=runBlocking {
+        val current=coordinator();val fixture=observedProgram(current)
+        current.updateAccess(access().copy(mediaFocusAllowed=false))
+        assertTrue(current.segmentAdmissionPermission(fixture.snapshot.program))
+        assertTrue(callback(current,fixture.admission))
+        val generation=current.snapshot().intentGeneration
+        assertTrue(current.segmentOutputAdmissionPermission(fixture.snapshot.program,generation){true})
+        assertFalse(current.segmentOutputPermission(fixture.snapshot.program,generation){fail();false})
+        var actualFocus=true
+        val entered=CompletableDeferred<Unit>();val rights=CompletableDeferred<Unit>()
+        val permission=async { current.segmentFocusedOutputPermission(fixture.snapshot.program,generation,{actualFocus}) {
+            entered.complete(Unit);rights.await();true
+        } }
+        withTimeout(3_000){entered.await()};actualFocus=false;rights.complete(Unit)
+        assertFalse(permission.await());assertFalse(current.snapshot().access.mediaFocusAllowed)
+        assertEquals(PlaybackIntent.PLAY,current.snapshot().intent)
+        actualFocus=true
+        assertTrue(current.segmentFocusedOutputPermission(fixture.snapshot.program,generation,{actualFocus}){true})
+        assertTrue(current.requestMediaIntent(owner,PlaybackIntent.STOPPED))
+        assertTrue(current.segmentAdmissionPermission(fixture.snapshot.program)) // A new explicit play/paused seek is available.
+        assertFalse(current.segmentOutputAdmissionPermission(fixture.snapshot.program,current.snapshot().intentGeneration){fail();false})
+    }
+
+    private suspend fun legacyKey(current:SessionCoordinator):NewsPlaybackKey {
+        val w=requireNotNull(current.snapshot().listening)
+        val key=NewsPlaybackKey(owner,w.selectionId,w.checkpointId,w.content,w.content.listeningScriptId,
+            requireNotNull(w.assetId),requireNotNull(w.durationMs),w.runId?:UUID.randomUUID(),"main")
+        assertTrue(current.bindMediaRun(key,w.runId))
+        return key
+    }
+    @Test fun explicitStopAndInputEdgesCannotBeUndoneByLatePlayerObservationsOrIdle()=runBlocking {
+        for(interruption in listOf("stop","input","review")) {
+            val current=coordinator();val admitted=admit(current,false);assertTrue(callback(current,admitted))
+            val key=legacyKey(current);val before=current.snapshot()
+            current.configureGleo(VoiceCapabilities(inputActivity=Capability.Verified("fixture:actual-input")))
+            when(interruption) {
+                "stop"->current.stop()
+                "review"->assertTrue(current.suspendForReviewTools(owner))
+                "input"->{
+                    assertTrue(current.updateVoiceInput(VoiceInputActivity.CAPTURING,owner,10))
+                    val edge=current.snapshot().intentGeneration
+                    assertTrue(current.updateVoiceInput(VoiceInputActivity.CAPTURING,owner,11))
+                    assertTrue(current.updateVoiceInput(VoiceInputActivity.PROCESSING,owner,12))
+                    assertEquals(edge,current.snapshot().intentGeneration)
+                    assertFalse(current.requestMediaIntent(owner,PlaybackIntent.PLAY))
+                    assertTrue(current.updateVoiceInput(VoiceInputActivity.IDLE,owner,13))
+                }
+            }
+            val held=current.snapshot()
+            assertEquals(before.intentGeneration+1,held.intentGeneration)
+            assertTrue(held.requiresExplicitMediaResume)
+            assertFalse(current.observeMedia(key,1,true,true,"none"))
+            assertEquals(held.intent,current.snapshot().intent);assertEquals(held.intentGeneration,current.snapshot().intentGeneration)
+            assertFalse(current.snapshot().mediaPlaying);assertFalse(current.mediaPermission(key))
+            assertTrue(current.mediaAdmissionPermission(key))
+            assertTrue(current.requestMediaIntent(owner,PlaybackIntent.PLAY))
+            assertFalse(current.snapshot().requiresExplicitMediaResume)
+            assertTrue(current.mediaPermission(key))
+        }
+    }
+    @Test fun repeatedActualPausedObservationsCreateOneFenceAndCannotRevivePlay()=runBlocking {
+        val current=coordinator();assertTrue(callback(current,admit(current,false)));val key=legacyKey(current)
+        val before=current.snapshot().intentGeneration
+        assertTrue(current.observeMedia(key,20,false,false,"user",current.snapshot().intentGeneration))
+        assertTrue(current.observeMedia(key,20,false,false,"user",current.snapshot().intentGeneration))
+        assertEquals(before+1,current.snapshot().intentGeneration)
+        assertFalse(current.observeMedia(key,21,true,true,"none"))
+        assertEquals(PlaybackIntent.USER_PAUSED,current.snapshot().intent)
+        assertTrue(current.snapshot().requiresExplicitMediaResume);assertFalse(current.snapshot().mediaPlaying)
+    }
+
+    @Test fun oldOrUnstampedPauseCannotRewindLivePositionOrStopANewerExplicitPlayGrant()=runBlocking {
+        val c=coordinator();assertTrue(callback(c,admit(c,false)));val key=legacyKey(c)
+        val old=c.snapshot().intentGeneration
+        assertTrue(c.requestMediaIntent(owner,PlaybackIntent.USER_PAUSED));assertTrue(c.requestMediaIntent(owner,PlaybackIntent.PLAY))
+        val fresh=c.snapshot().intentGeneration
+        assertFalse(c.observeMedia(key,25,false,false,"user",old))
+        assertFalse(c.observeMedia(key,26,false,false,"user"))
+        assertEquals(0L,c.snapshot().mediaPositionMs);assertEquals(fresh,c.snapshot().intentGeneration)
+        assertEquals(PlaybackIntent.PLAY,c.snapshot().intent);assertFalse(c.snapshot().requiresExplicitMediaResume)
+        assertTrue(c.observeMedia(key,27,false,false,"user",fresh))
+        assertEquals(PlaybackIntent.USER_PAUSED,c.snapshot().intent);assertTrue(c.snapshot().requiresExplicitMediaResume)
     }
 
 }

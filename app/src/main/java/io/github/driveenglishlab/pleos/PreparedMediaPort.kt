@@ -22,7 +22,7 @@ internal class PreparedMediaPort(private val coordinator: SessionCoordinator, sc
         val index = if (!offer && matches) snapshot?.cursor?.segmentIndex else null
         val count = if (index != null) snapshot?.program?.manifest?.segments?.size else null
         val generation = snapshot?.generation ?: work.checkpointVersion
-        val available = !offer && matches && view.mediaConnected && view.access.ownerValid && view.access.power == PowerAvailability.ALLOWED &&
+        val available = !offer && matches && view.mediaConnected && view.access.mediaReady &&
             view.task == null && view.pendingAnswer == null && view.inputPhase == InputPhase.IDLE && view.voiceInput == VoiceInputActivity.IDLE &&
             view.practiceModal?.visible != true && view.reviewPolicy.auxiliary == null
         return SegmentMediaProjection(SegmentMediaKey(owner, work.selectionId, work.checkpointId, work.content.segmentSourceKey(), work.cursor.phase,
@@ -45,7 +45,7 @@ internal class PreparedMediaPort(private val coordinator: SessionCoordinator, sc
         if (!work.accepts(snapshot.program) || snapshot.program.owner != expected.owner) return false
         return when (command) {
             SegmentMediaCommand.PLAY -> {
-                if (!current.available || !coordinator.segmentPermission(snapshot.program) ||
+                if (!current.available || !coordinator.segmentAdmissionPermission(snapshot.program) ||
                     !coordinator.requestMediaIntent(expected.owner, PlaybackIntent.PLAY,
                         expectedIntentGeneration = view.intentGeneration, expectedSelectionId = work.selectionId)) return false
                 // The runtime rechecks owner, source/rights, exclusive lease and actual Pleos gate.
@@ -60,7 +60,7 @@ internal class PreparedMediaPort(private val coordinator: SessionCoordinator, sc
             SegmentMediaCommand.PREVIOUS_SEGMENT, SegmentMediaCommand.NEXT_SEGMENT -> {
                 val previous = command == SegmentMediaCommand.PREVIOUS_SEGMENT
                 if (!current.available || !(if (previous) current.previousAvailable else current.nextAvailable) ||
-                    !coordinator.segmentPermission(snapshot.program)) return false
+                    !coordinator.segmentAdmissionPermission(snapshot.program)) return false
                 preparedRuntime.runtime.move(if (previous) -1 else 1, playAfterMove = current.playIntent)
             }
         }

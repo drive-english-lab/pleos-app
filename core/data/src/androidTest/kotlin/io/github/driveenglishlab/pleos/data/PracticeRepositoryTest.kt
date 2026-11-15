@@ -45,7 +45,10 @@ class PracticeRepositoryTest {
 
     private suspend fun accepted(): AcceptedAnswer {
         val access = AccessState(SafetyState(VehiclePosition.PARKED, true, true, true), WindowState(true, true), PowerAvailability.ALLOWED,
-            microphoneGranted = true, directProviderVerified = true, inputArbitrationVerified = true, audioAllowsReply = true, ownerValid = true)
+            microphoneGranted = true, directProviderVerified = true, inputArbitrationVerified = true, audioAllowsReply = true, ownerValid = true,
+            // Synthetic direct-capture evidence for this repository fixture, not runtime approval.
+            components = ComponentPolicies(generation = 1, microphone = ComponentAccess(known = true, allowed = true, sourceGeneration = 1, permissionGeneration = 1)),
+            directReplyFocusAllowed = true)
         val lease = InputLease(); val token = lease.start(owner, task, lessonId, access)!!; lease.finish(token.captureId)
         val answer = lease.finalText(token.captureId, "The company expanded production.", access, owner, task,
             Capture(CapturePath.PARKED_STT, CaptureFidelity.UNKNOWN, emptyList(), SpokenLanguage.EN, EnglishEvidence.VERIFIED_PATH, "test-only-route"))!!

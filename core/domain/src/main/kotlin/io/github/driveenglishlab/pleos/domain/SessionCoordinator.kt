@@ -49,6 +49,7 @@ data class SessionView(
     val reviewPolicy: ReviewPolicyState = ReviewPolicyState(null),
     val offerRuntime: ReviewOfferRuntime? = null,
     val practiceModal: PracticeModalSession? = null,
+    val requiresExplicitMediaResume:Boolean=false,
 )
 
 /** Process-scoped reducer. All callbacks use the same serialized lane. */
@@ -59,6 +60,13 @@ class SessionCoordinator {
     private fun invalidateInput() { input.invalidate(); gleoLease = null }
     private val clock = DialogueClock()
     private val issuedOutputs = linkedMapOf<UUID, OutputExpectation>()
+    private data class OutputAccessStamp(val source:Long,val safety:Long,val window:Long)
+    private val outputAccessStamps=mutableMapOf<UUID,OutputAccessStamp>()
+    private fun outputStamp(access:AccessState,route:OutputRoute)=if(route==OutputRoute.GLEO)OutputAccessStamp(access.gleoPermissionGeneration,0,0)
+        else OutputAccessStamp(access.components.audio.permissionGeneration,access.safety.generation,access.window.generation)
+    private fun routeReady(access:AccessState,route:OutputRoute)=if(route==OutputRoute.GLEO)access.gleoReady else access.parkedReplyReady
+    private fun routeAllowed(access:AccessState,route:OutputRoute)=if(route==OutputRoute.GLEO)access.gleoAllowed else access.parkedReplyAllowed
+    private fun replyAllowed(access:AccessState)=waitRoute?.let{routeAllowed(access,it)} ?: (access.gleoAllowed || access.parkedReplyAllowed)
     private var gleoCapabilities = VoiceCapabilities()
     private var waitRoute: OutputRoute? = null
     private val observable = MutableStateFlow(SessionView())
@@ -71,18 +79,31 @@ class SessionCoordinator {
     suspend fun snapshot(): SessionView = mutex.withLock { view }
 
     suspend fun updateAccess(access: AccessState): SessionView = mutex.withLock {
+        val previous=view.access
         val closingSettings = !access.detailsOpen && view.screen == SessionScreen.SETTINGS
         input.recheck(access, view.owner, view.task)
         if (closingSettings) invalidateOfferLocked(ReviewOfferEvent.SettingsForcedClosed)
         if (!access.detailsOpen) closeModalLocked(PracticeModalCloseReason.RESTRICTED)
-        if (!access.ownerValid || access.power != PowerAvailability.ALLOWED || !access.audioAllowsReply)
-            invalidateOfferLocked(ReviewOfferEvent.InputOrRestriction)
-        if (!access.ownerValid || access.power != PowerAvailability.ALLOWED || !access.audioAllowsReply) gleoLease = null
-        if (!access.ownerValid || access.power != PowerAvailability.ALLOWED || !access.audioAllowsReply ||
-            waitRoute == OutputRoute.PARKED_TTS && !access.detailsOpen) {
-            clock.cancel(); waitRoute = null
-            view = view.copy(expectedOutput = null)
+        val suspendEdge=access.suspending && !previous.suspending
+        val ownerLost=previous.ownerValid && !access.ownerValid
+        val mediaPermissionChanged=previous.components.audio.permissionGeneration!=access.components.audio.permissionGeneration ||
+            previous.components.media.permissionGeneration!=access.components.media.permissionGeneration
+        val mediaReadinessLost=previous.mediaReady && (!access.mediaReady || mediaPermissionChanged)
+        if(suspendEdge || ownerLost || mediaReadinessLost) {
+            view=view.copy(intent=if(suspendEdge || ownerLost)PlaybackIntent.STOPPED else PlaybackIntent.USER_PAUSED,
+                intentGeneration=view.intentGeneration+1,requiresExplicitMediaResume=true,mediaPlaying=false)
+        } else if(!access.mediaAllowed)view=view.copy(mediaPlaying=false)
+        if(!access.gleoReady || previous.gleoPermissionGeneration!=access.gleoPermissionGeneration) {
+            val lostInput=gleoLease!=null;gleoLease=null
+            if(lostInput && view.pendingAnswer==null)view=view.copy(voiceInput=VoiceInputActivity.IDLE)
         }
+        if(!replyAllowed(access))invalidateOfferLocked(ReviewOfferEvent.InputOrRestriction)
+        val expected=view.expectedOutput
+        if(access.suspending || !access.ownerValid || expected?.let{!routeReady(access,it.route) || outputAccessStamps[it.outputId]!=outputStamp(access,it.route)}==true ||
+            waitRoute?.let{!routeAllowed(access,it)}==true) {
+            clock.cancel();waitRoute=null;view=view.copy(expectedOutput=null)
+        }
+        if(access.suspending){invalidateInput();clock.cancel();waitRoute=null;view=view.copy(expectedOutput=null,voiceInput=VoiceInputActivity.IDLE)}
         if (!access.detailsOpen && view.screen !in setOf(SessionScreen.RESTRICTED, SessionScreen.RECOVERY, SessionScreen.CONNECTING))
             restrictedReturn = if (view.screen == SessionScreen.CAPTURE) SessionScreen.QUESTION else view.screen
         if (closingSettings) restrictedReturn = if (view.listening != null || view.preparedListening != null) SessionScreen.PLAYER else SessionScreen.NEWS
@@ -98,7 +119,7 @@ class SessionCoordinator {
     /** Durable repositories perform the identity mutation; close current effects immediately. */
     suspend fun fenceOwner(owner: OwnerContext): Boolean = mutex.withLock {
         if (view.owner != owner) return@withLock false
-        invalidateInput(); clock.cancel(); issuedOutputs.clear(); operations.clear(); waitRoute = null
+        invalidateInput(); clock.cancel(); issuedOutputs.clear(); outputAccessStamps.clear(); operations.clear(); waitRoute = null
         view = SessionView(owner = owner, ownerBinding = OwnerBindingStatus.TRANSITION,
             access = view.access.copy(ownerValid = false, audioAllowsReply = false), mediaConnected = view.mediaConnected,
             screen = SessionScreen.RECOVERY, navigationGeneration = view.navigationGeneration + 1,
@@ -164,7 +185,7 @@ class SessionCoordinator {
         if (ticket.kind != SessionOperationKind.PROFILE || !matches(ticket, false)) return@withLock false
         operations.remove(ticket.kind)
         if (view.owner != owner) {
-            invalidateInput(); clock.cancel(); issuedOutputs.clear(); operations.clear(); waitRoute = null
+            invalidateInput(); clock.cancel(); issuedOutputs.clear(); outputAccessStamps.clear(); operations.clear(); waitRoute = null
             val access = view.access.copy(ownerValid = true)
             view = SessionView(owner = owner, ownerBinding = OwnerBindingStatus.VERIFIED, access = access,
                 mediaConnected = view.mediaConnected, screen = if (access.detailsOpen) {
@@ -200,10 +221,14 @@ class SessionCoordinator {
         view = view.copy(mediaConnected = connected, mediaPlaying = if (connected) view.mediaPlaying else false)
     }
 
-    suspend fun mediaPermission(key: NewsPlaybackKey): Boolean = mutex.withLock {
+    private fun mediaAccessLocked(key:NewsPlaybackKey,focus:Boolean?,admission:Boolean):Boolean =
         key.owner == view.owner && view.listening?.accepts(key) == true && view.mediaConnected &&
-            view.access.ownerValid && view.access.power == PowerAvailability.ALLOWED &&
-            view.task == null && view.inputPhase == InputPhase.IDLE && view.pendingAnswer == null && view.voiceInput == VoiceInputActivity.IDLE
+            (if(admission)view.access.mediaReady else (focus?.let{view.access.copy(mediaFocusAllowed=it)}?:view.access).mediaAllowed) &&
+            (!view.requiresExplicitMediaResume || admission) && view.task == null && view.inputPhase == InputPhase.IDLE && view.pendingAnswer == null && view.voiceInput == VoiceInputActivity.IDLE
+    suspend fun mediaPermission(key: NewsPlaybackKey): Boolean = mutex.withLock {mediaAccessLocked(key,null,false)}
+    suspend fun mediaAdmissionPermission(key:NewsPlaybackKey):Boolean = mutex.withLock{mediaAccessLocked(key,null,true)}
+    suspend fun mediaFocusedPermission(key:NewsPlaybackKey,navigationGeneration:Long,intentGeneration:Long,focusLease:()->Boolean):Boolean = mutex.withLock {
+        view.navigationGeneration==navigationGeneration && view.intentGeneration==intentGeneration && view.intent==PlaybackIntent.PLAY && mediaAccessLocked(key,focusLease(),false)
     }
 
     suspend fun bindMediaRun(key: NewsPlaybackKey, expectedPreviousRun: UUID?): Boolean = mutex.withLock {
@@ -222,6 +247,12 @@ class SessionCoordinator {
         true
     }
 
+    /** A single interruption edge revokes old output authority; repeated status observations do not. */
+    private fun holdMediaLocked() {
+        if(!view.requiresExplicitMediaResume || view.intent==PlaybackIntent.PLAY)
+            view=view.copy(intent=PlaybackIntent.USER_PAUSED,mediaPlaying=false,requiresExplicitMediaResume=true,intentGeneration=view.intentGeneration+1)
+    }
+
     suspend fun requestMediaIntent(owner: OwnerContext, intent: PlaybackIntent,
         expectedNavigationGeneration: Long? = null, expectedIntentGeneration: Long? = null,
         expectedSelectionId: java.util.UUID? = null): Boolean = mutex.withLock {
@@ -229,27 +260,35 @@ class SessionCoordinator {
             expectedIntentGeneration?.let { it != view.intentGeneration } == true ||
             expectedSelectionId?.let { it != (view.preparedListening?.selectionId ?: view.listening?.selectionId) } == true) return@withLock false
         if (intent == PlaybackIntent.PLAY && (!view.mediaConnected || !view.access.ownerValid ||
-                view.access.power != PowerAvailability.ALLOWED || view.listening == null && view.preparedListening == null ||
+                !view.access.mediaReady || view.listening == null && view.preparedListening == null ||
+                view.task!=null || view.pendingAnswer!=null || view.inputPhase!=InputPhase.IDLE || view.voiceInput!=VoiceInputActivity.IDLE ||
+                view.practiceModal?.visible==true || view.reviewPolicy.auxiliary!=null ||
                 (view.preparedListening?.stage ?: view.listening?.stage) == ListeningStage.ARTICLE_OFFER)) return@withLock false
         if (intent != PlaybackIntent.PLAY) invalidateOfferLocked(ReviewOfferEvent.ExplicitStop)
-        view = view.copy(intent = intent, intentGeneration = view.intentGeneration + 1)
+        view = view.copy(intent = intent, intentGeneration = view.intentGeneration + 1,requiresExplicitMediaResume=intent!=PlaybackIntent.PLAY,
+            mediaPlaying=if(intent==PlaybackIntent.PLAY)view.mediaPlaying else false)
         true
     }
 
-    suspend fun observeMedia(key: NewsPlaybackKey, positionMs: Long, playIntent: Boolean, playing: Boolean, pauseReason: String): Boolean = mutex.withLock {
+    suspend fun observeMedia(key: NewsPlaybackKey, positionMs: Long, playIntent: Boolean, playing: Boolean, pauseReason: String,
+        expectedIntentGeneration:Long?=null): Boolean = mutex.withLock {
         val work = view.listening ?: return@withLock false
         if (key.owner != view.owner) return@withLock false
+        val ownsControl=expectedIntentGeneration!=null && expectedIntentGeneration==view.intentGeneration
+        // Durable position facts are recorded upstream. An old sample cannot rewind a new live grant.
+        if(!ownsControl)return@withLock false
         if (!work.accepts(key) || work.runId != key.mainRunId) {
             // A user STOP/pause queued at EOS still cancels continuation of the same article.
-            if (!playIntent && pauseReason !in setOf("none", "transition") && work.checkpointId == key.checkpointId &&
+            if (ownsControl && !playIntent && pauseReason !in setOf("none", "transition") && work.checkpointId == key.checkpointId &&
                 work.selectionId == key.selectionId && work.content == key.content)
-                view = view.copy(intent = PlaybackIntent.USER_PAUSED, intentGeneration = view.intentGeneration + 1)
+                holdMediaLocked()
             return@withLock false
         }
         require(positionMs in 0..key.durationMs)
-        view = view.copy(mediaPositionMs = positionMs, mediaPlaying = playing,
-            intentGeneration = view.intentGeneration + if (!playIntent && pauseReason !in setOf("none", "transition")) 1 else 0,
-            intent = if (pauseReason == "transition") view.intent else if (playIntent) PlaybackIntent.PLAY
+        if(ownsControl && !playIntent && pauseReason !in setOf("none", "transition"))holdMediaLocked()
+        view = view.copy(mediaPositionMs = positionMs,
+            mediaPlaying = if(ownsControl)playing && view.access.mediaAllowed && !view.requiresExplicitMediaResume else view.mediaPlaying,
+            intent = if (!ownsControl || view.requiresExplicitMediaResume || pauseReason == "transition") view.intent else if (playIntent) PlaybackIntent.PLAY
                 else if (view.intent == PlaybackIntent.STOPPED) PlaybackIntent.STOPPED else PlaybackIntent.USER_PAUSED)
         true
     }
@@ -262,6 +301,7 @@ class SessionCoordinator {
         val lessonId = view.lessonId ?: return@withLock null
         input.start(owner, task, lessonId, view.access).also {
             if (it != null) {
+                holdMediaLocked()
                 val modal = view.practiceModal?.takeIf { modal -> modal.visible }
                 val nextModal = modal?.let { current -> PracticeModalReducer.reduce(current, PracticeModalEvent.BeginCapture(it.captureId), view.access, view.owner).session }
                 view = view.copy(inputPhase = InputPhase.CAPTURING, captureLease = it, practiceModal = nextModal ?: view.practiceModal,
@@ -309,13 +349,15 @@ class SessionCoordinator {
     }
 
     suspend fun stop(): SessionView = mutex.withLock {
+        val originalNavigation=view.navigationGeneration;val originalIntent=view.intentGeneration
         closeModalLocked(PracticeModalCloseReason.SAVE_EXIT)
         invalidateOfferLocked(ReviewOfferEvent.ExplicitStop)
         invalidateInput()
         clock.cancel()
         waitRoute = null
         view = view.copy(intent = PlaybackIntent.STOPPED, screen = SessionScreen.SAVED, captureLease = null,
-                         navigationGeneration = view.navigationGeneration + 1, intentGeneration = view.intentGeneration + 1,
+                         navigationGeneration = originalNavigation + 1, intentGeneration = originalIntent + 1,
+                         requiresExplicitMediaResume=true,mediaPlaying=false,voiceInput=VoiceInputActivity.IDLE,
                          inputPhase = if (view.pendingAnswer != null) InputPhase.ACCEPTED else InputPhase.IDLE, expectedOutput = null)
         view
     }
@@ -391,7 +433,7 @@ class SessionCoordinator {
     suspend fun leavePractice(owner: OwnerContext): Boolean = mutex.withLock {
         if (view.owner != owner) return@withLock false
         closeModalLocked(PracticeModalCloseReason.FINISH)
-        invalidateInput(); clock.cancel(); issuedOutputs.clear(); waitRoute = null
+        invalidateInput(); clock.cancel(); issuedOutputs.clear(); outputAccessStamps.clear(); waitRoute = null
         view = view.copy(task = null, lessonId = null, pendingAnswer = null, inputPhase = InputPhase.IDLE, captureLease = null,
             helpReceived = HelpSnapshot(), preparedSupports = emptyList(), dialogueProgress = null, expectedOutput = null)
         true
@@ -402,10 +444,11 @@ class SessionCoordinator {
         if (view.practiceModal?.visible == true && view.practiceModal?.phase !in setOf(PracticeModalPhase.QUESTION, PracticeModalPhase.RETRY)) return@withLock null
         val task = view.task ?: return@withLock null
         if (view.owner != owner || view.lessonId != lessonId || view.pendingAnswer != null || view.inputPhase != InputPhase.IDLE ||
-            !view.access.ownerValid || view.access.power != PowerAvailability.ALLOWED || !view.access.audioAllowsReply ||
+            !view.access.gleoReady ||
             gleoCapabilities.inputActivity !is Capability.Verified || gleoCapabilities.microphoneArbitration !is Capability.Verified) return@withLock null
         clock.cancel(); waitRoute = null
-        CaptureLease(UUID.randomUUID(), UUID.randomUUID(), owner, task, lessonId, view.access.safety.generation, view.access.window.generation).also {
+        holdMediaLocked()
+        CaptureLease(UUID.randomUUID(), UUID.randomUUID(), owner, task, lessonId, view.access.safety.generation, view.access.window.generation,view.access.gleoPermissionGeneration).also {
             gleoLease = it
             val modal = view.practiceModal?.takeIf { it.visible }
             view = view.copy(practiceModal = modal?.copy(phase = PracticeModalPhase.CAPTURING, captureToken = it.captureId, captureReturnState = modal.phase) ?: view.practiceModal,
@@ -416,8 +459,7 @@ class SessionCoordinator {
     suspend fun acceptGleoFinal(lease: CaptureLease, text: String, capture: Capture,
         persist: suspend (AcceptedAnswer) -> Unit): AcceptedAnswer? = mutex.withLock {
         if (gleoLease != lease || view.owner != lease.owner || view.task != lease.task || view.lessonId != lease.lessonId ||
-            view.pendingAnswer != null || capture.path != CapturePath.GLEO || !view.access.ownerValid ||
-            view.access.power != PowerAvailability.ALLOWED || !view.access.audioAllowsReply ||
+            view.pendingAnswer != null || capture.path != CapturePath.GLEO || !view.access.gleoReady || lease.componentGeneration!=view.access.gleoPermissionGeneration ||
             gleoCapabilities.inputActivity !is Capability.Verified || gleoCapabilities.microphoneArbitration !is Capability.Verified) return@withLock null
         val value = text.trim()
         if (value.isBlank() || value.codePointCount(0, value.length) > 1200) return@withLock null
@@ -433,15 +475,20 @@ class SessionCoordinator {
     }
 
     suspend fun configureGleo(capabilities: VoiceCapabilities) = mutex.withLock {
+        val previous=gleoCapabilities
         gleoCapabilities = capabilities
-        if (waitRoute == OutputRoute.GLEO && capabilities.outputCompletion !is Capability.Verified) {
+        if(previous.inputActivity!=capabilities.inputActivity || previous.microphoneArbitration!=capabilities.microphoneArbitration) {
+            val old=gleoLease;gleoLease=null
+            if(old!=null && view.captureLease==old)view=view.copy(captureLease=null,inputPhase=if(view.pendingAnswer!=null)InputPhase.ACCEPTED else input.phase,voiceInput=VoiceInputActivity.IDLE)
+        }
+        if (waitRoute == OutputRoute.GLEO && (capabilities.outputCompletion !is Capability.Verified || previous.outputCompletion!=capabilities.outputCompletion || previous.exactOutputContent!=capabilities.exactOutputContent)) {
             clock.cancel(); waitRoute = null; view = view.copy(expectedOutput = null)
         }
     }
 
     suspend fun expectOutput(output: OutputExpectation): Boolean = mutex.withLock {
         if (output.context != view.owner || output.task != view.task || output.lessonId != view.lessonId ||
-            !view.access.ownerValid || view.access.power != PowerAvailability.ALLOWED || !view.access.audioAllowsReply) return@withLock false
+            !routeReady(view.access,output.route)) return@withLock false
         if (view.practiceModal != null && (view.practiceModal?.visible != true || output.modalToken != view.practiceModal?.token)) return@withLock false
         if (output.kind == WaitKind.ARTICLE_OFFER && !outputMatchesWork(output)) return@withLock false
         if (output.kind == WaitKind.ARTICLE_OFFER && view.reviewPolicy.context != null && !view.reviewPolicy.canAutoOffer) return@withLock false
@@ -450,10 +497,11 @@ class SessionCoordinator {
             view.offerRuntime?.expected != output.announcement || output.announcement.requestId != output.outputId)) return@withLock false
         if (output.kind != WaitKind.ARTICLE_OFFER && view.dialogueProgress == null) return@withLock false
         if (output.route == OutputRoute.GLEO && gleoCapabilities.outputCompletion !is Capability.Verified) return@withLock false
-        if (output.route == OutputRoute.PARKED_TTS && (!view.access.detailsOpen || !view.access.directProviderVerified)) return@withLock false
+        if (output.route == OutputRoute.PARKED_TTS && !view.access.parkedReplyReady) return@withLock false
         if (output.outputId in issuedOutputs) return@withLock false
-        if (issuedOutputs.size >= 16) issuedOutputs.remove(issuedOutputs.keys.first())
+        if (issuedOutputs.size >= 16) {val oldest=issuedOutputs.keys.first();issuedOutputs.remove(oldest);outputAccessStamps.remove(oldest)}
         issuedOutputs[output.outputId] = output
+        outputAccessStamps[output.outputId]=outputStamp(view.access,output.route)
         if (output.announcement == null) clock.expectOutput(output.kind, output.outputId, output.context)
         else clock.cancel()
         waitRoute = output.route
@@ -461,15 +509,28 @@ class SessionCoordinator {
         true
     }
 
+    private fun acceptsOriginalGleoOutputLocked(outputId:UUID,owner:OwnerContext,originalPermissionGeneration:Long?):Boolean {
+        if(originalPermissionGeneration==null || originalPermissionGeneration<0 || view.owner!=owner)return false
+        val issued=issuedOutputs[outputId]?:return false
+        return issued.context==owner && issued.route==OutputRoute.GLEO &&
+            outputAccessStamps[outputId]?.source==originalPermissionGeneration
+    }
+    /** Historical end facts bind to the issued route generation, never a newly granted route. */
+    suspend fun acceptsOutputObservation(outputId:UUID,owner:OwnerContext,originalPermissionGeneration:Long?):Boolean = mutex.withLock {
+        acceptsOriginalGleoOutputLocked(outputId,owner,originalPermissionGeneration)
+    }
+
     /** Adapter must witness the exact output's real end. Local commit precedes the wait. */
     suspend fun outputCompleted(outputId: UUID, originalContext: OwnerContext, endedAtMs: Long,
-        evidenceRef: String, persistHint: suspend (OwnerContext, DialogueProgressEvent) -> Unit): Boolean = mutex.withLock {
+        evidenceRef: String, originalPermissionGeneration:Long?=null,
+        persistHint: suspend (OwnerContext, DialogueProgressEvent) -> Unit): Boolean = mutex.withLock {
         require(endedAtMs >= 0); requireReference(evidenceRef)
+        if(originalPermissionGeneration!=null && !acceptsOriginalGleoOutputLocked(outputId,originalContext,originalPermissionGeneration))return@withLock false
         val issued = issuedOutputs[outputId] ?: return@withLock false
         val active = view.owner ?: return@withLock false
         if (issued.context != originalContext || active.profileId != originalContext.profileId ||
             active.privacyEpoch != originalContext.privacyEpoch || active.revision != originalContext.revision) return@withLock false
-        if (issued.route == OutputRoute.GLEO && gleoCapabilities.outputCompletion !is Capability.Verified) return@withLock false
+        if (issued.route == OutputRoute.GLEO && originalPermissionGeneration==null && gleoCapabilities.outputCompletion !is Capability.Verified) return@withLock false
         if (issued.kind == WaitKind.HINT_METHOD) {
             val lesson = issued.lessonId ?: return@withLock false
             // A durable write's completion can be lost before this reducer resumes.
@@ -483,6 +544,8 @@ class SessionCoordinator {
             }
         }
         issuedOutputs.remove(outputId)
+        val sameAccess=outputAccessStamps.remove(outputId)==outputStamp(view.access,issued.route)
+        if(!sameAccess || !routeAllowed(view.access,issued.route))return@withLock false
         if (view.expectedOutput != issued || view.owner != originalContext || view.task != issued.task || issued.kind == WaitKind.ARTICLE_OFFER && !outputMatchesWork(issued)) return@withLock false
         if (issued.announcement != null) {
             val offer = view.offerRuntime ?: return@withLock false
@@ -500,14 +563,17 @@ class SessionCoordinator {
     suspend fun updateVoiceInput(activity: VoiceInputActivity, context: OwnerContext, nowMs: Long): Boolean = mutex.withLock {
         if (context != view.owner || gleoCapabilities.inputActivity !is Capability.Verified) return@withLock false
         clock.tick(nowMs, false, context)
-        if (activity != VoiceInputActivity.IDLE) invalidateOfferLocked(ReviewOfferEvent.InputOrRestriction)
+        if (activity != VoiceInputActivity.IDLE) {
+            invalidateOfferLocked(ReviewOfferEvent.InputOrRestriction)
+            if(view.voiceInput==VoiceInputActivity.IDLE)holdMediaLocked()
+        }
         view = view.copy(voiceInput = activity)
         true
     }
 
     suspend fun tick(nowMs: Long): WaitAction? = mutex.withLock {
         val owner = view.owner ?: return@withLock null
-        val canReply = view.access.ownerValid && view.access.audioAllowsReply && view.access.power == PowerAvailability.ALLOWED &&
+        val canReply = replyAllowed(view.access) &&
             view.voiceInput == VoiceInputActivity.IDLE && input.phase == InputPhase.IDLE && view.pendingAnswer == null
         val offer = view.offerRuntime
         if (offer != null) {
@@ -537,8 +603,8 @@ class SessionCoordinator {
         val allowed = when (observation.mode) {
             ObservationMode.PARKED_VISIBLE -> view.access.detailsOpen
             ObservationMode.VOICE_OUTPUT_COMPLETED -> if (ticket.presentation.interactionChannel == InteractionChannel.PARKED)
-                view.access.detailsOpen && view.access.directProviderVerified && view.access.audioAllowsReply
-                else gleoCapabilities.exactOutputContent is Capability.Verified && gleoCapabilities.outputCompletion is Capability.Verified
+                view.access.parkedReplyAllowed
+                else view.access.gleoAllowed && gleoCapabilities.exactOutputContent is Capability.Verified && gleoCapabilities.outputCompletion is Capability.Verified
             ObservationMode.EXPLICIT_EXAMPLE_CONFIRMATION -> view.access.detailsOpen && view.access.window.focused ||
                 gleoCapabilities.exactOutputContent is Capability.Verified && gleoCapabilities.outputCompletion is Capability.Verified
             else -> false
@@ -552,7 +618,7 @@ class SessionCoordinator {
 
     suspend fun canPresent(context: OwnerContext, task: PracticeRef?): Boolean = mutex.withLock {
         context == view.owner && task == view.task && (view.practiceModal == null || view.practiceModal?.visible == true) && view.access.ownerValid &&
-            view.access.power == PowerAvailability.ALLOWED && view.access.audioAllowsReply
+            (view.access.parkedReplyReady || view.access.gleoReady)
     }
     /** source6 admission keeps its own reference/cursor and leaves all legacy fields absent. */
     suspend fun admitPreparedListening(completion: RepositoryCompletion<PreparedListeningWorkRef>, showPlayer: Boolean,
@@ -562,7 +628,7 @@ class SessionCoordinator {
         if (ticket.kind !in setOf(SessionOperationKind.SELECTION, SessionOperationKind.RESTORE) || !matches(ticket, true)) return@withLock false
         val work = completion.value
         review?.let { require(it.profile == ProfileContext(owner.profileId, owner.privacyEpoch) && it.selectionId == work.selectionId) }
-        operations.remove(ticket.kind); invalidateInput(); clock.cancel(); issuedOutputs.clear(); waitRoute = null
+        operations.remove(ticket.kind); invalidateInput(); clock.cancel(); issuedOutputs.clear(); outputAccessStamps.clear(); waitRoute = null
         val policy = if (restored) ReviewContextPolicy.restored(review) else ReviewPolicyState(review)
         val offer = review?.offerId?.takeIf { work.stage == ListeningStage.ARTICLE_OFFER }?.let {
             ReviewOfferRuntime(owner, work.selectionId, it, explicitResumeRequired = restored || !policy.canAutoOffer)
@@ -578,28 +644,40 @@ class SessionCoordinator {
         true
     }
 
-    suspend fun segmentPermission(program: SegmentProgram, expectedIntentGeneration: Long? = null,
-        requirePlayIntent: Boolean = false): Boolean = mutex.withLock {
+    private fun segmentAccessLocked(program:SegmentProgram,expectedIntentGeneration:Long?,requirePlayIntent:Boolean,focus:Boolean?,admission:Boolean):Boolean =
         expectedIntentGeneration?.let { it == view.intentGeneration } != false &&
             (!requirePlayIntent || view.intent == PlaybackIntent.PLAY) &&
             program.owner == view.owner && view.preparedListening?.accepts(program) == true && view.mediaConnected &&
-            view.access.ownerValid && view.access.power == PowerAvailability.ALLOWED && view.task == null &&
+            (if(admission)view.access.mediaReady else (focus?.let{view.access.copy(mediaFocusAllowed=it)}?:view.access).mediaAllowed) &&
+            (!view.requiresExplicitMediaResume || admission && !requirePlayIntent) && view.task == null &&
             view.inputPhase == InputPhase.IDLE && view.pendingAnswer == null && view.voiceInput == VoiceInputActivity.IDLE &&
             view.practiceModal?.visible != true && view.reviewPolicy.auxiliary == null
+    suspend fun segmentAdmissionPermission(program:SegmentProgram,expectedIntentGeneration:Long?=null,requirePlayIntent:Boolean=false):Boolean = mutex.withLock {
+        segmentAccessLocked(program,expectedIntentGeneration,requirePlayIntent,null,true)
     }
-
+    suspend fun segmentPermission(program: SegmentProgram, expectedIntentGeneration: Long? = null,
+        requirePlayIntent: Boolean = false): Boolean = mutex.withLock {
+        segmentAccessLocked(program,expectedIntentGeneration,requirePlayIntent,null,false)
+    }
+    suspend fun segmentOutputAdmissionPermission(program:SegmentProgram,intentGeneration:Long,verifyContent:suspend()->Boolean):Boolean =
+        segmentAdmissionPermission(program,intentGeneration,true) && verifyContent() && segmentAdmissionPermission(program,intentGeneration,true)
     /** Rights may require I/O. The original play generation must still own output afterwards. */
     suspend fun segmentOutputPermission(program: SegmentProgram, intentGeneration: Long,
         verifyContent: suspend () -> Boolean): Boolean =
-        segmentPermission(program, intentGeneration, true) && verifyContent() &&
-            segmentPermission(program, intentGeneration, true)
+        segmentPermission(program, intentGeneration, true) && verifyContent() && segmentPermission(program, intentGeneration, true)
+    /** The callback is an actual exact-run focus lease; no global focus value is manufactured. */
+    suspend fun segmentFocusedOutputPermission(program:SegmentProgram,intentGeneration:Long,focusLease:()->Boolean,
+        verifyContent:suspend()->Boolean):Boolean {
+        suspend fun current()=mutex.withLock{segmentAccessLocked(program,intentGeneration,true,focusLease(),false)}
+        return current() && verifyContent() && current()
+    }
 
     /** Caller carries the previous binding across the asynchronous runtime observation. */
     suspend fun observeSegment(snapshot: SegmentPlaybackSnapshot, playing: Boolean, expectedPreviousRun: UUID? = null): Boolean = mutex.withLock {
         val work = view.preparedListening ?: return@withLock false
         if (snapshot.program.owner != view.owner || !work.accepts(snapshot.program) || work.runId !in setOf(expectedPreviousRun, snapshot.runId)) return@withLock false
         view = view.copy(preparedListening = work.copy(cursor = snapshot.cursor, runId = if (snapshot.bindingAcknowledged) snapshot.runId else work.runId),
-            mediaPositionMs = null, mediaPlaying = playing && snapshot.bindingAcknowledged && view.intent == PlaybackIntent.PLAY)
+            mediaPositionMs = null, mediaPlaying = playing && snapshot.bindingAcknowledged && view.intent == PlaybackIntent.PLAY && view.access.mediaAllowed && !view.requiresExplicitMediaResume)
         true
     }
 
@@ -662,6 +740,7 @@ class SessionCoordinator {
         val policy = if (view.reviewPolicy.context != null) ReviewContextPolicy.enterAuxiliary(view.reviewPolicy, ReviewAuxiliaryKind.PRACTICE, original).state else view.reviewPolicy.copy(explicitResumeRequired = true)
         invalidateInput(); clock.cancel(); waitRoute = null
         invalidateOfferLocked(ReviewOfferEvent.InputOrRestriction)
+        holdMediaLocked()
         view = view.copy(practiceModal = modal, reviewPolicy = policy, intent = PlaybackIntent.USER_PAUSED, mediaPlaying = false,
             inputPhase = if (view.pendingAnswer != null) InputPhase.ACCEPTED else InputPhase.IDLE, captureLease = null, expectedOutput = null,
             screen = SessionScreen.PLAYER, navigationGeneration = view.navigationGeneration + 1)
@@ -683,7 +762,7 @@ class SessionCoordinator {
             invalidateInput(); clock.cancel(); waitRoute = null
             view = view.copy(practiceModal = modal, reviewPolicy = ReviewContextPolicy.closeAuxiliary(view.reviewPolicy).state,
                 task = null, lessonId = null, pendingAnswer = null, inputPhase = InputPhase.IDLE, captureLease = null, expectedOutput = null,
-                intent = PlaybackIntent.USER_PAUSED, mediaPlaying = false, preparedSupports = emptyList(), voiceInput = VoiceInputActivity.IDLE,
+                intent = PlaybackIntent.USER_PAUSED, requiresExplicitMediaResume=true, mediaPlaying = false, preparedSupports = emptyList(), voiceInput = VoiceInputActivity.IDLE,
                 screen = if (view.access.detailsOpen) SessionScreen.PLAYER else SessionScreen.RESTRICTED,
                 navigationGeneration = view.navigationGeneration + 1, intentGeneration = view.intentGeneration + 1)
             restrictedReturn = SessionScreen.PLAYER
@@ -697,9 +776,9 @@ class SessionCoordinator {
     }
     private fun offerGateLocked(): ReviewOfferGate = ReviewOfferGate(view.owner, view.reviewPolicy,
         SegmentPhase.valueOf((view.preparedListening?.stage ?: view.listening?.stage ?: ListeningStage.MAIN).name),
-        view.access.ownerValid && view.access.power == PowerAvailability.ALLOWED && view.access.audioAllowsReply,
+        replyAllowed(view.access),
         view.voiceInput == VoiceInputActivity.IDLE && view.inputPhase == InputPhase.IDLE && view.pendingAnswer == null && view.practiceModal?.visible != true,
-        !view.access.ownerValid || view.access.power != PowerAvailability.ALLOWED || !view.access.audioAllowsReply)
+        !replyAllowed(view.access))
     private fun invalidateOfferLocked(event: ReviewOfferEvent) {
         val offer = view.offerRuntime ?: return
         val change = ReviewOfferReducer.reduce(offer, event, offerGateLocked())
@@ -724,6 +803,7 @@ class SessionCoordinator {
         if (owner != view.owner) return@withLock false
         invalidateInput(); clock.cancel(); waitRoute = null
         invalidateOfferLocked(ReviewOfferEvent.InputOrRestriction)
+        holdMediaLocked()
         view = view.copy(expectedOutput = null, captureLease = null, voiceInput = VoiceInputActivity.IDLE,
             inputPhase = if (view.pendingAnswer != null) InputPhase.ACCEPTED else InputPhase.IDLE,
             mediaPlaying = false, intent = PlaybackIntent.USER_PAUSED)
@@ -736,6 +816,7 @@ class SessionCoordinator {
         val change = ReviewContextPolicy.enterAuxiliary(view.reviewPolicy, kind, original)
         invalidateInput(); clock.cancel(); waitRoute = null
         invalidateOfferLocked(ReviewOfferEvent.InputOrRestriction)
+        holdMediaLocked()
         view = view.copy(reviewPolicy = change.state, expectedOutput = null, captureLease = null, mediaPlaying = false,
             inputPhase = if (view.pendingAnswer != null) InputPhase.ACCEPTED else InputPhase.IDLE, intent = PlaybackIntent.USER_PAUSED)
         change
@@ -743,6 +824,7 @@ class SessionCoordinator {
     suspend fun closeReviewAuxiliary(owner: OwnerContext): ReviewContextChange? = mutex.withLock {
         if (owner != view.owner) return@withLock null
         val change = ReviewContextPolicy.closeAuxiliary(view.reviewPolicy)
+        holdMediaLocked()
         view = view.copy(reviewPolicy = change.state, mediaPlaying = false, intent = PlaybackIntent.USER_PAUSED, expectedOutput = null)
         clock.cancel(); waitRoute = null
         change

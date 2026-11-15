@@ -67,8 +67,14 @@ class PreparedProductScreensTest {
         "Synthetic renderer bridge story", listOf("technology"),
         WirePreparationDiscoverySource("Synthetic renderer fixture", "https://example.invalid/synthetic-bridge", "2026-11-14 00:00 UTC",
             "2026-11-14T00:00:00Z", "verified", "news"), "synthetic-renderer-no-real-rights", emptyList(), 3, null, null, null)
+    // Synthetic component/route evidence is explicit; raw AWAKE never supplies approval.
+    private val component = ComponentAccess(known = true, allowed = true, sourceGeneration = 0)
+    private val components = ComponentPolicies(generation = 0, audio = component, media = component, microphone = component)
     private val allowed = AccessState(SafetyState(VehiclePosition.PARKED, true, true, true), WindowState(true, true),
-        PowerAvailability.ALLOWED, true, true, true, true, true)
+        PowerAvailability.ALLOWED, true, true, true, true, true,
+        components = components, mediaRouteAvailable = true, mediaFocusAllowed = true,
+        backgroundMediaAllowed = true, gleoRouteAvailable = true, gleoVehicleAllowed = true,
+        parkedOutputAvailable = true)
     private val categoryNames = linkedMapOf("technology" to "기술", "science" to "과학", "business" to "경제", "world" to "세계", "environment" to "환경", "culture" to "문화")
     private val categories = WirePreparationCategoryPublicProjection(1, "2026-11-14T00:00:00Z", categoryNames.entries.mapIndexed { index, item ->
         WirePreparationCategory(item.key, item.value, "${item.value} 분야의 합성 설정 검증", true, index.toLong(), "synthetic-supply", "synthetic-freshness")
@@ -188,12 +194,24 @@ class PreparedProductScreensTest {
         rule.onNodeWithText("설정 적용").assertDoesNotExist()
         rule.onNodeWithContentDescription("듣기 설정").assertDoesNotExist()
         rule.onNodeWithContentDescription("재생").assertIsNotEnabled()
-        rule.runOnIdle { frame.value = frame.value.copy(session = frame.value.session.copy(access = allowed.copy(power = PowerAvailability.UNKNOWN))) }
+        rule.runOnIdle { frame.value = frame.value.copy(session = frame.value.session.copy(access = allowed.copy(power = PowerAvailability.SUSPENDING))) }
         rule.onNodeWithText(question).assertDoesNotExist()
         rule.onNodeWithText(fragments[0]).assertDoesNotExist()
         rule.onNodeWithText("설정 적용").assertDoesNotExist()
         assertEquals(2, intents.size)
         capture("prepared-restricted-details")
+        // A current parked projection with raw UNKNOWN can read/play with explicit
+        // component/route evidence; it does not restore the previously restricted modal.
+        rule.runOnIdle {
+            val current = player()
+            frame.value = current.copy(session = current.session.copy(access = allowed.copy(power = PowerAvailability.UNKNOWN)))
+        }
+        assertTrue(frame.value.canRead); assertTrue(frame.value.session.access.mediaReady)
+        rule.onNodeWithText(fragments[0]).assertIsDisplayed()
+        rule.onNodeWithText(question).assertDoesNotExist()
+        rule.onNodeWithContentDescription("재생").assertIsEnabled()
+        assertEquals(2, intents.size)
+        capture("prepared-raw-unknown-readable")
     }
 
     @Test fun emptyPreparedCatalogStillUsesSixConfiguredTopicsWithoutLegacyTagUnion() {

@@ -65,6 +65,8 @@ open class NewsMediaService : MediaLibraryService() {
     private var userWantsPlay = false
     private var ended = false
     private var focused = false
+    private var outputGrant: NewsMediaPlayGrant? = null
+    private var loadingGeneration: Long? = null
     @Volatile private var disposed = false
     private var requestedPosition: Long? = null
     private var stationaryPosition: Long? = null
@@ -83,7 +85,7 @@ open class NewsMediaService : MediaLibraryService() {
             .setOnAudioFocusChangeListener({ change ->
                 if (!disposed) {
                     focused = change == AudioManager.AUDIOFOCUS_GAIN
-                    if (!focused) pausePlayback("audio_focus")
+                    if (!focused) pausePlayback("audio_focus") else publishAccess()
                 }
                 // GAIN never restores the previous play intent.
             }, Handler(Looper.getMainLooper())).build()
@@ -151,7 +153,8 @@ open class NewsMediaService : MediaLibraryService() {
         }
         val controlled = object : ForwardingPlayer(player) {
             override fun play() { load(true, null) }
-            override fun prepare() { load(false, null) }
+            // Media3 may call prepare before PLAY. It cannot mint authority or start a run.
+            override fun prepare() { if (resource != null) player.prepare() }
             override fun pause() { pausePlayback("user") }
             override fun setPlayWhenReady(value: Boolean) { if (value) play() else pause() }
             override fun stop() { pausePlayback("user"); player.stop() }
@@ -183,12 +186,17 @@ open class NewsMediaService : MediaLibraryService() {
             while (isActive) {
                 delay(500)
                 refreshSegmentPort()
+                if (loadingGeneration == generation && !player.isPlaying) continue
                 val key = resource?.key ?: continue
                 val port = runtime
-                val allowed = try { port != null && port.mayPlay(key) }
+                val currentGeneration = generation
+                val grant = outputGrant
+                val allowed = try { port != null && grant != null && port.mayOutput(key, grant) {
+                    !disposed && generation == currentGeneration && resource?.key == key && outputGrant === grant && focused
+                } }
                     catch (cancelled: CancellationException) { throw cancelled }
                     catch (_: Exception) { false }
-                if (resource?.key != key) continue
+                if (resource?.key != key || generation != currentGeneration || outputGrant !== grant) continue
                 if (!allowed && (player.isPlaying || userWantsPlay)) pausePlayback("output_unavailable")
                 else if (player.isPlaying) sample("none")
             }
@@ -205,7 +213,8 @@ open class NewsMediaService : MediaLibraryService() {
             stationaryPosition = null
             player.clearMediaItems()
             library?.notifyChildrenChanged(ROOT, 0, null)
-            load(false, null)
+            // Selection exposes metadata only; the explicit PLAY path obtains the product grant.
+
         }
     }
 
@@ -217,15 +226,28 @@ open class NewsMediaService : MediaLibraryService() {
             return
         }
         val ticket = ++generation
+        loadingGeneration = ticket
+        val previousGrant = outputGrant
         if (seek != null) requestedPosition = seek
         val requested = requestedPosition
-        sample(if (followupFrom == null) "user" else "none", if (followupFrom == null) null else true)
+        // Loading saves factual position only. A delayed prior paused intent cannot cancel
+        // the new explicit grant (or revive playback); actual pause/STOP is sampled separately.
+        sample("transition", if (followupFrom == null) null else true)
+        outputGrant = null
         userWantsPlay = play
         player.pause()
         tracker?.reset()
         scope.launch {
             val port = runtime ?: run { pausePlayback("output_unavailable"); return@launch }
             try {
+                if (ticket != generation || disposed) return@launch
+                // Capture explicit product authority before current()/renew() can await.
+                // Natural same-article followup retains the original authority; it cannot mint one.
+                val grant = if (!play) null else if (followupFrom != null)
+                    previousGrant?.takeIf { it.matches(followupFrom) } else port.beginExplicitPlay()
+                if (ticket != generation || disposed) return@launch
+                if (play && grant == null) { pausePlayback("output_unavailable"); return@launch }
+                outputGrant = grant
                 val old = resource
                 val position = requested ?: player.currentPosition.coerceAtLeast(0)
                 val loaded = if (old == null || followupFrom != null) port.current()
@@ -237,11 +259,13 @@ open class NewsMediaService : MediaLibraryService() {
                     it.owner == followupFrom.owner && it.selectionId == followupFrom.selectionId &&
                         it.checkpointId == followupFrom.checkpointId && it.content == followupFrom.content && it.phase == "followup"
                 } == true
-                if (next == null || (old != null && next.key != old.key && !sameArticleFollowup) || !port.mayPlay(next.key)) {
+                if (next == null || (old != null && next.key != old.key && !sameArticleFollowup) ||
+                    play && grant?.matches(next.key) != true || !port.mayPlay(next.key)) {
                     pausePlayback("output_unavailable"); return@launch
                 }
                 if (ticket != generation || disposed) return@launch
                 resource = next
+                outputGrant = grant
                 library?.notifyChildrenChanged(ROOT, 1, null)
                 requestedPosition = null
                 tracker = PlaybackIntervalTracker(next.key.durationMs)
@@ -253,10 +277,17 @@ open class NewsMediaService : MediaLibraryService() {
                 player.prepare()
                 if (play && userWantsPlay && ticket == generation) {
                     focused = audio.requestAudioFocus(focusRequest) == AudioManager.AUDIOFOCUS_REQUEST_GRANTED
-                    if (focused) player.play() else pausePlayback("audio_focus")
+                    publishAccess()
+                    val authority = grant ?: run { pausePlayback("output_unavailable"); return@launch }
+                    val permitted = focused && port.mayOutput(next.key, authority) {
+                        !disposed && ticket == generation && resource?.key == next.key && outputGrant === authority && focused
+                    }
+                    if (ticket != generation || disposed || outputGrant !== authority) return@launch
+                    if (permitted && focused) player.play() else pausePlayback(if (focused) "output_unavailable" else "audio_focus")
                 }
             } catch (cancelled: CancellationException) { throw cancelled }
               catch (_: Exception) { if (ticket == generation) pausePlayback("media_unavailable") }
+            finally { if (loadingGeneration == ticket) loadingGeneration = null }
         }
     }
 
@@ -265,7 +296,8 @@ open class NewsMediaService : MediaLibraryService() {
         if (player.currentPosition < 0) { tracker?.reset(); return }
         val position = player.currentPosition.coerceIn(0, pinned.key.durationMs)
         val interval = tracker?.sample(position, SystemClock.elapsedRealtime(), player.isPlaying && focused)
-        val observed = NewsPlaybackPosition(pinned.key, position, playIntentOverride ?: userWantsPlay, reason, player.isPlaying && focused)
+        val observed = NewsPlaybackPosition(pinned.key, position, playIntentOverride ?: userWantsPlay, reason, player.isPlaying && focused,
+            outputGrant?.takeIf { it.matches(pinned.key) }?.intentGeneration)
         val port = runtime ?: return
         enqueue { port.persist(observed, interval) }
     }
@@ -279,13 +311,23 @@ open class NewsMediaService : MediaLibraryService() {
     private fun pausePlayback(reason: String, persist: Boolean = true) {
         generation++
         userWantsPlay = false
+        // Capture the original grant before revocation. Delayed storage cannot control a newer PLAY.
         if (persist) sample(reason)
+        outputGrant = null
         tracker?.reset()
         player.pause()
         abandonFocus()
     }
 
-    private fun abandonFocus() { focused = false; audio.abandonAudioFocusRequest(focusRequest) }
+    private fun publishAccess() {
+        val port = runtime ?: return
+        val key = resource?.key
+        val expectedGeneration = generation
+        // Root retains a live exact-service observation, never a sampled availability Boolean.
+        val lease = { !disposed && key != null && generation == expectedGeneration && resource?.key == key && focused }
+        writerScope.launch { port.observeAccess(key, lease) }
+    }
+    private fun abandonFocus() { focused = false; audio.abandonAudioFocusRequest(focusRequest); publishAccess() }
 
     /** Dynamic provider binding lets the application install the process runtime after connect. */
     private fun refreshSegmentPort() {

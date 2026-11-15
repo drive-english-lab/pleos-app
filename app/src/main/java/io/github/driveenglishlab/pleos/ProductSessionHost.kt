@@ -78,6 +78,8 @@ class ProductSessionHost @Inject constructor(@param:ApplicationContext private v
     private val originalTtsRegistration = voices.pleosRegistration
     private val currentAccountScope = CurrentAccountScope(context, database)
     private var protectedConnectionHeld = false
+    private var mediaAccessKey: NewsPlaybackKey? = null
+    private var mediaFocusLease: () -> Boolean = { false }
     private val profiles = ProfileRepository(context, database, BuildConfig.LEARNING_API_ORIGIN, BuildConfig.DEBUG)
     private val api = LearningApi(context, BuildConfig.LEARNING_API_ORIGIN, profiles, BuildConfig.DEBUG)
     private val catalog = CatalogRepository(context)
@@ -121,7 +123,7 @@ class ProductSessionHost @Inject constructor(@param:ApplicationContext private v
         })
     private val audio = AudioAccessRepository(catalog, api, profiles)
     private val playback = NewsPlaybackRepository(profiles, listening, catalog, audio, mediaJournal,
-        outputAllowed = coordinator::mediaPermission, onEnded = ::advanceAfterEnd)
+        outputAllowed = coordinator::mediaAdmissionPermission, onEnded = ::advanceAfterEnd)
     private val presentation = MutableStateFlow(ProductPresentation(themeDraft = appearances.state.value))
     private var controller: MediaBrowser? = null
     private var connectingMedia = false
@@ -245,9 +247,32 @@ class ProductSessionHost @Inject constructor(@param:ApplicationContext private v
         override suspend fun renew(key: NewsPlaybackKey, positionMs: Long) = playback.renew(key, positionMs)
         override suspend fun streamAccess(key: NewsPlaybackKey) = playback.streamAccess(key)
         override suspend fun mayPlay(key: NewsPlaybackKey) = playback.mayPlay(key)
+        override suspend fun observeAccess(key: NewsPlaybackKey?, focusLease: () -> Boolean) {
+            mediaAccessKey = key
+            mediaFocusLease = focusLease
+            updateAccess()
+        }
+        override suspend fun beginExplicitPlay(): NewsMediaPlayGrant? {
+            val before = coordinator.snapshot()
+            val owner = before.owner ?: return null
+            val work = before.listening ?: return null
+            if (!coordinator.requestMediaIntent(owner, PlaybackIntent.PLAY, before.navigationGeneration,
+                    before.intentGeneration, work.selectionId)) return null
+            val admitted = coordinator.snapshot()
+            if (admitted.owner != owner || admitted.listening?.sameWork(work) != true ||
+                admitted.navigationGeneration != before.navigationGeneration || admitted.intentGeneration != before.intentGeneration + 1 ||
+                admitted.intent != PlaybackIntent.PLAY || admitted.requiresExplicitMediaResume) return null
+            return NewsMediaPlayGrant(owner, work.selectionId, work.checkpointId, work.content,
+                admitted.navigationGeneration, admitted.intentGeneration)
+        }
+        override suspend fun mayOutput(key: NewsPlaybackKey, grant: NewsMediaPlayGrant, focusLease: () -> Boolean): Boolean {
+            if (!grant.matches(key) || !coordinator.mediaFocusedPermission(key, grant.navigationGeneration, grant.intentGeneration, focusLease)) return false
+            if (!playback.mayPlay(key)) return false
+            return grant.matches(key) && coordinator.mediaFocusedPermission(key, grant.navigationGeneration, grant.intentGeneration, focusLease)
+        }
         override suspend fun persist(position: NewsPlaybackPosition, interval: PlayedInterval?) {
             playback.persist(position, interval)
-            coordinator.observeMedia(position.key, position.positionMs, position.playIntent, position.playing, position.pauseReason)
+            coordinator.observeMedia(position.key, position.positionMs, position.playIntent, position.playing, position.pauseReason, position.intentGeneration)
         }
         override suspend fun ended(key: NewsPlaybackKey) = playback.ended(key)
         override suspend fun followupReady(endedKey: NewsPlaybackKey): Boolean {
@@ -390,7 +415,17 @@ class ProductSessionHost @Inject constructor(@param:ApplicationContext private v
         if (visible != projectedWindow.visible || focused != projectedWindow.focused)
             projectedWindow = WindowState(visible, focused, projectedWindow.generation + 1)
         coordinator.updateAccess(previous.copy(safety = vehicleSnapshot.safety, window = projectedWindow,
-            power = vehicleSnapshot.effectivePower, ownerValid = ownerValid,
+            power = vehicleSnapshot.effectivePower, ownerValid = ownerValid, components = vehicleSnapshot.components,
+            mediaRouteAvailable = coordinator.state.value.mediaConnected,
+            mediaFocusAllowed = mediaAccessKey?.let { key -> key.owner == coordinator.state.value.owner &&
+                coordinator.state.value.listening?.accepts(key) == true && mediaFocusLease() } == true,
+            backgroundMediaAllowed = false,
+            parkedOutputAvailable = learning.parkedOutputAvailable,
+            directReplyFocusAllowed = learning.parkedFocusGranted,
+            gleoRouteAvailable = learning.gleoRouteAvailable,
+            gleoVehicleAllowed = learning.gleoVehicleAllowed(vehicleSnapshot.safety),
+            gleoPermissionGeneration = learning.gleoPermissionGeneration ?: 0,
+            gleoReplyFocusAllowed = learning.gleoReplyAvailable,
             microphoneGranted = learning.microphoneGranted, directProviderVerified = learning.speechState.approved,
             inputArbitrationVerified = learning.speechState.approved, audioAllowsReply = learning.replyAllowed))
     }
@@ -401,15 +436,15 @@ class ProductSessionHost @Inject constructor(@param:ApplicationContext private v
         val future = MediaBrowser.Builder(context, SessionToken(context, ComponentName(context, NewsMediaService::class.java)))
             .setListener(object : MediaBrowser.Listener {
                 override fun onDisconnected(value: MediaController) {
-                    if (controller === value) { controller = null; scope.launch { coordinator.setMediaConnected(false) } }
+                    if (controller === value) { controller = null; scope.launch { coordinator.setMediaConnected(false); updateAccess() } }
                 }
             }).buildAsync()
         future.addListener({
             connectingMedia = false
             try {
                 controller = future.get()
-                scope.launch { coordinator.setMediaConnected(true) }
-            } catch (_: Exception) { scope.launch { coordinator.setMediaConnected(false) } }
+                scope.launch { coordinator.setMediaConnected(true); updateAccess() }
+            } catch (_: Exception) { scope.launch { coordinator.setMediaConnected(false); updateAccess() } }
         }, context.mainExecutor)
     }
 
@@ -781,7 +816,7 @@ class ProductSessionHost @Inject constructor(@param:ApplicationContext private v
                 is UiIntent.Seek -> {
                     if (view.preparedListening != null) { preparedRuntime.runtime.move(if (intent.offsetMs < 0) -1 else 1, view.intent == PlaybackIntent.PLAY); return }
                     val duration = view.listening?.durationMs ?: return
-                    if (view.access.power == PowerAvailability.ALLOWED && view.mediaConnected)
+                    if (view.access.mediaReady && view.mediaConnected)
                         controller?.seekTo(((view.mediaPositionMs ?: 0) + intent.offsetMs).coerceIn(0, duration))
                 }
                 is UiIntent.ReaderView -> if (view.access.detailsOpen) loadContent(intent.language)
@@ -1419,7 +1454,7 @@ class ProductSessionHost @Inject constructor(@param:ApplicationContext private v
         if (presentation.value.preparedCatalogAvailable || coordinator.state.value.preparedListening != null || catalogViews.state.value.snapshot != null) {
             selectPreparedArticle(article, fresh, retry, viaVoice, automatic = automatic); return
         }
-        if ((!view.access.detailsOpen && !(viaVoice && gleoRuntime != null && view.access.ownerValid && view.access.power == PowerAvailability.ALLOWED && view.access.audioAllowsReply)) || presentation.value.profile?.settings?.onboardingComplete != true) return
+        if ((!view.access.detailsOpen && !(viaVoice && gleoRuntime != null && view.access.gleoReady)) || presentation.value.profile?.settings?.onboardingComplete != true) return
         if (pendingFormat?.owner == call.owner) { presentation.update { it.copy(notice = "형식 변경 결과를 먼저 확인해 주세요") }; return }
         val saved = pendingSelection?.takeIf { it.owner == call.owner }
         if (!retry && saved != null) { presentation.update { it.copy(notice = "이전 기사 선택을 먼저 확인해 주세요", selectionPending = true) }; return }
@@ -1485,9 +1520,9 @@ class ProductSessionHost @Inject constructor(@param:ApplicationContext private v
         val format = presentation.value.profile?.settings?.listeningMode?.let { ListeningMode.valueOf(it.uppercase()) }
         return PlaybackActivationGuard(view.owner, if (samePresentation) pending.binding.contextToken else null,
             reviewNext2.processToken, System.nanoTime() / 1_000_000, java.time.Instant.now(),
-            view.access.ownerValid && view.access.power == PowerAvailability.ALLOWED && view.task == null &&
-                (view.access.detailsOpen || pending.viaVoice && view.access.audioAllowsReply && gleoRuntime != null),
-            sameArticleAndFormat = samePresentation && format == pending.binding.listeningMode)
+            view.access.ownerValid && view.task == null &&
+                (view.access.detailsOpen || pending.viaVoice && view.access.gleoReady && gleoRuntime != null),
+            sameArticleAndFormat = samePresentation && format == pending.binding.listeningMode, access = view.access)
     }
 
     private fun nextGuard(pending: PendingReview3Selection): PlaybackActivationGuard {
@@ -1496,9 +1531,9 @@ class ProductSessionHost @Inject constructor(@param:ApplicationContext private v
         val format = presentation.value.profile?.settings?.listeningMode?.let { ListeningMode.valueOf(it.uppercase()) }
         return PlaybackActivationGuard(view.owner, if (samePresentation) pending.binding.contextToken else null,
             reviewNext3.processToken, System.nanoTime() / 1_000_000, java.time.Instant.now(),
-            view.access.ownerValid && view.access.power == PowerAvailability.ALLOWED && view.task == null &&
-                (view.access.detailsOpen || pending.viaVoice && view.access.audioAllowsReply && gleoRuntime != null),
-            sameArticleAndFormat = samePresentation && (pending.request.selectionOverride != null || format == pending.binding.listeningMode))
+            view.access.ownerValid && view.task == null &&
+                (view.access.detailsOpen || pending.viaVoice && view.access.gleoReady && gleoRuntime != null),
+            sameArticleAndFormat = samePresentation && (pending.request.selectionOverride != null || format == pending.binding.listeningMode), access = view.access)
     }
 
     private suspend fun revokePendingActivation() {
@@ -1536,8 +1571,8 @@ class ProductSessionHost @Inject constructor(@param:ApplicationContext private v
         val began = System.nanoTime() / 1_000_000
         val call = profiles.current() ?: return
         val before = coordinator.snapshot()
-        if (before.task != null || !before.access.ownerValid || before.access.power != PowerAvailability.ALLOWED ||
-            !before.access.detailsOpen && !(viaVoice && before.access.audioAllowsReply && gleoRuntime != null)) return
+        if (before.task != null || !before.access.ownerValid ||
+            !before.access.detailsOpen && !(viaVoice && before.access.gleoReady && gleoRuntime != null)) return
         if (presentation.value.profile?.settings?.onboardingComplete != true) return
         val existing = pendingReview3Selection
         if (!automatic && !coordinator.invalidateMediaActivation(call.owner)) return
@@ -1664,8 +1699,8 @@ class ProductSessionHost @Inject constructor(@param:ApplicationContext private v
         val began = System.nanoTime() / 1_000_000
         val call = profiles.current() ?: return
         val before = coordinator.snapshot()
-        if (!before.access.ownerValid || before.access.power != PowerAvailability.ALLOWED || before.task != null ||
-            !before.access.detailsOpen && !(viaVoice && before.access.audioAllowsReply && gleoRuntime != null)) return
+        if (!before.access.ownerValid || before.task != null ||
+            !before.access.detailsOpen && !(viaVoice && before.access.gleoReady && gleoRuntime != null)) return
         val actionOperation = pendingActionOperation() ?: return
         val old = pendingReview2Selection
         val current = pendingReview3Selection
@@ -1786,8 +1821,8 @@ class ProductSessionHost @Inject constructor(@param:ApplicationContext private v
         val began = System.nanoTime() / 1_000_000
         val call = profiles.current() ?: return
         val before = coordinator.snapshot()
-        if (before.task != null || !before.access.ownerValid || before.access.power != PowerAvailability.ALLOWED ||
-            !before.access.detailsOpen && !(viaVoice && before.access.audioAllowsReply && gleoRuntime != null)) return
+        if (before.task != null || !before.access.ownerValid ||
+            !before.access.detailsOpen && !(viaVoice && before.access.gleoReady && gleoRuntime != null)) return
         if (presentation.value.profile?.settings?.onboardingComplete != true) return
         val existing = pendingReview2Selection
         if (retry && existing != null && existing.owner == call.owner) {
@@ -2113,8 +2148,7 @@ class ProductSessionHost @Inject constructor(@param:ApplicationContext private v
 
     private suspend fun changeFormat(mode: ListeningMode, viaVoice: Boolean = false) {
         val view = coordinator.snapshot()
-        if (!view.access.detailsOpen && !(viaVoice && view.access.ownerValid && view.access.power == PowerAvailability.ALLOWED &&
-                view.access.audioAllowsReply && gleoRuntime != null)) return
+        if (!view.access.detailsOpen && !(viaVoice && view.access.gleoReady && gleoRuntime != null)) return
         if (view.preparedListening != null) { changePreparedFormat(mode); return }
         val call = profiles.current() ?: return; val frame = listening.snapshot() ?: return
         val source = frame.selection ?: return; val current = point(frame) ?: return
@@ -2286,7 +2320,7 @@ class ProductSessionHost @Inject constructor(@param:ApplicationContext private v
 
     private fun restriction(view: SessionView): String? = when {
         view.ownerBinding != OwnerBindingStatus.VERIFIED -> "이 차량의 저장된 학습을 확인하고 있어요"
-        view.access.power != PowerAvailability.ALLOWED -> "차량 상태 확인이 필요해요. 확인되면 대본과 학습 화면을 열 수 있어요"
+        view.access.suspending -> "차량이 절전 상태예요. 다시 이용할 때 재생을 눌러 주세요"
         !view.access.safety.uxKnown -> "차량의 화면 사용 조건을 확인하지 못했어요"
         view.access.safety.position != VehiclePosition.PARKED -> "주차 후 대본과 학습 화면을 열 수 있어요"
         !view.access.window.visible -> "화면이 다시 보이면 이어서 이용할 수 있어요"

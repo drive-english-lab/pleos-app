@@ -1,6 +1,18 @@
 # Pleos Android app
 
-Pleos Connect용 Android 앱이다. 기본 진입은 실제 프로필·catalog·대본·단일 기사 미디어 port에 연결한 제품 화면이다. 차량 전원·owner·입력 권한을 확인하지 못하면 준비/제한 상태를 표시한다. 연결 점검은 별도 destination으로 보존한다. schema5·Room5와 기사 질문·연습의 제품 연결 코드를 갖추며 실제 음성·전원·자료 승인을 별도 확인한다.
+Pleos Connect용 Android 앱이다. 기본 진입은 실제 프로필·catalog·대본·단일 기사 미디어 port에 연결한 제품 화면이다. 실제 전원 사실과 화면·미디어·직접 입력·Gleo의 허용 조건을 각각 확인한다. 연결 점검은 별도 destination으로 보존한다. schema5·Room5와 기사 질문·연습의 제품 연결 코드를 갖추며 실제 음성·전원·자료 승인을 별도 확인한다.
+
+## 현재 구현 · R7 기능별 허용과 음성 초기화
+
+원시 전원 UNKNOWN을 그대로 유지하며 Details는 실제 P·UXR·보이는 창·현재 owner로 판단한다. AUDIO/MEDIA와 MIC의 현재 값·출처 세대·권한 세대를 분리해 마이크 변경이 뉴스 재생을 취소하지 않게 했다. 실제 매체 포커스와 원 재생 명령은 별도로 검사한다. Suspend·STOP·입력 중단 뒤 늦은 저장·재생 준비가 자동 재개하지 않으며, 실제 출력 완료 사실은 원 owner/회차/저장소에 보존한다. 실제 background 실행 근거가 없는 경로는 계속 대기한다.
+
+Gleo는 실제 sender/schema·차량 사용 범위·등록 세대와 원 언어/형태/완료 근거를 확인하며 직접 마이크의 P·MIC 제한과 구분한다. 생산 Gleo/직접 음성/뉴스 TTS의 승인값은 임의로 채우지 않았다. Google 제공 보류와 같은 설치의 보호 세션·저장·동기화·삭제 범위는 아래 R6 기준을 유지한다.
+
+SDK3.3.1의 초기화 전에 listener를 등록하던 오류를 실제 호출로 확인해 초기화 성공 뒤 등록하도록 고쳤다. 원 instance의 정리 실패·미확인과 remove/release/focus 반납 상태를 보존하고 새 출력을 차단한다. 중립 ON_DEVICE 시험에서 EN·KO start/done과 별도 start→stop/onStop·정리를 확인했으며, 이 시험은 생산 Gateway·실제 뉴스·Gleo·실차 전체의 성공을 뜻하지 않는다.
+
+검증은 domain90, data156개 중155통과/실연동 기본 제외1, 플랫폼 고유30개(기존28+정리 결함2), renderer UI34개 중32통과/기본 제외 진단2다. 플랫폼28과 UI32는 전체 실행 뒤 실패에 관련된 사례만 선별 확인한 고유 결과이며 단일 전체 실행 통과가 아니다. 별도 opt-in 실제 차량·식별정보 읽기 각1과 중립 음성1도 통과했다. 마지막 debug/release·테스트 APK 빌드와 lint(error0/warning37), 계약 동기화4개를 확인했다.
+
+실제 target35 앱/SDK34에서 P·UXR 및 AUDIO/MEDIA/MIC current 정책과 저장 세션·소유·암호문 존재를 확인했다. raw power는 UNKNOWN, RECORD_AUDIO는 미허용이다. Main 실행 신호는 성공했으나 캡처에 OEM 화면만 남고 top-resumed timeout/REMOVE_TASK가 관찰돼 정상 Main/전체 흐름은 미확인이다. 합성 캡처·격리 SDK 결과로 대체하지 않는다. [통합 검증·현재 캡처](../docs/verification/learning-review-20261115/README.md).
 
 ## 현재 제품 범위 · R6 Google 계정 제공 보류
 

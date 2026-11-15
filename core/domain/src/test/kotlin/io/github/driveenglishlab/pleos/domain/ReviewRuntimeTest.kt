@@ -49,7 +49,7 @@ class ReviewRuntimeTest {
         return ReviewReturnSnapshot(profile, selection, UUID.randomUUID(), 1, null, SegmentPhase.MAIN, cursor, true, PauseReason.NONE, 1)
     }
     private fun access() = AccessState(SafetyState(VehiclePosition.PARKED, true, true, true), WindowState(true, true),
-        PowerAvailability.ALLOWED, true, true, true, true, true)
+        PowerAvailability.ALLOWED, true, true, true, true, true).withSyntheticFeatureRoutes()
 
     @Test fun closeDiscardsUnsubmittedOnlyAndLateFeedbackCannotReopenOrNavigate() {
         val token = PracticeModalToken(owner, selection, UUID.randomUUID(), UUID.randomUUID(), 1)

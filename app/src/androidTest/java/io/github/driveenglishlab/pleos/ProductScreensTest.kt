@@ -33,8 +33,15 @@ class ProductScreensTest {
     private val asset = UUID.randomUUID()
     private val work = ListeningWorkRef(UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), content,
         ListeningStage.MAIN, asset, 60_000, UUID.randomUUID(), 1)
+    // Explicit synthetic component/source/route evidence. Raw AWAKE is never approval.
+    private val component = ComponentAccess(known = true, allowed = true, sourceGeneration = 0)
+    private val confirmedComponents = ComponentPolicies(generation = 0, audio = component,
+        media = component, microphone = component)
     private val allowed = AccessState(SafetyState(VehiclePosition.PARKED, true, true, true), WindowState(true, true),
-        PowerAvailability.ALLOWED, true, true, true, true, true)
+        PowerAvailability.ALLOWED, true, true, true, true, true,
+        components = confirmedComponents, mediaRouteAvailable = true, mediaFocusAllowed = true,
+        backgroundMediaAllowed = true, gleoRouteAvailable = true, gleoVehicleAllowed = true,
+        parkedOutputAvailable = true)
     private val settings = WireCommonSettings(listOf("technology"), "original_full", "none", emptyList(), true, 1)
     private val script = PublishedScript(content.listeningScriptId, content.bundleId, CatalogScriptRole.ORIGINAL_FULL, null,
         (1..20).joinToString("\n\n") { "Paragraph $it. This synthetic article tests readable text and preserved controls." } + "\n\nLast sentence remains above the playback dock.",
@@ -71,18 +78,88 @@ class ProductScreensTest {
         source.listFiles()?.filter { it.isFile && it.extension == "png" }?.forEach { it.copyTo(File(target, it.name), overwrite = true) }
     }
 
-    @Test fun unknownPowerClosesReaderAndDoesNotExposeAPlayableControl() {
-        val state = player().let { it.copy(session = it.session.copy(access = allowed.copy(power = PowerAvailability.UNKNOWN)),
-            recovery = "차량 상태 확인이 필요해요") }
+    @Test fun rawUnknownKeepsParkedReaderButMissingComponentEvidenceBlocksNewPlayback() {
+        val state = player().let { it.copy(session = it.session.copy(access = allowed.copy(
+            power = PowerAvailability.UNKNOWN, components = ComponentPolicies()))) }
         val frame = mutableStateOf(Frame(state)); val intents = mutableListOf<UiIntent>()
         render(frame, intents)
-        rule.onNodeWithText("차량 상태 확인이 필요해요").assertIsDisplayed()
-        rule.onNodeWithText("Paragraph 1.", substring = true).assertDoesNotExist()
+        assertEquals(PowerAvailability.UNKNOWN, state.session.access.power)
+        assertTrue(state.canRead); assertFalse(state.session.access.mediaReady)
+        rule.onNodeWithText("Paragraph 1.", substring = true).assertIsDisplayed()
         rule.onNodeWithContentDescription("재생").assertIsNotEnabled()
-        capture("restricted-unknown-power")
+        assertTrue(intents.isEmpty())
+        capture("reader-raw-unknown-without-component-approval")
         rule.runOnIdle { frame.value = Frame(state.copy(session = state.session.copy(intent = PlaybackIntent.PLAY))) }
+        // Stop/pause remains available even when a fresh playback admission is unavailable.
         rule.onNodeWithContentDescription("일시정지").assertIsEnabled().performClick()
         assertFalse((intents.single() as UiIntent.PlayPause).wantPlay)
+    }
+
+    @Test fun rawUnknownWithExplicitComponentAndRouteEvidenceKeepsReaderAndMediaIntent() {
+        val state = player().let { it.copy(session = it.session.copy(access = allowed.copy(power = PowerAvailability.UNKNOWN))) }
+        val intents = mutableListOf<UiIntent>(); render(mutableStateOf(Frame(state)), intents)
+        assertTrue(state.canRead); assertTrue(state.session.access.mediaReady)
+        assertEquals(PowerAvailability.UNKNOWN, state.session.access.power)
+        rule.onNodeWithText("Paragraph 1.", substring = true).assertIsDisplayed()
+        rule.onNodeWithContentDescription("재생").assertIsEnabled().performClick()
+        assertEquals(1, intents.size)
+        assertTrue((intents.single() as UiIntent.PlayPause).wantPlay)
+        assertEquals(state.origin, intents.single().origin)
+    }
+
+    @Test fun missingDeniedStaleOrMissingRouteEvidenceBlocksMediaWithoutClosingDetails() {
+        val frame = mutableStateOf(Frame(player())); val intents = mutableListOf<UiIntent>()
+        render(frame, intents)
+        val denied = component.copy(allowed = false)
+        val unavailable = listOf(
+            allowed.copy(components = confirmedComponents.copy(audio = ComponentAccess())),
+            allowed.copy(components = confirmedComponents.copy(media = ComponentAccess())),
+            allowed.copy(components = confirmedComponents.copy(audio = denied)),
+            allowed.copy(components = confirmedComponents.copy(media = denied)),
+            allowed.copy(components = confirmedComponents.copy(generation = 1)),
+            allowed.copy(mediaRouteAvailable = false))
+        for (access in unavailable) {
+            val state = player().let { it.copy(session = it.session.copy(access = access)) }
+            rule.runOnIdle { frame.value = Frame(state) }
+            assertTrue(state.canRead); assertFalse(access.mediaReady)
+            // Even known AWAKE does not supply a missing/denied/stale policy or route.
+            assertEquals(PowerAvailability.ALLOWED, access.power)
+            rule.onNodeWithText("Paragraph 1.", substring = true).assertIsDisplayed()
+            rule.onNodeWithContentDescription("재생").assertIsNotEnabled()
+            assertTrue(intents.isEmpty())
+        }
+    }
+
+    @Test fun microphoneOnlyDenialKeepsDetailsAndMediaWithoutStartingCapture() {
+        val access = allowed.copy(power = PowerAvailability.UNKNOWN,
+            components = confirmedComponents.copy(microphone = component.copy(allowed = false)))
+        val state = player().let { it.copy(session = it.session.copy(access = access)) }
+        val intents = mutableListOf<UiIntent>(); render(mutableStateOf(Frame(state)), intents)
+        assertTrue(state.canRead); assertTrue(access.mediaReady); assertFalse(access.canCapture)
+        rule.onNodeWithText("Paragraph 1.", substring = true).assertIsDisplayed()
+        rule.onNodeWithContentDescription("재생").assertIsEnabled()
+        rule.onNodeWithText("한국어").performClick()
+        assertTrue(intents.single() is UiIntent.ReaderView)
+        assertFalse(intents.any { it is UiIntent.StartAnswer || it is UiIntent.FinishAnswer || it is UiIntent.StartPractice })
+    }
+
+    @Test fun actualParkUxWindowOwnerAndSuspendRestrictionsStillCloseDetails() {
+        val frame = mutableStateOf(Frame(player())); val intents = mutableListOf<UiIntent>()
+        render(frame, intents)
+        val closed = listOf(
+            allowed.copy(safety = allowed.safety.copy(position = VehiclePosition.DRIVE_STOPPED)),
+            allowed.copy(safety = allowed.safety.copy(uxKnown = false)),
+            allowed.copy(safety = allowed.safety.copy(detailsAllowed = false)),
+            allowed.copy(safety = allowed.safety.copy(systemBlocked = true)),
+            allowed.copy(window = WindowState(false, false)), allowed.copy(ownerValid = false),
+            allowed.copy(power = PowerAvailability.SUSPENDING), allowed.copy(power = PowerAvailability.SUSPENDED))
+        for (access in closed) {
+            val state = player().let { it.copy(session = it.session.copy(access = access)) }
+            rule.runOnIdle { frame.value = Frame(state) }
+            assertFalse(state.canRead)
+            rule.onNodeWithText("Paragraph 1.", substring = true).assertDoesNotExist()
+            assertTrue(intents.isEmpty())
+        }
     }
 
     @Test fun readerViewAndSeekSendTypedIntentsWithoutChangingPlaybackOrCreatingPractice() {

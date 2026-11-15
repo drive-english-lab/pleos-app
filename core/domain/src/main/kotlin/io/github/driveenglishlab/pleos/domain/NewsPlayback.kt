@@ -19,13 +19,24 @@ class NewsPlaybackResource(val key: NewsPlaybackKey, val title: String, val uri:
 }
 
 data class NewsPlaybackPosition(val key: NewsPlaybackKey, val positionMs: Long,
-    val playIntent: Boolean, val pauseReason: String, val playing: Boolean = false) {
+    val playIntent: Boolean, val pauseReason: String, val playing: Boolean = false,
+    /** Original explicit media grant only. Null has factual position authority, never control authority. */
+    val intentGeneration: Long? = null) {
     init { require(positionMs in 0..key.durationMs) }
 }
 
 /** Player timeline observation. This is not Gleo output-end or physical audibility evidence. */
 data class PlayedInterval(val startMs: Long, val endMs: Long) {
     init { require(startMs >= 0 && endMs > startMs) }
+}
+
+/** Original explicit play authority, captured before any media/source lookup can suspend.
+ * A native focus lease proves output availability only; it cannot renew this owner/navigation/intent authority.
+ */
+data class NewsMediaPlayGrant(val owner: OwnerContext, val selectionId: UUID, val checkpointId: UUID,
+    val content: ContentRef, val navigationGeneration: Long, val intentGeneration: Long) {
+    fun matches(key: NewsPlaybackKey): Boolean = owner == key.owner && selectionId == key.selectionId &&
+        checkpointId == key.checkpointId && content == key.content
 }
 
 /** Bound to a current owner/selection. Implementations must recheck after network completion.
@@ -36,7 +47,14 @@ interface NewsPlaybackPort {
     suspend fun renew(key: NewsPlaybackKey, positionMs: Long): NewsPlaybackResource?
     /** Credential access on a media loading thread; does not seek or replace a playback run. */
     suspend fun streamAccess(key: NewsPlaybackKey): URI? = null
+    /** Readiness only. Neither this check nor a loaded asset grants physical output. */
     suspend fun mayPlay(key: NewsPlaybackKey): Boolean
+    /** Explicit player/hardware PLAY only; a cold restore or automatic phase change cannot mint a grant. */
+    suspend fun beginExplicitPlay(): NewsMediaPlayGrant? = null
+    /** Current actual service focus observation; background support is not inferred from this lease. */
+    suspend fun observeAccess(key: NewsPlaybackKey?, focusLease: () -> Boolean) {}
+    /** Recheck this original authority and current actual focus around any asynchronous content check. */
+    suspend fun mayOutput(key: NewsPlaybackKey, grant: NewsMediaPlayGrant, focusLease: () -> Boolean): Boolean = false
     suspend fun persist(position: NewsPlaybackPosition, interval: PlayedInterval?)
     suspend fun ended(key: NewsPlaybackKey)
     suspend fun followupReady(endedKey: NewsPlaybackKey): Boolean = false

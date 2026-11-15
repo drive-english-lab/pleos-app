@@ -35,7 +35,7 @@ internal class ProductLearningController(private val context: Context, private v
     }, presentationVerifier = FeedbackPresentationVerifier { witness ->
         val view = coordinator.snapshot()
         witness.mode == "explicit_user_action" && witness.owner == view.owner && witness.lessonId == view.lessonId &&
-            mutable.value.practice?.progress?.pendingFeedbackAttemptId == witness.attemptId && (view.access.detailsOpen && view.access.window.focused || mutable.value.channel == InteractionChannel.GLEO && voices.gleo?.schemaApproval is Capability.Verified && replyAllowed)
+            mutable.value.practice?.progress?.pendingFeedbackAttemptId == witness.attemptId && (view.access.detailsOpen && view.access.window.focused || mutable.value.channel == InteractionChannel.GLEO && voices.gleo?.schemaApproval is Capability.Verified && view.access.gleoAllowed && replyAllowed)
     })
     private val incremental = api.incremental(context)
     private val codecs = IncrementalContractJson(context)
@@ -51,7 +51,7 @@ internal class ProductLearningController(private val context: Context, private v
             witness.mode == "explicit_user_action" && witness.owner == view.owner && witness.lessonId == view.lessonId &&
                 mutable.value.practice?.progress?.pendingFeedbackAttemptId == witness.attemptId &&
                 (view.access.detailsOpen && view.access.window.focused || mutable.value.channel == InteractionChannel.GLEO &&
-                    voices.gleo?.schemaApproval is Capability.Verified && replyAllowed)
+                    voices.gleo?.schemaApproval is Capability.Verified && view.access.gleoAllowed && replyAllowed)
         }, mayProjectResult = { owner, lesson, attempt ->
             coordinator.snapshot().let { it.owner == owner && it.lessonId == lesson && it.captureLease == null &&
                 it.inputPhase !in setOf(InputPhase.CAPTURING, InputPhase.FINALIZING) &&
@@ -87,7 +87,7 @@ internal class ProductLearningController(private val context: Context, private v
     private var preparedRequestActive = false
     var preparedPracticeMaterial: (suspend (PreparedContentRef) -> Triple<PreparedPracticeRef, String, PracticeSupportManifest>?)? = null
     private var questionReturn: ConversationReturn? = null
-    private data class QuestionContext(val owner: OwnerContext, val work: ListeningWorkRef?, val task: PracticeRef?, val lesson: UUID?, val navigation: Long, val intent: Long, val prepared: PreparedListeningWorkRef? = null,val modal:PracticeModalToken?=null)
+    private data class QuestionContext(val owner: OwnerContext, val work: ListeningWorkRef?, val task: PracticeRef?, val lesson: UUID?, val navigation: Long, val intent: Long, val prepared: PreparedListeningWorkRef? = null,val modal:PracticeModalToken?=null,val gleoPermissionGeneration:Long=0)
     private data class PreparedQuestionResult(val value:WireSource6InferenceQAResponse,val intent:String)
     private data class QuestionOutput(val id: UUID, val context: QuestionContext, var ended: Boolean = false,val prepared:PreparedQuestionResult?=null)
     data class PreparedQuestionInterpretation(val intent:String,val targetSpan:WireSource6TargetSpan?=null) {
@@ -101,32 +101,51 @@ internal class ProductLearningController(private val context: Context, private v
     private var questionContext: QuestionContext? = null
     private var questionOutput: QuestionOutput? = null
     private fun QuestionContext.matches(view: SessionView): Boolean = owner == view.owner && task == view.task && lesson == view.lessonId &&
-        navigation == view.navigationGeneration && intent == view.intentGeneration && modal==view.practiceModal?.token && (work == null && view.listening == null || work?.sameWork(view.listening) == true) &&
+        navigation == view.navigationGeneration && intent == view.intentGeneration && gleoPermissionGeneration == view.access.gleoPermissionGeneration && modal==view.practiceModal?.token && (work == null && view.listening == null || work?.sameWork(view.listening) == true) &&
         (prepared == null && view.preparedListening == null || prepared?.sameWork(view.preparedListening) == true)
     private var support: PresentationUiBinding? = null
-    private data class SupportContext(val navigation:Long,val intent:Long,val modal:PracticeModalToken?)
+    private data class SupportContext(val navigation:Long,val intent:Long,val modal:PracticeModalToken?,val gleoPermissionGeneration:Long?)
     private var supportContext:SupportContext? = null
     private val completedOutputs = mutableSetOf<UUID>()
+    private data class HintOutputOrigin(val owner:OwnerContext,val lesson:UUID,val prepared:Boolean)
+    private val hintOutputOrigins=linkedMapOf<UUID,HintOutputOrigin>()
     private val speech = DirectSpeechGateway(context, voices.direct) { event -> scope.launch { speechEvent(event) } }
     private val presenter = SupportPresenter(current = { binding ->
         val view = coordinator.snapshot()
         support == binding && supportContext?.let { it.navigation==view.navigationGeneration && it.intent==view.intentGeneration && it.modal==view.practiceModal?.token &&
+            (it.gleoPermissionGeneration==null || it.gleoPermissionGeneration==view.access.gleoPermissionGeneration) &&
             (it.modal==null || view.practiceModal?.visible==true) }==true && view.owner == binding.owner && view.task == binding.task && view.lessonId == binding.lessonId &&
-            view.access.ownerValid && view.access.power == PowerAvailability.ALLOWED &&
+            view.access.ownerValid &&
             (if (binding.ticket.presentation.interactionChannel == InteractionChannel.PARKED) view.access.detailsOpen && view.access.window.focused
-             else voices.gleo?.capabilities?.exactOutputContent is Capability.Verified && voices.gleo?.capabilities?.outputCompletion is Capability.Verified)
+             else view.access.gleoAllowed && voices.gleo?.capabilities?.exactOutputContent is Capability.Verified && voices.gleo?.capabilities?.outputCompletion is Capability.Verified)
     }, record = { binding, observation ->
         profiles.current()?.takeIf { it.owner == binding.owner }?.let { if (source6(binding.owner,binding.lessonId,binding.task)) preparedPresentations.record(it, binding.ticket, observation) else presentations.record(it, binding.ticket, observation) }
     })
     val speechState get() = speech.state.value
+    val parkedOutputAvailable get() = speech.state.value.approved && speech.state.value.outputReady
+    val parkedFocusGranted get() = speech.state.value.focusGranted
+    val gleoReplyAvailable get() = gleoReplyAllowed
+    val gleoPermissionGeneration: Long? get() = voices.gleo?.permissionGeneration?.takeIf { it >= 0 }
+    val gleoRouteAvailable: Boolean get() = voices.gleo?.let { adapter ->
+        gleoPermissionGeneration != null && adapter.schemaApproval is Capability.Verified && adapter.actionParamJsonVerified &&
+            adapter.capabilities.inputActivity is Capability.Verified && adapter.capabilities.microphoneArbitration is Capability.Verified
+    } == true
+    fun gleoVehicleAllowed(safety: SafetyState): Boolean = voices.gleo?.let { adapter ->
+        gleoRouteAvailable && adapter.vehicleScopeApproval is Capability.Verified && adapter.allowsVehicle(safety)
+    } == true
     val microphoneGranted get() = ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
     private data class GleoInput(val owner: OwnerContext, val lessonId: UUID?, val task: PracticeRef?, val id: UUID, val navigation: Long,
         val preferenceLease:GleoLearningPreferenceLease,val pendingChoiceOperationId:UUID?)
+    private fun interactionReady(view: SessionView, channel: InteractionChannel): Boolean =
+        if (channel == InteractionChannel.PARKED) view.access.detailsOpen else view.access.gleoReady &&
+            voices.gleo?.schemaApproval is Capability.Verified
     private var gleoInput: GleoInput? = null
     private var gleoReplyAllowed = false
+    private var observedGleoPermissionGeneration = 0L
     val replyAllowed get() = speech.state.value.focusGranted || gleoReplyAllowed
     val gleoRuntime: GleoProductRuntime? = voices.gleo?.let { GleoGateway(it, object : GleoProductHandler {
         override suspend fun playback(command: String, title: String?, mode: String?,capture:GleoCaptureBinding?): String {
+            if (!coordinator.snapshot().access.gleoReady) return "이 차량의 음성 명령 경로를 확인하지 못했어요. 현재 기사는 유지돼요"
             if(command in GleoProductActionParser.pendingChoiceCommands) {
                 val adapter=voices.gleo;val lease=gleoInput?.preferenceLease;val pending=gleoInput?.pendingChoiceOperationId
                 val admitted=GleoLearningPreferencePolicy.admits(adapter?.pendingChoiceCommandVerified(command)==true,
@@ -144,15 +163,19 @@ internal class ProductLearningController(private val context: Context, private v
             if (command == "resume" && questionReturn != null) return if (returnFromQuestion()) "원래 작업으로 돌아갈게요" else "저장된 원래 작업을 다시 확인해 주세요"
             return playbackHandler?.invoke(command, title, mode) ?: "뉴스 재생 연결을 준비하고 있어요"
         }
-        override suspend fun question(text: String, title: String?): String = ask(text, title)
-        override suspend fun practice(command: String, text: String?, title: String?, capture: GleoCaptureBinding?): String = when (command) {
+        override suspend fun question(text: String, title: String?): String =
+            if (coordinator.snapshot().access.gleoReady) ask(text, title) else "이 차량의 음성 질문 경로를 확인하지 못했어요. 현재 작업은 유지돼요"
+        override suspend fun practice(command: String, text: String?, title: String?, capture: GleoCaptureBinding?): String {
+            if (!coordinator.snapshot().access.gleoReady) return "이 차량의 음성 입력 경로를 확인하지 못했어요. 같은 질문은 유지돼요"
+            return when (command) {
             in GleoLearningPreferenceCommand.wires -> gleoLearningPreference(command,capture)
             "start" -> { startPractice(InteractionChannel.GLEO); mutable.value.practice?.questionEn ?: "말하기 연습을 준비하지 못했어요" }
             "answer" -> {
                 val current = coordinator.snapshot()
                 val started = gleoInput
                 val sameInput = started != null && capture != null && started.id == capture.inputId && started.owner == current.owner &&
-                    started.task == current.task && started.lessonId == current.lessonId && started.navigation == current.navigationGeneration
+                    started.task == current.task && started.lessonId == current.lessonId && started.navigation == current.navigationGeneration &&
+                    started.preferenceLease.mayAct(current)
                 val lease = if (sameInput && current.lessonId != null && current.owner != null && mutable.value.practice?.progress?.nextTurn != null &&
                     (!currentSource6() || preparedResumeSelected && !preparedReadOnly) && support==null && flushQuestionDeliveries())
                     coordinator.startGleoAnswer(requireNotNull(current.owner), requireNotNull(current.lessonId)) else null
@@ -201,6 +224,7 @@ internal class ProductLearningController(private val context: Context, private v
             }
             "resume" -> { readyForAnswer(); mutable.value.practice?.questionEn ?: "저장한 연습을 먼저 확인해 주세요" }
             else -> "요청을 확인하지 못했어요. 같은 질문을 유지할게요"
+            }
         }
     }) }
     var materialPracticeAllowed: (PracticeContentRef) -> Boolean = { true }
@@ -253,7 +277,8 @@ internal class ProductLearningController(private val context: Context, private v
             ?.let { it.feedback?.attemptId ?: it.progress?.pendingFeedbackAttemptId ?: mutable.value.lastAttemptId }
         val verified = assessmentGleoCommandsVerified() && voices.gleo?.schemaApproval is Capability.Verified && voices.gleo?.actionParamJsonVerified == true &&
             originalInput != null && capture != null && originalInput.id == capture.inputId && originalInput.owner == owner &&
-            originalInput.lessonId == lesson && originalInput.task == ref && originalInput.navigation == before.navigationGeneration
+            originalInput.lessonId == lesson && originalInput.task == ref && originalInput.navigation == before.navigationGeneration &&
+            originalInput.preferenceLease.mayAct(before)
         if (!verified || owner == null || lesson == null || ref == null || originalAttempt == null)
             return "원래 답변의 음성 요청을 확인하지 못했어요. 현재 연습은 유지돼요"
         gleoInput = null // A command is not an answer turn and cannot be replayed as one.
@@ -281,19 +306,44 @@ internal class ProductLearningController(private val context: Context, private v
         scope.launch { speech.state.collect { accessChanged() } }
         scope.launch { voices.gleo?.let { adapter ->
             coordinator.configureGleo(adapter.capabilities)
-            adapter.events.collect { event -> when (event) {
+            adapter.events.collect { event ->
+                // The actual adapter getter, never an event's claimed stamp, advances the route projection.
+                if(adapter.permissionGeneration?.takeIf{it>=0}!=coordinator.state.value.access.gleoPermissionGeneration)accessChanged()
+                if (event.permissionGeneration != coordinator.state.value.access.gleoPermissionGeneration) {
+                    // Only an exact originally issued output may preserve its historical end fact.
+                    // This path cannot complete QA/support or restore current reply/input permissions.
+                    if(event is GleoRuntimeEvent.OutputEnded && coordinator.acceptsOutputObservation(event.outputId,event.owner,event.permissionGeneration)) {
+                        coordinator.outputCompleted(event.outputId,event.owner,event.atMs,event.evidenceRef,
+                            originalPermissionGeneration=event.permissionGeneration) { original,fact ->
+                            persistHintFact(event.outputId,original,fact)
+                        }
+                    }
+                    return@collect
+                }
+                when (event) {
                 is GleoRuntimeEvent.InputStarted -> {
                     val current = coordinator.snapshot()
-                    if (current.owner == event.owner && current.lessonId == event.lessonId) {
-                        gleoInput = GleoInput(event.owner, event.lessonId, current.task, event.inputId, current.navigationGeneration,
-                            GleoLearningPreferenceLease(event.owner,event.inputId,current.task,current.lessonId,current.navigationGeneration,
-                                current.intentGeneration,current.listening,current.preparedListening,current.practiceModal?.token),pendingChoiceContext())
-                        coordinator.updateVoiceInput(VoiceInputActivity.CAPTURING, event.owner, android.os.SystemClock.elapsedRealtime())
+                    if (current.owner == event.owner && current.lessonId == event.lessonId && current.access.gleoReady &&
+                        adapter.schemaApproval is Capability.Verified && adapter.capabilities.inputActivity is Capability.Verified &&
+                        adapter.capabilities.microphoneArbitration is Capability.Verified) {
+                        gleoInput=null
+                        val pending=pendingChoiceContext()
+                        if(coordinator.updateVoiceInput(VoiceInputActivity.CAPTURING,event.owner,android.os.SystemClock.elapsedRealtime())) {
+                            val admitted=coordinator.snapshot()
+                            if(admitted.owner==current.owner && admitted.task==current.task && admitted.lessonId==current.lessonId &&
+                                admitted.navigationGeneration==current.navigationGeneration && admitted.access.gleoReady &&
+                                admitted.access.gleoPermissionGeneration==event.permissionGeneration && pendingChoiceContext()==pending &&
+                                admitted.voiceInput==VoiceInputActivity.CAPTURING) {
+                                gleoInput=GleoInput(event.owner,event.lessonId,admitted.task,event.inputId,admitted.navigationGeneration,
+                                    GleoLearningPreferenceLease(event.owner,event.inputId,admitted.task,admitted.lessonId,admitted.navigationGeneration,
+                                        admitted.intentGeneration,admitted.listening,admitted.preparedListening,admitted.practiceModal?.token,admitted.access.gleoPermissionGeneration),pending)
+                            } else coordinator.updateVoiceInput(VoiceInputActivity.IDLE,event.owner,android.os.SystemClock.elapsedRealtime())
+                        }
                     }
                 }
                 is GleoRuntimeEvent.InputChanged -> { coordinator.updateVoiceInput(event.activity, event.owner, event.atMs); completeQuestionReturn() }
-                is GleoRuntimeEvent.OutputEnded -> outputEnded(event.outputId, event.owner, event.atMs, event.evidenceRef)
-                is GleoRuntimeEvent.ReplyAvailability -> if (event.owner == coordinator.state.value.owner) { gleoReplyAllowed = event.allowed; accessChanged() }
+                is GleoRuntimeEvent.OutputEnded -> outputEnded(event.outputId, event.owner, event.atMs, event.evidenceRef,event.permissionGeneration)
+                is GleoRuntimeEvent.ReplyAvailability -> if (event.owner == coordinator.state.value.owner) { gleoReplyAllowed = event.allowed && coordinator.state.value.access.gleoReady; accessChanged() }
                 is GleoRuntimeEvent.Interrupted -> if (event.owner == coordinator.state.value.owner) {
                     val interrupted=questionOutput
                     interrupted?.prepared?.takeIf{it.value.status=="answered" && !interrupted.ended}?.let{result->
@@ -316,10 +366,21 @@ internal class ProductLearningController(private val context: Context, private v
         }
         scope.launch { coordinator.state.collect { view ->
             if (mutable.value.owner != view.owner) { speech.releaseFocus(); task = null; preparedManifest=null;preparedResumeSelected=false;preparedRequestActive=false;preparedRequestClock.clear()
-                preparedReadOnly=false;source6Binding=null;preparedQuestionResult=null;support = null;supportContext=null;completedOutputs.clear(); questionReturn = null; questionContext = null; questionOutput = null; gleoInput = null; mutable.value = LearningPresentation(owner = view.owner) }
+                preparedReadOnly=false;source6Binding=null;preparedQuestionResult=null;support = null;supportContext=null;completedOutputs.clear();hintOutputOrigins.clear(); questionReturn = null; questionContext = null; questionOutput = null; gleoInput = null; mutable.value = LearningPresentation(owner = view.owner) }
             if (speech.state.value.listening && !view.access.canCapture) speech.cancel()
+            if (observedGleoPermissionGeneration != view.access.gleoPermissionGeneration) {
+                observedGleoPermissionGeneration = view.access.gleoPermissionGeneration
+                gleoInput = null; gleoReplyAllowed = false; questionOutput = null
+                accessChanged()
+            }
+            if (!view.access.gleoReady) { gleoInput = null; gleoReplyAllowed = false }
+            if (view.access.suspending || !view.access.ownerValid ||
+                !view.access.detailsOpen && speech.state.value.focusGranted || speech.speaking && !speech.outputAllowed(view.access))
+                speech.releaseFocus()
             if (support != null && (support?.owner != view.owner || supportContext?.modal!=view.practiceModal?.token || view.practiceModal?.visible==false ||
-                support?.ticket?.presentation?.interactionChannel==InteractionChannel.PARKED && (!view.access.detailsOpen || !view.access.window.focused))) closeSupport()
+                (support?.ticket?.presentation?.interactionChannel==InteractionChannel.PARKED && (!view.access.detailsOpen || !view.access.window.focused) ||
+                 support?.ticket?.presentation?.interactionChannel==InteractionChannel.GLEO &&
+                    (!view.access.gleoAllowed || supportContext?.gleoPermissionGeneration!=view.access.gleoPermissionGeneration)))) closeSupport()
         } }
     }
 
@@ -346,6 +407,7 @@ internal class ProductLearningController(private val context: Context, private v
 
     suspend fun startPractice(channel: InteractionChannel, fixed: PracticeContentRef? = null) {
         val view = coordinator.snapshot(); val call = profiles.current() ?: return
+        if (!interactionReady(view, channel)) return
         val work = view.listening
         val prepared = view.preparedListening
         if (prepared != null && fixed == null) {
@@ -362,8 +424,7 @@ internal class ProductLearningController(private val context: Context, private v
             return
         }
         if (work == null && fixed == null) return
-        if (call.owner != view.owner || view.task != null || view.pendingAnswer != null || view.access.power != PowerAvailability.ALLOWED ||
-            channel == InteractionChannel.PARKED && !view.access.detailsOpen) return
+        if (call.owner != view.owner || view.task != null || view.pendingAnswer != null || !interactionReady(view, channel)) return
         val op = coordinator.beginOperation(SessionOperationKind.PRACTICE, call.owner) ?: return
         try {
             if ((work != null || prepared!=null) && !freeze(call.owner)) { notice("듣던 위치를 저장하지 못했어요. 다시 시도해 주세요"); return }
@@ -396,8 +457,7 @@ internal class ProductLearningController(private val context: Context, private v
         restored: WireSource6PersonalLessonRecord? = null,readOnlyAttempt:UUID?=null,readOnly:Boolean=false) {
         val call = profiles.current() ?: return
         val view = coordinator.snapshot()
-        if (view.owner != call.owner || view.pendingAnswer != null || restored==null && view.task != null || view.access.power != PowerAvailability.ALLOWED ||
-            channel == InteractionChannel.PARKED && !view.access.detailsOpen) return
+        if (view.owner != call.owner || view.pendingAnswer != null || restored==null && view.task != null || !interactionReady(view, channel)) return
         if(restored==null && view.preparedListening?.content!=ref.segmentContent())return
         if(restored!=null && restored.contentRef!=ref.source6Wire())return
         if(manifest.taskId!=ref.supportTaskIdentity || manifest.questionRef!=ref.questionRef)return
@@ -685,7 +745,8 @@ internal class ProductLearningController(private val context: Context, private v
         if (registered !is LearningReply.Stored || !coordinator.preparedSupport(registered.value)) { notice("도움 출력을 준비하지 못했어요. 질문은 유지돼요"); return }
         val binding = PresentationUiBinding(call.owner, ref, view.lessonId, registered.value, UUID.randomUUID(), artifact)
         support = binding
-        supportContext=SupportContext(view.navigationGeneration,view.intentGeneration,view.practiceModal?.token)
+        supportContext=SupportContext(view.navigationGeneration,view.intentGeneration,view.practiceModal?.token,
+            view.access.gleoPermissionGeneration.takeIf{channel==InteractionChannel.GLEO})
         if (channel == InteractionChannel.PARKED && view.access.detailsOpen) mutable.update { it.copy(support = binding) }
         else if (voices.gleo?.bindReplyOutput(call.owner, binding.outputId, artifact.text) != true)
             notice("음성 도움 출력 경로를 확인하고 있어요. 같은 질문은 유지돼요")
@@ -695,24 +756,31 @@ internal class ProductLearningController(private val context: Context, private v
         val id = UUID.randomUUID()
         val route = if (mutable.value.channel == InteractionChannel.GLEO) OutputRoute.GLEO else OutputRoute.PARKED_TTS
         if (route == OutputRoute.PARKED_TTS) { if (!speech.acquireFocus(owner)) return; accessChanged() }
+        val originalHint = view.lessonId?.takeIf { kind == WaitKind.HINT_METHOD }?.let { HintOutputOrigin(owner,it,source6(owner,it,ref)) }
         if (!coordinator.expectOutput(OutputExpectation(id, kind, owner, ref, view.lessonId, route,modalToken=view.practiceModal?.token))) return
+        originalHint?.let { hintOutputOrigins[id]=it; while(hintOutputOrigins.size>16)hintOutputOrigins.remove(hintOutputOrigins.keys.first()) }
         if (route == OutputRoute.PARKED_TTS) speech.speak(owner, id, text, language, coordinator.state.value.access)
         else voices.gleo?.bindReplyOutput(owner, id, text)
     }
-    private suspend fun outputEnded(id: UUID, owner: OwnerContext, at: Long, evidence: String) {
+    private suspend fun persistHintFact(id:UUID,owner:OwnerContext,fact:DialogueProgressEvent) {
+        val original=requireNotNull(hintOutputOrigins[id]) { "Original hint output binding is unavailable." }
+        require(original.owner==owner && original.lesson==fact.observation.lessonId)
+        if(original.prepared)preparedPractice.persistHintCompletion(owner,fact) else practice.persistHintCompletion(owner,fact)
+    }
+    private suspend fun outputEnded(id: UUID, owner: OwnerContext, at: Long, evidence: String,permissionGeneration:Long?=null) {
         val qa = questionOutput
-        if (qa?.id == id && qa.context.owner == owner) {
+        if (qa?.id == id && qa.context.owner == owner && (permissionGeneration==null || qa.context.gleoPermissionGeneration==permissionGeneration)) {
             qa.ended = true
             qa.prepared?.takeIf{it.value.status=="answered"}?.let{result->profiles.current()?.takeIf{it.owner==owner}?.let{call->
                 reviewJournal.recordQuestionDelivery(call,result.value,result.intent,id,evidence);flushQuestionDeliveries()
             }}
             completeQuestionReturn()
         }
-        coordinator.outputCompleted(id, owner, at, evidence) { original, fact ->
-            if (currentSource6()) preparedPractice.persistHintCompletion(original, fact)
-            else practice.persistHintCompletion(original, fact)
+        coordinator.outputCompleted(id, owner, at, evidence,originalPermissionGeneration=permissionGeneration) { original, fact ->
+            persistHintFact(id,original,fact)
         }
-        val binding = support?.takeIf { it.outputId == id && it.owner == owner } ?: return
+        val binding = support?.takeIf { it.outputId == id && it.owner == owner &&
+            (permissionGeneration==null || supportContext?.gleoPermissionGeneration==permissionGeneration) } ?: return
         observeSupport(ArtifactWitness(id, binding.artifact.textHash, ObservationMode.VOICE_OUTPUT_COMPLETED, evidence))
     }
     private suspend fun observeSupport(witness: ArtifactWitness) {
@@ -756,7 +824,7 @@ internal class ProductLearningController(private val context: Context, private v
             if (!freeze(call.owner)) { notice("듣던 위치 저장을 다시 확인해 주세요"); return }
             val original = origin() ?: return
             val frozen = coordinator.snapshot()
-            questionContext = QuestionContext(call.owner, frozen.listening, frozen.task, frozen.lessonId, frozen.navigationGeneration, frozen.intentGeneration, frozen.preparedListening,frozen.practiceModal?.token)
+            questionContext = QuestionContext(call.owner, frozen.listening, frozen.task, frozen.lessonId, frozen.navigationGeneration, frozen.intentGeneration, frozen.preparedListening,frozen.practiceModal?.token,frozen.access.gleoPermissionGeneration)
             questionOutput = null
             preparedQuestionResult=null
             if (!coordinator.openArticleQuestion(op)) return
@@ -787,7 +855,7 @@ internal class ProductLearningController(private val context: Context, private v
             if (before.listening != null && !freeze(call.owner)) return "듣던 위치 저장을 확인하지 못했어요"
             val original = origin() ?: return "원래 작업을 확인하지 못했어요"
             val frozen = coordinator.snapshot()
-            questionContext = QuestionContext(call.owner, frozen.listening, frozen.task, frozen.lessonId, frozen.navigationGeneration, frozen.intentGeneration, frozen.preparedListening,frozen.practiceModal?.token)
+            questionContext = QuestionContext(call.owner, frozen.listening, frozen.task, frozen.lessonId, frozen.navigationGeneration, frozen.intentGeneration, frozen.preparedListening,frozen.practiceModal?.token,frozen.access.gleoPermissionGeneration)
             questionOutput = null
             if (!coordinator.openArticleQuestion(op)) return "원래 작업을 확인하지 못했어요"
             mutable.update { it.copy(channel = InteractionChannel.GLEO, questionOrigin = original, questionStatus = LoadStatus.LOADING, questionAnswer = null, questionNotice = null, titleConfirmationUsed = false) }
@@ -822,7 +890,7 @@ internal class ProductLearningController(private val context: Context, private v
             if (coordinator.state.value.preparedListening != null && !freeze(call.owner)) return "듣던 구간 저장을 확인하지 못했어요"
             val original = origin() ?: return "원래 작업을 확인하지 못했어요"
             val frozen = coordinator.snapshot()
-            questionContext = QuestionContext(call.owner, frozen.listening, frozen.task, frozen.lessonId, frozen.navigationGeneration, frozen.intentGeneration, frozen.preparedListening,frozen.practiceModal?.token)
+            questionContext = QuestionContext(call.owner, frozen.listening, frozen.task, frozen.lessonId, frozen.navigationGeneration, frozen.intentGeneration, frozen.preparedListening,frozen.practiceModal?.token,frozen.access.gleoPermissionGeneration)
             questionOutput = null
             if (!coordinator.openArticleQuestion(operation)) return "원래 작업을 확인하지 못했어요"
             mutable.update { it.copy(channel = InteractionChannel.GLEO, questionOrigin = original, questionStatus = LoadStatus.LOADING, questionAnswer = null, questionNotice = null) }
@@ -870,7 +938,7 @@ internal class ProductLearningController(private val context: Context, private v
         val adapter = voices.gleo ?: return
         val context = questionContext ?: return
         if (adapter.capabilities.outputCompletion !is Capability.Verified || adapter.capabilities.exactOutputContent !is Capability.Verified ||
-            !context.matches(coordinator.snapshot())) return
+            (!context.matches(coordinator.snapshot()) || !coordinator.state.value.access.gleoAllowed)) return
         val output = QuestionOutput(UUID.randomUUID(), context,prepared=preparedQuestionResult)
         questionOutput = output
         if (!adapter.bindReplyOutput(context.owner, output.id, text) && questionOutput == output) questionOutput = null
@@ -886,7 +954,7 @@ internal class ProductLearningController(private val context: Context, private v
     private suspend fun completeQuestionReturn() {
         val output = questionOutput?.takeIf { it.ended } ?: return
         val view = coordinator.snapshot()
-        if (!output.context.matches(view) || !view.access.ownerValid || view.access.power != PowerAvailability.ALLOWED || !view.access.audioAllowsReply) {
+        if (!output.context.matches(view) || !view.access.gleoAllowed) {
             questionOutput = null; return
         }
         if (view.voiceInput != VoiceInputActivity.IDLE || view.inputPhase in setOf(InputPhase.CAPTURING, InputPhase.FINALIZING)) return

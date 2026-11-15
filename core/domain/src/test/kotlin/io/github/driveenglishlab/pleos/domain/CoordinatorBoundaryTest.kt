@@ -14,7 +14,7 @@ class CoordinatorBoundaryTest {
         ListeningMode.ORIGINAL_FULL), UUID.randomUUID(), UUID.randomUUID())
     private val lesson = UUID.randomUUID()
     private fun allowed() = AccessState(SafetyState(VehiclePosition.PARKED, true, true, true), WindowState(true, true),
-        PowerAvailability.ALLOWED, true, true, true, true, true)
+        PowerAvailability.ALLOWED, true, true, true, true, true).withSyntheticFeatureRoutes()
     private fun capabilities() = VoiceCapabilities(outputCompletion = Capability.Verified("test:actual-output-end"),
         exactOutputContent = Capability.Verified("test:exact-text"), inputActivity = Capability.Verified("test:input-state"))
     private fun output(kind: WaitKind) = OutputExpectation(UUID.randomUUID(), kind, owner, task, lesson, OutputRoute.GLEO)
@@ -63,10 +63,10 @@ class CoordinatorBoundaryTest {
         assertNull(c.tick(10_900)); assertEquals(WaitAction.SAVE_AND_PAUSE, c.tick(21_000))
     }
 
-    @Test fun powerReturnDoesNotReviveWaitOrInput() = runBlocking {
+    @Test fun actualSuspendReturnDoesNotReviveWaitOrInput() = runBlocking {
         val c = ready(); val question = output(WaitKind.FIRST_ANSWER); c.expectOutput(question)
         c.outputCompleted(question.outputId, owner, 0, "actual-end") { _, _ -> fail() }
-        c.updateAccess(allowed().copy(power = PowerAvailability.UNKNOWN)); c.updateAccess(allowed())
+        c.updateAccess(allowed().copy(power = PowerAvailability.SUSPENDED)); c.updateAccess(allowed())
         assertNull(c.tick(100_000)); assertEquals(InputPhase.IDLE, c.snapshot().inputPhase)
         assertNull(c.snapshot().expectedOutput)
     }
