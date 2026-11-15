@@ -41,6 +41,10 @@ sealed interface DirectSpeechEvent {
 data class DirectSpeechReadiness(val approved: Boolean = false, val outputReady: Boolean = false, val focusGranted: Boolean = false,
     val listening: Boolean = false)
 
+/** Immutable identity/permission facts for one issued output, never a later focus lifetime. */
+internal data class DirectSpeechOutputLifetime(val owner: OwnerContext, val outputId: UUID,
+    val focusGeneration: Long, val audioPermissionGeneration: Long)
+
 /** No raw audio retention, locale-as-proof, automatic permission grant/start, or focus-gain resume. */
 class DirectSpeechGateway(private val context: Context, private val approval: SpeechRuntimeApproval? = null,
     private val emit: (DirectSpeechEvent) -> Unit) : AutoCloseable {
@@ -51,8 +55,7 @@ class DirectSpeechGateway(private val context: Context, private val approval: Sp
     private var recognizer: SpeechRecognizer? = null
     private var tts: TextToSpeech? = null
     private var lease: CaptureLease? = null
-    private var output: Pair<OwnerContext, UUID>? = null
-    private var outputAudioPermissionGeneration: Long? = null
+    private var output: DirectSpeechOutputLifetime? = null
     private var ready = false
     private var captureGeneration = 0L
     private var closed = false
@@ -83,19 +86,30 @@ class DirectSpeechGateway(private val context: Context, private val approval: Sp
             } }, policy.ttsEnginePackage).apply {
                 setOnUtteranceProgressListener(object : UtteranceProgressListener() {
                     override fun onStart(utteranceId: String?) = Unit
-                    override fun onDone(utteranceId: String?) { handler.post {
-                        val original = output?.takeIf { it.second.toString() == utteranceId } ?: return@post
-                        output = null
-                        emit(DirectSpeechEvent.Ended(original.first, original.second, android.os.SystemClock.elapsedRealtime(), policy.outputReviewRef))
-                    } }
-                    @Deprecated("Platform legacy callback") override fun onError(utteranceId: String?) { handler.post {
-                        val original = output?.takeIf { it.second.toString() == utteranceId }; output = null
-                        emit(DirectSpeechEvent.Failed(original?.first, "speech_output_unavailable", focusGeneration, outputId = original?.second))
-                    } }
+                    override fun onDone(utteranceId: String?) = postOutputDone(utteranceId, policy.outputReviewRef)
+                    @Deprecated("Platform legacy callback") override fun onError(utteranceId: String?) = postOutputError(utteranceId)
                 })
             }
         } catch (_: Exception) { close(); emit(DirectSpeechEvent.Failed(null, "provider_unavailable", focusGeneration)) }
     }
+
+    /** Resolve on the handler after any queued replacement/cancel/focus change, before mutation. */
+    private fun takeCurrentOutput(utteranceId: String?): DirectSpeechOutputLifetime? {
+        val original = output?.takeIf {
+            !closed && utteranceId != null && it.outputId.toString() == utteranceId &&
+                it.focusGeneration == focusGeneration && it.owner == focusOwner && mutable.value.focusGranted
+        } ?: return null
+        output = null // Identity and its audio/focus metadata retire together, exactly once.
+        return original
+    }
+    private fun postOutputDone(utteranceId: String?, evidenceRef: String) { handler.post {
+        val original = takeCurrentOutput(utteranceId) ?: return@post
+        emit(DirectSpeechEvent.Ended(original.owner, original.outputId, android.os.SystemClock.elapsedRealtime(), evidenceRef))
+    } }
+    private fun postOutputError(utteranceId: String?) { handler.post {
+        val original = takeCurrentOutput(utteranceId) ?: return@post
+        emit(DirectSpeechEvent.Failed(original.owner, "speech_output_unavailable", original.focusGeneration, outputId = original.outputId))
+    } }
 
     private fun createRecognizer(value: CaptureLease, generation: Long): SpeechRecognizer {
         val policy = requireNotNull(approval)
@@ -145,7 +159,7 @@ class DirectSpeechGateway(private val context: Context, private val approval: Sp
                 if (generation != focusGeneration || focusOwner != owner || closed) return@setOnAudioFocusChangeListener
                 mutable.value = mutable.value.copy(focusGranted = change == AudioManager.AUDIOFOCUS_GAIN)
                 if (change != AudioManager.AUDIOFOCUS_GAIN) {
-                    val capture = lease?.captureId; val spoken = output?.second
+                    val capture = lease?.captureId; val spoken = output?.outputId
                     cancel()
                     emit(DirectSpeechEvent.Interrupted(owner, generation, capture, spoken))
                 }
@@ -170,8 +184,9 @@ class DirectSpeechGateway(private val context: Context, private val approval: Sp
     fun finish(value: CaptureLease) { if (lease == value) recognizer?.stopListening() }
     val speaking: Boolean get() = output != null
     fun outputAllowed(access: AccessState): Boolean {
-        val owner = output?.first ?: return false
-        return outputAudioPermissionGeneration == access.components.audio.permissionGeneration && permitsOutput(owner, access)
+        val original = output ?: return false
+        return original.focusGeneration == focusGeneration &&
+            original.audioPermissionGeneration == access.components.audio.permissionGeneration && permitsOutput(original.owner, access)
     }
     private fun permitsOutput(owner: OwnerContext, access: AccessState): Boolean {
         val actualOutput = access.copy(parkedOutputAvailable = mutable.value.approved && ready,
@@ -185,12 +200,11 @@ class DirectSpeechGateway(private val context: Context, private val approval: Sp
         val voice = tts ?: return false
         val locale = if (language == "en") Locale.US else Locale.KOREAN
         if (voice.isLanguageAvailable(locale) < TextToSpeech.LANG_AVAILABLE || voice.setLanguage(locale) < TextToSpeech.LANG_AVAILABLE) return false
-        output = owner to id
-        outputAudioPermissionGeneration = access.components.audio.permissionGeneration
+        output = DirectSpeechOutputLifetime(owner, id, focusGeneration, access.components.audio.permissionGeneration)
         if (voice.speak(text, TextToSpeech.QUEUE_FLUSH, Bundle(), id.toString()) != TextToSpeech.SUCCESS) { output = null; return false }
         return true
     }
-    fun cancel() { captureGeneration++; lease = null; output = null; outputAudioPermissionGeneration = null; recognizer?.cancel(); tts?.stop(); mutable.value = mutable.value.copy(listening = false) }
+    fun cancel() { captureGeneration++; lease = null; output = null; recognizer?.cancel(); tts?.stop(); mutable.value = mutable.value.copy(listening = false) }
     fun releaseFocus() {
         val previous = focus
         focusGeneration++; focus = null; focusOwner = null
