@@ -54,6 +54,29 @@ class SegmentPlaybackRepository(context: Context, private val dao: SegmentPlayba
             segmentIndices ?: manifest.segments.indices.toList())
     }
 
+    /** A real current checkpoint may prove that the old phase CAS already succeeded before a
+     * crash. Only its marker is reduced; completion/cleanup facts and physical-output holds survive. */
+    suspend fun acknowledgeRestoredPhase(program:SegmentProgram,checkpoint:WireSource6PersonalReadCheckpoint):Boolean {
+        if(!current(program.owner) || checkpoint.payload.selectionId!=program.selectionId.toString() ||
+            checkpoint.payload.contentRef!=codecs.decodeSource6Content(requireNotNull(sources[program.source])))return false
+        val cursor=checkpoint.payload.cursor as? WireSource6SegmentCursor6?:return false
+        val advanced=when(program.phase){
+            SegmentPhase.MAIN->cursor.phase in setOf("followup","article_offer")
+            SegmentPhase.FOLLOWUP->cursor.phase=="article_offer"
+            SegmentPhase.ARTICLE_OFFER->false
+        }
+        if(!advanced)return false
+        val snapshot=restore(program)?:return false
+        val pending=snapshot.continuation?.takeIf{it.phaseEndPending}?:return false
+        val starts=dao.acknowledgedStarts(program.owner.profileId.toString(),program.owner.privacyEpoch,program.selectionId.toString())
+        val original=starts.firstNotNullOfOrNull{row->row.receiptJson?.let{json->
+            val value=codecs.decodeSource6("PersonalPlaybackRunReceipt",json,WireSource6PersonalPlaybackRunReceipt.serializer())
+            value.takeIf{it.run.let{run->run is WireSource6SegmentRunRecord6 && run.requestId==pending.completedRun.requestId.toString() && run.runId==pending.completedRun.runId.toString()}}
+        }}?:return false
+        if(checkpoint.recordId!=original.checkpoint.recordId || checkpoint.version<=original.checkpoint.version || !current(program.owner))return false
+        return journal.phaseAcknowledged(snapshot,pending.completedEventId)
+    }
+
     /** Requires the same approved source and complete manifest. It never converts a legacy time. */
     suspend fun restore(program: SegmentProgram): SegmentPlaybackSnapshot? {
         if (!current(program.owner)) return null
@@ -65,17 +88,38 @@ class SegmentPlaybackRepository(context: Context, private val dao: SegmentPlayba
         val cursor = codecs.decodeSource6("PlaybackCursor6", row.cursorJson, WireSource6PlaybackCursor6.serializer()) as? WireSource6SegmentCursor6 ?: return null
         val domainCursor = cursor.toSegmentCursor()
         require(domainCursor.matches(program.manifest) && domainCursor.phase == program.phase)
-        val ledger = decodeSegmentLedger(requireNotNull(row.ledgerJson), program)
+        val stored=decodeLocalSegmentState(requireNotNull(row.ledgerJson),program)
+        val ledger=stored.first
+        val continuation=stored.second
         require(ledger.runId.toString() == row.runId)
         for (evidence in ledger.completed) {
             val observation = dao.operation(evidence.eventId.toString()) ?: error("Missing original segment evidence.")
             require(observation.kind == "observation" && !observation.isolated && observation.profileId == row.profileId && observation.privacyEpoch == row.privacyEpoch)
             val exact = codecs.decodeSource6("SegmentObservationInput6", observation.payloadJson, WireSource6SegmentObservationInput6.serializer())
             require(exact.eventId == evidence.eventId.toString() && exact.requestId == evidence.requestId.toString() && exact.runId == row.runId &&
-                exact.status == "completed" && exact.runGeneration == evidence.generation && exact.segmentId == evidence.segmentId.toString() && exact.segmentIndex == evidence.index.toLong() && exact.evidenceRef == evidence.evidenceRef)
+                exact.status == "completed" && exact.runGeneration == evidence.generation && exact.segmentId == evidence.segmentId.toString() && exact.segmentIndex == evidence.index.toLong() && exact.evidenceRef == evidence.evidenceRef &&
+                exact.sourceRef==codecs.decodeSource6Content(row.sourceJson) && exact.phase==program.phase.name.lowercase() && exact.purpose==program.purpose.name.lowercase() &&
+                exact.scriptId==program.manifest.scriptId.toString() && exact.scriptHash==program.manifest.scriptHash && exact.manifestId==program.manifest.manifestId.toString() &&
+                exact.manifestHash==program.manifest.manifestHash && exact.segmentsVersion==program.manifest.segmentsVersion.toLong())
+        }
+        if(continuation!=null) {
+            val run=continuation.completedRun
+            val starts=dao.acknowledgedStarts(row.profileId,row.privacyEpoch,row.selectionId)
+            require(starts.any{start->
+                if(start.ownerRevision!=run.owner.revision || start.payloadHash!=LearningJson.hash(start.payloadJson) || start.receiptJson==null)false
+                else {
+                    val receipt=codecs.decodeSource6("PersonalPlaybackRunReceipt",start.receiptJson,WireSource6PersonalPlaybackRunReceipt.serializer())
+                    val actual=receipt.run as? WireSource6SegmentRunRecord6
+                    actual!=null && actual.runId==run.runId.toString() && actual.requestId==run.requestId.toString() && actual.leaseId==run.outputLeaseId.toString() &&
+                        actual.runGeneration==run.generation && actual.profileId==row.profileId && actual.privacyEpoch==row.privacyEpoch && actual.sourceRef==codecs.decodeSource6Content(row.sourceJson) &&
+                        actual.currentSegmentId==run.segmentId.toString() && actual.currentSegmentIndex==run.segmentIndex.toLong() &&
+                        actual.scriptId==run.scriptId.toString() && actual.scriptHash==run.scriptHash && actual.manifestId==run.manifestId.toString() &&
+                        actual.segmentsVersion==run.manifestVersion.toLong() && actual.manifestHash==run.manifestHash && actual.phase==run.phase.name.lowercase() && actual.purpose==run.purpose.name.lowercase()
+                }
+            })
         }
         // Process recreation restores facts only. Old queued/physical output never auto-resumes.
-        return SegmentPlaybackSnapshot(program, domainCursor, UUID.fromString(requireNotNull(row.runId)), row.generation, ledger)
+        return SegmentPlaybackSnapshot(program, domainCursor, UUID.fromString(requireNotNull(row.runId)), row.generation, ledger,continuation=continuation)
     }
 
     /** Preserve the original legacy cursor/ref/coverage bytes separately from segment restarts. */

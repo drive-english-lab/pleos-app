@@ -1,5 +1,11 @@
 package io.github.driveenglishlab.pleos.platform
 
+import android.content.ContextWrapper
+import android.content.pm.PackageManager
+import kotlin.coroutines.*
+import kotlin.coroutines.intrinsics.COROUTINE_SUSPENDED
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.MutableStateFlow
 import ai.pleos.playground.tts.listener.EventListener
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
@@ -17,7 +23,7 @@ import org.junit.runner.RunWith
  * attaches only a test-owned object to the existing private Any-SDK seam; production gets no factory. */
 @RunWith(AndroidJUnit4::class)
 class PleosTtsCleanupFailureTest {
-    class FaultSdk(private val failRemove: Boolean, private val failRelease: Boolean) {
+    class FaultSdk(private var failRemove: Boolean, private var failRelease: Boolean) {
         var removeCalls = 0
         var releaseCalls = 0
         var removed: EventListener? = null
@@ -25,6 +31,7 @@ class PleosTtsCleanupFailureTest {
             removeCalls++; removed = listener
             if (failRemove) throw IllegalStateException("synthetic cleanup fault")
         }
+        fun repair() { failRemove=false; failRelease=false }
         fun release() {
             releaseCalls++
             if (failRelease) throw UnsupportedOperationException("synthetic cleanup fault")
@@ -107,6 +114,60 @@ class PleosTtsCleanupFailureTest {
                 scope.cancel()
             }
         }
+    }
+
+    @Test fun originalDoneSurvivesCleanupFailureAndFocusReturnButCannotGrantChangedOwnerOrColdRecovery()=runBlocking {
+        val scope=CoroutineScope(SupervisorJob()+Dispatchers.Main.immediate)
+        // Explicit test-owned permission seam; does not grant the library/app an OS permission.
+        val context=object:ContextWrapper(InstrumentationRegistry.getInstrumentation().targetContext) {
+            override fun checkSelfPermission(permission:String)=if(permission=="pleos.car.permission.TTS_SERVICE")PackageManager.PERMISSION_GRANTED else super.checkSelfPermission(permission)
+        }
+        val originalRun=run()
+        val access=AccessState(ownerValid=true,safety=SafetyState(VehiclePosition.PARKED,true,true,false,false,1),
+            window=WindowState(true,true,1),components=ComponentPolicies(1,ComponentAccess(true,true,1,2),ComponentAccess(true,true,1,3)),mediaRouteAvailable=true)
+        val limits=TtsOutputLimits1(100,2,5_000,7_000,1_000,250)
+        val review=PleosOnDeviceScope1("synthetic-done-review",1,TtsReviewState.REVIEWED,"synthetic.fixture",1,"syntheticDebug",
+            "synthetic-build","synthetic-environment",setOf(34),"synthetic-environment",setOf(SegmentPurpose.MAIN),setOf(SegmentLanguage.EN),setOf(originalRun.manifestHash),true,true,limits)
+        val approval=PleosTtsProjectApproval("3.3.1",PleosTtsMode.ON_DEVICE,"synthetic-permission","synthetic-instance","synthetic-stop",
+            mapOf(SegmentLanguage.EN to "synthetic-language"),"synthetic-vehicle",onDeviceScope=review)
+        var ownerCurrent=true
+        val gateway=withContext(Dispatchers.Main.immediate){PleosTtsGateway(context,scope,approval,currentFacts={run->
+            TtsCurrentScopeFact1(access,if(ownerCurrent)run.owner else null,true,true,TtsPermissionState.GRANTED,1,0,true,5)})}
+        var cold:PleosTtsGateway?=null
+        try {
+            val result=async(start=CoroutineStart.UNDISPATCHED){withTimeout(3_000){gateway.events.first()}}
+            val sdk=FaultSdk(true,true)
+            withContext(Dispatchers.Main.immediate) {
+                val original=attach(gateway,originalRun,sdk,true,false,true).first
+                write(original,"synthesisRequested",true);write(original,"intentGeneration",5L)
+                val now=android.os.SystemClock.elapsedRealtime()
+                write(original,"binding",TtsRunReviewBinding1(review.reviewId,1,UUID.randomUUID(),originalRun,SegmentLanguage.EN,
+                    originalRun.segmentTextHash,0,1,1,2,3,1,now,now+5_000))
+                @Suppress("UNCHECKED_CAST")
+                val readiness=read(gateway,"mutable") as MutableStateFlow<PleosTtsReadiness>
+                readiness.value=readiness.value.copy(focusGranted=true)
+                suspendCoroutine<Unit>{continuation->
+                    try {
+                        val returned=gateway.javaClass.getDeclaredMethod("finish",original.javaClass,SegmentSpeechEventKind::class.java,String::class.java,Continuation::class.java)
+                            .apply{isAccessible=true}.invoke(gateway,original,SegmentSpeechEventKind.COMPLETED,"synthetic-native-done",continuation)
+                        if(returned!==COROUTINE_SUSPENDED)continuation.resume(Unit)
+                    } catch(error:Throwable){continuation.resumeWithException(error)}
+                }
+            }
+            val done=result.await()
+            assertEquals(SegmentSpeechEventKind.COMPLETED,done.kind);assertEquals(OutputContinuationState.BLOCKED,done.outputContinuation)
+            assertFalse(gateway.ownsOutputFocus(originalRun));assertFalse(gateway.quiescent)
+            val fact=gateway.outputObservations.value.single()
+            assertTrue(fact.nativeDoneObserved);assertTrue(fact.doneScopeValid);assertFalse(fact.quiescent)
+            assertEquals(TtsCleanupStatus.FAILED,fact.listenerRemoval);assertEquals(TtsCleanupStatus.FAILED,fact.release)
+            assertTrue(gateway.completionDisposition(done).admissible) // actual DONE precedes normal focus cleanup
+            ownerCurrent=false;assertFalse(gateway.completionDisposition(done).admissible);ownerCurrent=true
+            val hold=CompletionContinuation1(done.eventId,originalRun,null,true,OutputContinuationState.BLOCKED,"synthetic-cleanup-fault",true)
+            cold=withContext(Dispatchers.Main.immediate){PleosTtsGateway(context,scope,approval)}
+            assertEquals(OutputContinuationState.UNKNOWN,cold!!.recoverCleanup(hold))
+            sdk.repair();assertEquals(OutputContinuationState.READY,gateway.recoverCleanup(hold));assertTrue(gateway.quiescent)
+            assertEquals(SegmentSpeechEventKind.COMPLETED,done.kind) // cleanup recovery never rewrites original proof
+        } finally {withContext(Dispatchers.Main.immediate){gateway.close();cold?.close()};scope.cancel()}
     }
 
     @Test fun preInitializationCleanupDistinguishesAbsentListenerFromOutstandingResourceUncertainty() = runBlocking {

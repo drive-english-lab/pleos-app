@@ -41,6 +41,8 @@ abstract class SegmentPlaybackDao {
     abstract suspend fun observationCount(profile: String, epoch: Long, run: String): Long
     @Query("SELECT * FROM segment_journal WHERE profileId = :profile AND privacyEpoch = :epoch AND selectionId = :selection AND kind = 'cursor' AND state = 'acknowledged' AND isolated = 0 ORDER BY rowid DESC LIMIT 1")
     abstract suspend fun checkpoint(profile: String, epoch: Long, selection: String): LocalSegmentOperation?
+    @Query("SELECT * FROM segment_journal WHERE profileId=:profile AND privacyEpoch=:epoch AND selectionId=:selection AND kind='start' AND state='acknowledged' AND isolated=0 ORDER BY rowid")
+    abstract suspend fun acknowledgedStarts(profile:String,epoch:Long,selection:String):List<LocalSegmentOperation>
     @Insert(onConflict = OnConflictStrategy.ABORT)
     protected abstract suspend fun insertOperation(value: LocalSegmentOperation)
     @Query("UPDATE segment_journal SET state = 'acknowledged', receiptJson = :receipt WHERE operationId = :id AND payloadHash = :hash AND isolated = 0 AND state = 'pending'")
@@ -108,6 +110,22 @@ abstract class SegmentPlaybackDao {
         val old = requireNotNull(operation(sent.operationId))
         if (old.state == "acknowledged") { require(old.copy(state = "pending", receiptJson = null) == sent && old.receiptJson == receipt); return }
         require(old == sent && acknowledgeRow(sent.operationId, sent.payloadHash, receipt) == 1)
+    }
+    /** Root has matched the real checkpoint ACK. Reduce only its exact current local phase marker. */
+    @Transaction open suspend fun acknowledgePhaseContinuation(scope:OwnerContext,expected:LocalSegmentState,eventId:String,json:String):Boolean {
+        authorize(scope)
+        val actual=state(expected.profileId,expected.privacyEpoch,expected.selectionId,expected.phase,expected.purpose,expected.cursorKind)
+        if(actual!=expected || expected.ownerRevision!=scope.revision || expected.profileId!=scope.profileId.toString() || expected.privacyEpoch!=scope.privacyEpoch)return false
+        val before=kotlinx.serialization.json.Json.parseToJsonElement(requireNotNull(expected.ledgerJson)) as kotlinx.serialization.json.JsonObject
+        val after=kotlinx.serialization.json.Json.parseToJsonElement(json) as kotlinx.serialization.json.JsonObject
+        require(before.keys==setOf("local_state_version","ledger","continuation") && after.keys==before.keys && before["ledger"]==after["ledger"] && before["local_state_version"]==after["local_state_version"])
+        val original=before["continuation"] as kotlinx.serialization.json.JsonObject
+        val reduced=after["continuation"] as kotlinx.serialization.json.JsonObject
+        require(original["completed_event_id"]==kotlinx.serialization.json.JsonPrimitive(eventId) && original["phase_end_pending"]==kotlinx.serialization.json.JsonPrimitive(true) &&
+            reduced==kotlinx.serialization.json.JsonObject(original+("phase_end_pending" to kotlinx.serialization.json.JsonPrimitive(false))))
+        val proof=operation(eventId)?:return false
+        require(!proof.isolated && proof.kind=="observation" && proof.profileId==scope.profileId.toString() && proof.privacyEpoch==scope.privacyEpoch && proof.ownerRevision==scope.revision)
+        putState(expected.copy(ledgerJson=json,localVersion=expected.localVersion+1));return true
     }
     @Transaction
     open suspend fun confirmCompletion(scope: OwnerContext, run: String, actualServerRecord: String) {

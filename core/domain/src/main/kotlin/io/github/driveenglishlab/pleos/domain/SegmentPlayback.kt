@@ -102,7 +102,22 @@ data class SegmentRun(val runId: UUID, val generation: Long, val requestId: UUID
     init { require(generation >= 1 && manifestVersion >= 1 && segmentIndex >= 0); requireSegmentHash(scriptHash); requireSegmentHash(manifestHash); requireSegmentHash(segmentTextHash) }
 }
 enum class SegmentSpeechEventKind { STARTED, COMPLETED, STOPPED, ERROR, UNKNOWN }
-data class SegmentSpeechEvent(val eventId: UUID, val run: SegmentRun, val kind: SegmentSpeechEventKind, val evidenceRef: String) {
+enum class OutputContinuationState { READY, BLOCKED, UNKNOWN }
+data class CompletionDisposition1(val admissible:Boolean,val bindingToken:UUID?,val scopeGeneration:Long?,
+    val continuation:OutputContinuationState,val reasonCode:String?=null) {
+    init { require(admissible==(bindingToken!=null && scopeGeneration!=null));require(scopeGeneration==null || scopeGeneration>=0);reasonCode?.let(::requireReference) }
+    companion object { fun unavailable(reason:String)=CompletionDisposition1(false,null,null,OutputContinuationState.UNKNOWN,reason) }
+}
+data class CompletionContinuation1(val completedEventId:UUID,val completedRun:SegmentRun,val nextSegmentIndex:Int?,
+    val phaseEndPending:Boolean,val state:OutputContinuationState,val reasonCode:String?,val requiresExplicitResume:Boolean,
+    val continuationVersion:Int=1) {
+    init { require(continuationVersion==1 && (nextSegmentIndex==null || nextSegmentIndex>=0));require(!phaseEndPending || nextSegmentIndex==null);reasonCode?.let(::requireReference) }
+}
+data class SegmentContinuationAuthority(val owner:OwnerContext,val selectionId:UUID,val intentGeneration:Long) {
+    init { require(intentGeneration>=0) }
+}
+data class SegmentSpeechEvent(val eventId: UUID, val run: SegmentRun, val kind: SegmentSpeechEventKind, val evidenceRef: String,
+    val outputContinuation:OutputContinuationState?=null) {
     init { requireReference(evidenceRef) }
 }
 data class SegmentCompletionEvidence(val eventId: UUID, val requestId: UUID, val generation: Long, val segmentId: UUID, val index: Int, val evidenceRef: String)
@@ -136,7 +151,8 @@ data class SequentialCompletion(val profile: ProfileContext, val selectionId: UU
 }
 
 data class SegmentPlaybackSnapshot(val program: SegmentProgram, val cursor: PlaybackCursor6.Segment, val runId: UUID,
-    val generation: Long, val ledger: SequentialCompletion, val activeRequest: SegmentRun? = null, val bindingAcknowledged: Boolean = false) {
+    val generation: Long, val ledger: SequentialCompletion, val activeRequest: SegmentRun? = null, val bindingAcknowledged: Boolean = false,
+    val continuation:CompletionContinuation1?=null) {
     init { require(generation >= 1 && cursor.matches(program.manifest)) }
 }
 
@@ -154,6 +170,8 @@ interface SegmentJournalPort {
     /** Retry the same durable start/interrupt outbox before physical synthesis. */
     suspend fun prepareOutput(snapshot: SegmentPlaybackSnapshot): SegmentRun?
     suspend fun observed(event: SegmentSpeechEvent, snapshot: SegmentPlaybackSnapshot, recordEnglishCompletion: Boolean)
+    /** Reduces only the exact persisted phase-end continuation after the real checkpoint ACK. */
+    suspend fun phaseAcknowledged(snapshot:SegmentPlaybackSnapshot,eventId:UUID):Boolean=false
 }
 interface SegmentOutputLeasePort {
     suspend fun acquire(owner: OwnerContext, purpose: SegmentPurpose): UUID?
@@ -161,5 +179,9 @@ interface SegmentOutputLeasePort {
     /** Adopt the exact server-issued lease only while the provisional exclusive grant survives. */
     suspend fun adopt(previous: UUID, authoritative: UUID, owner: OwnerContext, purpose: SegmentPurpose): Boolean =
         previous == authoritative && owns(previous, owner, purpose)
+    /** Exact exclusive identity only. CompletionGuard separately checks current permissions/source. */
+    suspend fun retains(id:UUID,owner:OwnerContext,purpose:SegmentPurpose):Boolean=owns(id,owner,purpose)
     suspend fun release(id: UUID)
+    suspend fun retainCleanupHold(value:CompletionContinuation1) {}
+    suspend fun clearCleanupHold(value:CompletionContinuation1) {}
 }

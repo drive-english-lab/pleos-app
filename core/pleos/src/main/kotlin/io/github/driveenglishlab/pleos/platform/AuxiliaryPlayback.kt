@@ -101,6 +101,9 @@ class AuxiliaryPlayback(private val speech: SegmentSpeechPort, private val lease
     private val runtime = SegmentPlaybackCoordinator(speech, journal, leases, scope) { program ->
         active?.takeIf { it.program == program }?.let { permitted(it) } == true
     }
+    fun configureCompletion(guard:suspend(SegmentSpeechEvent)->CompletionDisposition1,
+        recover:suspend(CompletionContinuation1)->OutputContinuationState,
+        authority:suspend(SegmentProgram)->SegmentContinuationAuthority?)=runtime.configureCompletion(guard,recover,authority)
     val segmentState = runtime.state
     private val runtimeEvents = scope.launch { runtime.events.collect { event ->
         if (event is SegmentRuntimeEvent.PhaseCompleted) phaseCompleted(event)

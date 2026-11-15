@@ -71,8 +71,14 @@ fun PracticeScreen(state: ProductScreenState, send: (UiIntent) -> Unit, requestM
                     }, style = MaterialTheme.typography.bodySmall)
                 }
                 state.session.inputPhase in setOf(InputPhase.CAPTURING, InputPhase.FINALIZING) -> {
-                    Text(if (state.session.inputPhase == InputPhase.FINALIZING) "답변을 확인하고 있어요" else "영어로 답해 주세요", style = MaterialTheme.typography.titleMedium)
-                    Text("끝나면 ‘답변 마치기’를 눌러 주세요", style = MaterialTheme.typography.bodySmall)
+                    Text(when {
+                        state.session.inputPhase == InputPhase.FINALIZING -> "음성 입력을 마무리하고 있어요"
+                        study.directInputStatus == "INITIALIZING" -> "음성 입력을 준비하고 있어요"
+                        study.directInputStatus == "FINAL_READY" -> "입력한 답변이 준비됐어요"
+                        else -> "영어로 답해 주세요"
+                    }, style = MaterialTheme.typography.titleMedium)
+                    Text(if (state.session.inputPhase == InputPhase.FINALIZING) "같은 답변의 종료를 확인한 뒤 제출해요"
+                        else "끝나면 ‘답변 마치기’를 눌러 주세요. 누르기 전에는 제출하지 않아요", style = MaterialTheme.typography.bodySmall)
                 }
                 processing -> ProductStatus(if (practice.requestState == PracticeRequestState.PROCESSING_NOTICE) "피드백을 준비하고 있어요" else "답변을 저장하고 있어요",
                     "저장한 답변은 유지돼요", loading = true)
@@ -85,10 +91,13 @@ fun PracticeScreen(state: ProductScreenState, send: (UiIntent) -> Unit, requestM
                 practice.progress == null -> ProductStatus("연습 연결을 확인해 주세요", "질문은 유지돼요. 연결을 확인한 뒤 다시 열 수 있어요")
                 else -> {
                     Text("질문에 영어로 짧게 답해 보세요", style = MaterialTheme.typography.titleMedium)
-                    Text("입력 경로가 확인된 차량에서 음성 인식을 사용해요. 답변 텍스트는 학습 기록에 저장하며 원음은 앱에 보관하지 않아요", style = MaterialTheme.typography.bodySmall)
+                    Text(if (study.directInputReady && study.directInputNotice != null) "처리 안내를 확인한 뒤 답변 시작을 눌러 주세요"
+                        else if (study.directInputStatus == "CLEANUP_UNKNOWN") "이전 음성 입력의 종료를 확인하고 있어요. 같은 질문을 유지해요"
+                        else "직접 음성 입력 경로와 처리 안내를 준비하고 있어요. 같은 질문을 유지해요", style = MaterialTheme.typography.bodySmall)
                 }
             }
-            if (study.microphonePermissionNeeded) {
+            study.directInputNotice?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
+            if (study.microphonePermissionNeeded && study.directInputReady) {
                 Text("직접 답변 입력에는 마이크 권한이 필요해요. 허용한 뒤 답변 시작을 다시 눌러 주세요", style = MaterialTheme.typography.bodySmall)
                 ProductButton("마이크 권한 허용", requestMicrophone)
             }
@@ -120,7 +129,8 @@ fun PracticeScreen(state: ProductScreenState, send: (UiIntent) -> Unit, requestM
                     })
                     if (progress?.phase == "retry_offer") ProductButton("이번 연습 마치기", { send(UiIntent.FinishPractice(state.origin, true)) }, secondary = true)
                 }
-                !processing && (!assessmentRequired || effectiveReady) && practice.progress?.nextTurn != null -> ProductButton("답변 시작", { send(UiIntent.StartAnswer(state.origin)) })
+                !processing && (!assessmentRequired || effectiveReady) && practice.progress?.nextTurn != null -> ProductButton("답변 시작", { send(UiIntent.StartAnswer(state.origin)) },
+                    enabled = study.directInputReady && study.directInputNotice != null)
             }
             if (!processing && !assessmentRequired && study.lastAttemptId != null && practice.feedback == null) {
                 ProductButton("저장된 결과 확인", { send(UiIntent.RetryFeedback(state.origin, true)) }, secondary = true)

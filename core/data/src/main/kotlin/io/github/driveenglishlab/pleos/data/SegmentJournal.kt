@@ -27,6 +27,7 @@ class SegmentJournal internal constructor(private val dao: SegmentPlaybackDao, p
             event.run.manifestId == snapshot.program.manifest.manifestId && event.run.manifestHash == snapshot.program.manifest.manifestHash)
         val segment = snapshot.program.manifest.segments[event.run.segmentIndex]
         require(segment.segmentId == event.run.segmentId && segment.textHash == event.run.segmentTextHash)
+        if(event.kind==SegmentSpeechEventKind.COMPLETED)snapshot.continuation?.let{require(it.completedEventId==event.eventId && it.completedRun==event.run)}
         val original = dao.operation(event.eventId.toString())
         // The durable event identity is exact. Never assign a new sequence number to a replay.
         if (original != null) {
@@ -164,7 +165,7 @@ class SegmentJournal internal constructor(private val dao: SegmentPlaybackDao, p
         val cursorText = codecs.encode("source6", "PlaybackCursor6", snapshot.cursor.toWireSegmentCursor(), WireSource6PlaybackCursor6.serializer())
         val manifestText = codecs.encode("source6", "SegmentManifest", program.manifest.toWireSegmentManifest(), WireSource6SegmentManifest.serializer())
         val row = LocalSegmentState(owner.profileId.toString(), owner.privacyEpoch, program.selectionId.toString(), program.phase.name.lowercase(), program.purpose.name.lowercase(),
-            "segment", owner.revision, sourceText, manifestText, cursorText, snapshot.runId.toString(), snapshot.generation, encodeSegmentLedger(snapshot.ledger),
+            "segment", owner.revision, sourceText, manifestText, cursorText, snapshot.runId.toString(), snapshot.generation, encodeLocalSegmentState(snapshot.ledger,snapshot.continuation),
             snapshot.activeRequest?.let(::encodeSegmentRun), snapshot.bindingAcknowledged, (old?.localVersion ?: 0) + 1)
         val writes = first.toMutableList()
         if (old == null || old.cursorJson != cursorText || canonicalSource(old.sourceJson) != canonicalSource(sourceText) || old.ownerRevision != owner.revision) {
@@ -175,6 +176,16 @@ class SegmentJournal internal constructor(private val dao: SegmentPlaybackDao, p
             writes += operation(snapshot, UUID.randomUUID(), "cursor", intent)
         }
         dao.commit(owner, row, writes, completion)
+    }
+
+    override suspend fun phaseAcknowledged(snapshot:SegmentPlaybackSnapshot,eventId:UUID):Boolean=lane.withLock {
+        require(current(snapshot.program.owner))
+        val row=dao.state(snapshot.program.owner.profileId.toString(),snapshot.program.owner.privacyEpoch,snapshot.program.selectionId.toString(),
+            snapshot.program.phase.name.lowercase(),snapshot.program.purpose.name.lowercase(),"segment")?:return@withLock false
+        if(row.ownerRevision!=snapshot.program.owner.revision || canonicalSource(row.sourceJson)!=canonicalSource(exactSource(snapshot.program)))return@withLock false
+        val decoded=decodeLocalSegmentState(requireNotNull(row.ledgerJson),snapshot.program)
+        val pending=decoded.second?.takeIf{it.completedEventId==eventId && it.phaseEndPending && it.completedRun==snapshot.continuation?.completedRun}?:return@withLock false
+        dao.acknowledgePhaseContinuation(snapshot.program.owner,row,eventId.toString(),encodeLocalSegmentState(decoded.first,pending.copy(phaseEndPending=false)))
     }
 
     private fun source(program: SegmentProgram) = codecs.decodeSource6Content(exactSource(program))
@@ -207,7 +218,7 @@ internal fun encodeSegmentLedger(value: SequentialCompletion): String = buildJso
     } }))
 }.toString()
 
-internal fun decodeSegmentLedger(source: String, program: SegmentProgram): SequentialCompletion {
+private fun decodeBareSegmentLedger(source: String, program: SegmentProgram): SequentialCompletion {
     val value = Json.parseToJsonElement(source).jsonObject
     fun text(key: String) = value.getValue(key).jsonPrimitive.content
     val result = SequentialCompletion(ProfileContext(UUID.fromString(text("profile_id")), value.getValue("privacy_epoch").jsonPrimitive.long),
@@ -234,4 +245,74 @@ internal fun decodeSegmentLedger(source: String, program: SegmentProgram): Seque
     require(result.nextRequiredIndex <= witnessedPrefix && (result.sequentialOrigin || result.nextRequiredIndex == 0))
     require(!result.englishMainCompletionRecorded || result.sequentialOrigin && result.nextRequiredIndex == result.segmentCount && result.language == SegmentLanguage.EN && result.phase == SegmentPhase.MAIN && result.purpose == SegmentPurpose.MAIN)
     return result
+}
+
+internal fun encodeLocalSegmentState(ledger:SequentialCompletion,continuation:CompletionContinuation1?):String=buildJsonObject {
+    put("local_state_version",2);put("ledger",Json.parseToJsonElement(encodeSegmentLedger(ledger)))
+    put("continuation",continuation?.let(::encodeCompletionContinuation)?:JsonNull)
+}.toString()
+internal fun encodeCompletionContinuation(value:CompletionContinuation1):JsonObject=buildJsonObject {
+    put("continuation_version",value.continuationVersion);put("completed_event_id",value.completedEventId.toString())
+    put("completed_run",encodeCompletedSegmentRun(value.completedRun));put("next_segment_index",value.nextSegmentIndex?.let(::JsonPrimitive)?:JsonNull)
+    put("phase_end_pending",value.phaseEndPending);put("state",value.state.name);put("reason_code",value.reasonCode?.let(::JsonPrimitive)?:JsonNull)
+    put("requires_explicit_resume",value.requiresExplicitResume)
+}
+internal fun encodeCompletedSegmentRun(run:SegmentRun):JsonObject=buildJsonObject {
+    put("run_id",run.runId.toString());put("generation",run.generation);put("request_id",run.requestId.toString())
+    putJsonObject("owner"){put("profile_id",run.owner.profileId.toString());put("privacy_epoch",run.owner.privacyEpoch);put("revision",run.owner.revision);put("presentation_token",run.owner.presentationToken.toString())}
+    put("selection_id",run.selectionId.toString());putJsonObject("source"){put("kind",run.source.kind);put("canonical_hash",run.source.canonicalHash)}
+    put("phase",run.phase.name);put("purpose",run.purpose.name);put("script_id",run.scriptId.toString());put("script_hash",run.scriptHash)
+    put("manifest_id",run.manifestId.toString());put("manifest_version",run.manifestVersion);put("manifest_hash",run.manifestHash)
+    put("segment_id",run.segmentId.toString());put("segment_index",run.segmentIndex);put("segment_text_hash",run.segmentTextHash);put("output_lease_id",run.outputLeaseId.toString())
+}
+internal fun decodeSegmentLedger(source:String,program:SegmentProgram):SequentialCompletion=decodeLocalSegmentState(source,program).first
+internal fun decodeLocalSegmentState(source:String,program:SegmentProgram):Pair<SequentialCompletion,CompletionContinuation1?> {
+    val root=Json.parseToJsonElement(source).jsonObject
+    if("local_state_version" !in root)return decodeBareSegmentLedger(source,program) to null
+    require(root.keys==setOf("local_state_version","ledger","continuation") && root.getValue("local_state_version")==JsonPrimitive(2))
+    val ledger=decodeBareSegmentLedger(root.getValue("ledger").toString(),program)
+    val item=root.getValue("continuation");if(item===JsonNull)return ledger to null
+    val value=item.jsonObject
+    require(value.keys==setOf("continuation_version","completed_event_id","completed_run","next_segment_index","phase_end_pending","state","reason_code","requires_explicit_resume"))
+    require(value.getValue("continuation_version")==JsonPrimitive(1))
+    for(key in listOf("phase_end_pending","requires_explicit_resume"))require(value.getValue(key) in setOf(JsonPrimitive(true),JsonPrimitive(false)))
+    value.getValue("next_segment_index").takeUnless{it===JsonNull}?.let{require(!it.jsonPrimitive.isString && it.jsonPrimitive.intOrNull!=null)}
+    require(value.getValue("state").jsonPrimitive.isString)
+    value.getValue("reason_code").takeUnless{it===JsonNull}?.let{require(it.jsonPrimitive.isString)}
+    val run=decodeCompletedSegmentRun(value.getValue("completed_run").jsonObject)
+    val owner=program.owner
+    require(run.owner.profileId==owner.profileId && run.owner.privacyEpoch==owner.privacyEpoch && run.owner.revision==owner.revision &&
+        run.selectionId==program.selectionId && run.source==program.source && run.phase==program.phase && run.purpose==program.purpose &&
+        run.scriptId==program.manifest.scriptId && run.scriptHash==program.manifest.scriptHash && run.manifestId==program.manifest.manifestId &&
+        run.manifestVersion==program.manifest.segmentsVersion && run.manifestHash==program.manifest.manifestHash && run.runId==ledger.runId)
+    val segment=program.manifest.segments[run.segmentIndex];require(segment.segmentId==run.segmentId && segment.textHash==run.segmentTextHash)
+    val result=CompletionContinuation1(UUID.fromString(value.getValue("completed_event_id").jsonPrimitive.content),run,
+        value.getValue("next_segment_index").takeUnless{it===JsonNull}?.jsonPrimitive?.int,value.getValue("phase_end_pending").jsonPrimitive.boolean,
+        OutputContinuationState.valueOf(value.getValue("state").jsonPrimitive.content),value.getValue("reason_code").takeUnless{it===JsonNull}?.jsonPrimitive?.content,
+        value.getValue("requires_explicit_resume").jsonPrimitive.boolean,value.getValue("continuation_version").jsonPrimitive.int)
+    val index=program.segmentIndices.indexOf(run.segmentIndex);require(index>=0)
+    // A recorded manual move changes only the next explicit playback target. The original
+    // completed event/run and cleanup hold remain exact; it cannot create sequential credit.
+    require(result.nextSegmentIndex==program.segmentIndices.getOrNull(index+1) ||
+        ledger.broken && !result.phaseEndPending && result.nextSegmentIndex in program.segmentIndices)
+    require(!result.phaseEndPending || result.nextSegmentIndex==null)
+    require(ledger.completed.any{it.eventId==result.completedEventId && it.requestId==run.requestId && it.generation==run.generation && it.segmentId==run.segmentId && it.index==run.segmentIndex})
+    return ledger to result
+}
+private fun decodeCompletedSegmentRun(value:JsonObject):SegmentRun {
+    require(value.keys==setOf("run_id","generation","request_id","owner","selection_id","source","phase","purpose","script_id","script_hash","manifest_id","manifest_version","manifest_hash","segment_id","segment_index","segment_text_hash","output_lease_id"))
+    fun uuid(key:String):UUID {val p=value.getValue(key).jsonPrimitive;require(p.isString);return UUID.fromString(p.content)}
+    fun text(key:String):String { val p=value.getValue(key).jsonPrimitive;require(p.isString);return p.content }
+    for(key in listOf("generation","manifest_version","segment_index"))require(!value.getValue(key).jsonPrimitive.isString && value.getValue(key).jsonPrimitive.longOrNull!=null)
+    val o=value.getValue("owner").jsonObject;require(o.keys==setOf("profile_id","privacy_epoch","revision","presentation_token"))
+    for(key in listOf("privacy_epoch","revision"))require(!o.getValue(key).jsonPrimitive.isString && o.getValue(key).jsonPrimitive.longOrNull!=null)
+    for(key in listOf("profile_id","presentation_token"))require(o.getValue(key).jsonPrimitive.isString)
+    val source=value.getValue("source").jsonObject;require(source.keys==setOf("kind","canonical_hash"))
+    for(key in listOf("kind","canonical_hash"))require(source.getValue(key).jsonPrimitive.isString)
+    return SegmentRun(uuid("run_id"),value.getValue("generation").jsonPrimitive.long,uuid("request_id"),
+        OwnerContext(UUID.fromString(o.getValue("profile_id").jsonPrimitive.content),o.getValue("privacy_epoch").jsonPrimitive.long,
+            o.getValue("revision").jsonPrimitive.long,UUID.fromString(o.getValue("presentation_token").jsonPrimitive.content)),uuid("selection_id"),
+        SegmentSourceKey(source.getValue("kind").jsonPrimitive.content,source.getValue("canonical_hash").jsonPrimitive.content),
+        SegmentPhase.valueOf(text("phase")),SegmentPurpose.valueOf(text("purpose")),uuid("script_id"),text("script_hash"),uuid("manifest_id"),
+        value.getValue("manifest_version").jsonPrimitive.int,text("manifest_hash"),uuid("segment_id"),value.getValue("segment_index").jsonPrimitive.int,text("segment_text_hash"),uuid("output_lease_id"))
 }

@@ -31,7 +31,8 @@ import kotlin.coroutines.resumeWithException
 @Module
 @InstallIn(SingletonComponent::class)
 object ProductRuntimeModule {
-    @Provides @Singleton fun voiceConfiguration() = ProductVoiceConfiguration()
+    @Provides @Singleton fun voiceConfiguration(@ApplicationContext context:Context) = ProductVoiceConfiguration(
+        ttsRuntimeIdentity=TtsRuntimeIdentity1.actual(context,BuildConfig.BUILD_TYPE))
     @Provides @Singleton fun settingsDemoLoader(@ApplicationContext context: Context) = ReviewedSettingsDemoLoader(context)
     @Provides @Singleton fun coordinator() = SessionCoordinator()
     @Provides @Singleton fun vehicle(@ApplicationContext context: Context): VehicleStateSource =
@@ -138,7 +139,7 @@ class ProductSessionHost @Inject constructor(@param:ApplicationContext private v
     private var pendingPhase: Pair<NewsPlaybackKey, UUID>? = null
 
     private val preparedRuntime = PreparedProductRuntime(context, scope, profiles, database, incrementalApi, preparedCatalog,
-        coordinator, voices, visible = { productVisible && window.visible }, phaseEnded = { preparedPhaseEnded(it) })
+        coordinator, voices, visible = { productVisible && window.visible }, phaseEnded = { run,authority -> preparedPhaseEnded(run,authority=authority) })
     private var pendingPreparedFormat: WireSource6PersonalFormatChangeRequest? = null
     private var pendingPreparedPhase: SegmentRun? = null
     private var pendingPreparedSnapshot: SegmentPlaybackSnapshot? = null
@@ -203,6 +204,8 @@ class ProductSessionHost @Inject constructor(@param:ApplicationContext private v
                 return demo.takeIf { profiles.current()?.owner == scope.owner }
             }
         })
+    internal val productOutputGateway get()=preparedRuntime.speech
+    internal val productOutputRuntime get()=preparedRuntime.state
     val gleoRuntime get() = learning.gleoRuntime
     suspend fun microphonePermissionResult() = learning.permissionResult()
 
@@ -288,6 +291,17 @@ class ProductSessionHost @Inject constructor(@param:ApplicationContext private v
         started = true
         learning.start()
         preparedRuntime.start()
+        auxiliary.configureCompletion(preparedRuntime.speech::completionDisposition,preparedRuntime.speech::recoverCleanup){program->
+            val view=coordinator.state.value
+            if(view.owner==program.owner && auxiliary.segmentState.value.snapshot?.program==program)
+                SegmentContinuationAuthority(program.owner,program.selectionId,view.intentGeneration) else null
+        }
+        preparedRuntime.auxiliaryProgram={run->auxiliary.segmentState.value.snapshot?.takeIf{it.activeRequest==run && it.bindingAcknowledged}?.program}
+        preparedRuntime.auxiliaryLocalCurrent={run->
+            val binding=auxiliary.state.value.binding;val tools=reviewTools.state.value
+            binding?.owner==run.owner && tools.owner==run.owner && tools.token==binding.token && tools.status!=ReviewToolsStatus.CLOSED &&
+                auxiliary.segmentState.value.snapshot?.activeRequest==run
+        }
         preparedRuntime.auxiliaryPermission = { owner, _ -> auxiliary.state.value.binding?.let { it.owner == owner && reviewTools.auxiliaryCurrent(it) } == true }
         preparedRuntime.auxiliaryRunPermission = { run -> auxiliary.segmentState.value.snapshot?.let { it.activeRequest == run } == true &&
             auxiliary.state.value.binding?.let { reviewTools.auxiliaryCurrent(it) } == true }
@@ -410,24 +424,26 @@ class ProductSessionHost @Inject constructor(@param:ApplicationContext private v
         val ownerValid = !protectedConnectionHeld && coordinator.state.value.ownerBinding == OwnerBindingStatus.VERIFIED &&
             coordinator.state.value.owner?.let { profiles.current()?.owner == it } == true
         val previous = coordinator.state.value.access
+        // Unknown physical input cleanup blocks fresh shared audio/mic I/O, not stored completion facts.
+        val inputTransportSafe = !learning.inputState.cleanupUnknown
         val visible = window.visible && productVisible
         val focused = window.focused && visible
         if (visible != projectedWindow.visible || focused != projectedWindow.focused)
             projectedWindow = WindowState(visible, focused, projectedWindow.generation + 1)
         coordinator.updateAccess(previous.copy(safety = vehicleSnapshot.safety, window = projectedWindow,
             power = vehicleSnapshot.effectivePower, ownerValid = ownerValid, components = vehicleSnapshot.components,
-            mediaRouteAvailable = coordinator.state.value.mediaConnected,
+            mediaRouteAvailable = coordinator.state.value.mediaConnected && inputTransportSafe,
             mediaFocusAllowed = mediaAccessKey?.let { key -> key.owner == coordinator.state.value.owner &&
                 coordinator.state.value.listening?.accepts(key) == true && mediaFocusLease() } == true,
             backgroundMediaAllowed = false,
             parkedOutputAvailable = learning.parkedOutputAvailable,
-            directReplyFocusAllowed = learning.parkedFocusGranted,
-            gleoRouteAvailable = learning.gleoRouteAvailable,
+            directReplyFocusAllowed = learning.parkedFocusGranted || learning.parkedInputFocusGranted,
+            gleoRouteAvailable = learning.gleoRouteAvailable && inputTransportSafe,
             gleoVehicleAllowed = learning.gleoVehicleAllowed(vehicleSnapshot.safety),
             gleoPermissionGeneration = learning.gleoPermissionGeneration ?: 0,
             gleoReplyFocusAllowed = learning.gleoReplyAvailable,
-            microphoneGranted = learning.microphoneGranted, directProviderVerified = learning.speechState.approved,
-            inputArbitrationVerified = learning.speechState.approved, audioAllowsReply = learning.replyAllowed))
+            microphoneGranted = learning.microphoneGranted, directProviderVerified = learning.inputState.approved,
+            inputArbitrationVerified = learning.inputState.approved && inputTransportSafe, audioAllowsReply = learning.replyAllowed))
     }
 
     private fun connectMedia() {
@@ -1630,6 +1646,7 @@ class ProductSessionHost @Inject constructor(@param:ApplicationContext private v
     }
 
     private fun originalOutputConfigured(): Boolean = originalTtsReview?.languageEvidence?.containsKey(SegmentLanguage.EN) == true &&
+        (originalTtsReview?.mode!=PleosTtsMode.ON_DEVICE || originalTtsReview?.onDeviceScope?.reviewState==TtsReviewState.REVIEWED) &&
         context.checkSelfPermission("pleos.car.permission.TTS_SERVICE") == android.content.pm.PackageManager.PERMISSION_GRANTED &&
         ((productVisible && window.visible) || originalTtsReview?.backgroundEvidence != null) &&
         runCatching { Class.forName("ai.pleos.playground.tts.TextToSpeech") }.isSuccess
@@ -2081,13 +2098,20 @@ class ProductSessionHost @Inject constructor(@param:ApplicationContext private v
         if (script !is CatalogRead.Stored) { presentation.update { it.copy(readerStatus = LoadStatus.FAILED, notice = "이 구간의 자료를 아직 이용할 수 없어요. 저장된 진행은 유지돼요") }; return false }
         if (coordinator.state.value.preparedListening?.sameWork(work) != true || profiles.current()?.owner != call.owner) return false
         presentation.update { it.copy(preparedScript = script.value, readerStatus = LoadStatus.READY) }
+        presentation.value.source6History?.records?.filterIsInstance<WireSource6PersonalReadCheckpoint>()
+            ?.singleOrNull{it.recordId==work.checkpointId.toString() && it.version==work.checkpointVersion}?.let{checkpoint->
+                preparedRuntime.reconcileRestoredPhase(call.owner,work,checkpoint,selection.settingsSnapshot.followupPolicy?:"none")
+            }
         if (work.stage == ListeningStage.ARTICLE_OFFER) return true
         return preparedRuntime.attach(call.owner, work, script.value)
     }
 
-    private suspend fun preparedPhaseEnded(run: SegmentRun, skipFollowup: Boolean = false) {
+    private suspend fun preparedPhaseEnded(run: SegmentRun, skipFollowup: Boolean = false,authority:SegmentContinuationAuthority?=null) {
         val view = coordinator.snapshot(); val work = view.preparedListening ?: return
-        val call = profiles.current()?.takeIf { it.owner == run.owner && it.owner == view.owner } ?: return
+        val phaseOwner=authority?.owner?:run.owner
+        if(authority!=null && (authority.selectionId!=run.selectionId || authority.intentGeneration!=view.intentGeneration || view.requiresExplicitMediaResume ||
+            view.intent!=PlaybackIntent.PLAY || run.owner.profileId!=phaseOwner.profileId || run.owner.privacyEpoch!=phaseOwner.privacyEpoch || run.owner.revision!=phaseOwner.revision))return
+        val call = profiles.current()?.takeIf { it.owner == phaseOwner && it.owner == view.owner } ?: return
         val phaseView = view
         val current = preparedRuntime.state.value.snapshot ?: pendingPreparedSnapshot ?: return
         if (current.activeRequest != null || current.runId != run.runId || !work.accepts(current.program)) return
@@ -2121,6 +2145,7 @@ class ProductSessionHost @Inject constructor(@param:ApplicationContext private v
         val updated = work.copy(cursor = nextCursor, checkpointVersion = receipt.version, runId = receipt.payload.activeRunId?.let(UUID::fromString))
         val ticket = coordinator.beginOperation(SessionOperationKind.RESTORE, call.owner) ?: return
         if (!coordinator.admitPreparedListening(RepositoryCompletion(ticket, updated), false)) { coordinator.finishOperation(ticket); return }
+        if(current.continuation?.completedRun==run)preparedRuntime.acknowledgePhase(current,run,receipt)
         val context = reviewRepository.read(call, work.selectionId.toString())
         if (context is LearningReply.Stored) coordinator.bindReviewContext(call.owner, context.value.context.domainReview(), false)
         if (needsFollowup && nextScript != null) {

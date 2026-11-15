@@ -738,6 +738,16 @@ class SessionCoordinator {
             (!view.requiresExplicitMediaResume || admission && !requirePlayIntent) && view.task == null &&
             view.inputPhase == InputPhase.IDLE && view.pendingAnswer == null && view.voiceInput == VoiceInputActivity.IDLE &&
             view.practiceModal?.visible != true && view.reviewPolicy.auxiliary == null
+    /** System scope loss fences only the exact current segment/intent; it is not a user stop. */
+    suspend fun systemHoldSegment(run:SegmentRun,expectedIntentGeneration:Long):Boolean=mutex.withLock {
+        val work=view.preparedListening?:return@withLock false
+        if(view.owner!=run.owner || view.intentGeneration!=expectedIntentGeneration || work.selectionId!=run.selectionId ||
+            work.content.segmentSourceKey()!=run.source || work.cursor.phase!=run.phase || work.cursor.scriptId!=run.scriptId ||
+            work.cursor.scriptHash!=run.scriptHash || work.cursor.manifestId!=run.manifestId || work.cursor.manifestVersion!=run.manifestVersion ||
+            work.cursor.manifestHash!=run.manifestHash || work.runId?.let{it!=run.runId}==true)return@withLock false
+        clock.cancel();waitRoute=null;view=view.copy(requiresExplicitMediaResume=true,intentGeneration=view.intentGeneration+1,mediaPlaying=false,expectedOutput=null)
+        true
+    }
     suspend fun segmentAdmissionPermission(program:SegmentProgram,expectedIntentGeneration:Long?=null,requirePlayIntent:Boolean=false):Boolean = mutex.withLock {
         segmentAccessLocked(program,expectedIntentGeneration,requirePlayIntent,null,true)
     }

@@ -123,6 +123,39 @@ internal class ProductLearningController(private val context: Context, private v
         val confirmationAtArrival = coordinator.state.value.captureConfirmation
         scope.launch { speechEvent(event, confirmationAtArrival) }
     }
+    // Configuration chooses the input route once; a failed Pleos request never falls back.
+    private val input: ParkedSpeechInputPort = voices.parkedInput?.let { approval ->
+        PleosSttGateway(context, approval, ::inputCaptureCurrent) { event -> inputEvent(event) }
+    } ?: speech.parkedInputPort(voices.directInputNotice, ::inputCaptureCurrent) { event -> inputEvent(event) }
+
+    private fun inputEvent(event: DirectSpeechEvent) {
+        val confirmationAtArrival = coordinator.state.value.captureConfirmation
+        scope.launch { speechEvent(event, confirmationAtArrival, fromInput = true) }
+    }
+    /** Worker-safe immutable flow snapshots; material selection is admitted on the UI lane in startAnswer. */
+    private fun inputCaptureCurrent(lease: CaptureLease): Boolean {
+        val view = coordinator.state.value
+        val practice = mutable.value.practice ?: return false
+        val a = view.access
+        return view.captureLease == lease && view.owner == lease.owner && view.task == lease.task && view.lessonId == lease.lessonId &&
+            practice.owner == lease.owner && practice.lesson.lessonId == lease.lessonId && practice.lesson.contentRef == lease.task &&
+            view.inputPhase in setOf(InputPhase.CAPTURING, InputPhase.FINALIZING) && view.pendingAnswer == null &&
+            view.practiceModal?.visible == true && view.voiceInput == VoiceInputActivity.IDLE && a.canCapture &&
+            lease.safetyGeneration == a.safety.generation && lease.windowGeneration == a.window.generation &&
+            lease.componentGeneration == a.components.microphone.permissionGeneration
+    }
+    private fun publishInputReadiness() {
+        val ready = input.state.value
+        mutable.update { it.copy(
+            directInputReady = ready.approved && ready.processingNotice != null && !ready.cleanupUnknown,
+            directInputNotice = ready.processingNotice?.text,
+            directInputStatus = when {
+                ready.cleanupUnknown -> "CLEANUP_UNKNOWN"
+                ready.initializing -> "INITIALIZING"
+                ready.finalReady -> "FINAL_READY"
+                else -> null
+            }) }
+    }
     private val presenter = SupportPresenter(current = { binding ->
         val view = coordinator.snapshot()
         support == binding && supportContext?.let { it.navigation==view.navigationGeneration && it.intent==view.intentGeneration && it.modal==view.practiceModal?.token &&
@@ -135,7 +168,9 @@ internal class ProductLearningController(private val context: Context, private v
         profiles.current()?.takeIf { it.owner == binding.owner }?.let { if (source6(binding.owner,binding.lessonId,binding.task)) preparedPresentations.record(it, binding.ticket, observation) else presentations.record(it, binding.ticket, observation) }
     })
     val speechState get() = speech.state.value
-    val parkedOutputAvailable get() = speech.state.value.approved && speech.state.value.outputReady
+    val inputState get() = input.state.value
+    val parkedInputFocusGranted get() = input.state.value.focusGranted
+    val parkedOutputAvailable get() = speech.state.value.approved && speech.state.value.outputReady && !input.state.value.cleanupUnknown
     val parkedFocusGranted get() = speech.state.value.focusGranted
     val gleoReplyAvailable get() = gleoReplyAllowed
     val gleoPermissionGeneration: Long? get() = voices.gleo?.permissionGeneration?.takeIf { it >= 0 }
@@ -155,7 +190,7 @@ internal class ProductLearningController(private val context: Context, private v
     private var gleoInput: GleoInput? = null
     private var gleoReplyAllowed = false
     private var observedGleoPermissionGeneration = 0L
-    val replyAllowed get() = speech.state.value.focusGranted || gleoReplyAllowed
+    val replyAllowed get() = speech.state.value.focusGranted || input.state.value.focusGranted || gleoReplyAllowed
     val gleoRuntime: GleoProductRuntime? = voices.gleo?.let { GleoGateway(it, object : GleoProductHandler {
         override suspend fun playback(command: String, title: String?, mode: String?,capture:GleoCaptureBinding?): String {
             if (!coordinator.snapshot().access.gleoReady) return "이 차량의 음성 명령 경로를 확인하지 못했어요. 현재 기사는 유지돼요"
@@ -316,7 +351,9 @@ internal class ProductLearningController(private val context: Context, private v
 
     fun start() {
         speech.initialize()
+        input.initialize()
         scope.launch { speech.state.collect { accessChanged() } }
+        scope.launch { input.state.collect { publishInputReadiness(); accessChanged() } }
         scope.launch { voices.gleo?.let { adapter ->
             coordinator.configureGleo(adapter.capabilities)
             adapter.events.collect { event ->
@@ -393,9 +430,17 @@ internal class ProductLearningController(private val context: Context, private v
                 confirmationRecoveredOwner = null
                 view.owner?.let { recoverConfirmationMetadata(it) }
             }
-            if (mutable.value.owner != view.owner) { speech.releaseFocus(); task = null; preparedManifest=null;preparedResumeSelected=false;preparedRequestActive=false;preparedRequestClock.clear()
+            if (mutable.value.owner != view.owner) { input.releaseFocus(); captureFocusOrigin = null; speech.releaseFocus(); task = null; preparedManifest=null;preparedResumeSelected=false;preparedRequestActive=false;preparedRequestClock.clear()
                 preparedReadOnly=false;source6Binding=null;preparedQuestionResult=null;support = null;supportContext=null;completedOutputs.clear();hintOutputOrigins.clear(); questionReturn = null; questionContext = null; questionOutput = null; gleoInput = null; mutable.value = LearningPresentation(owner = view.owner) }
-            if (speech.state.value.listening && !view.access.canCapture) speech.cancel()
+            val capture = view.captureLease
+            val origin = captureFocusOrigin
+            if (origin != null && view.pendingAnswer?.lease?.captureId != origin.captureId &&
+                (capture == null || capture.captureId != origin.captureId || !inputCaptureCurrent(capture))) {
+                captureFocusOrigin = null
+                input.cancel()
+                coordinator.cancelCapture(origin.owner, origin.captureId)
+            }
+            publishInputReadiness()
             if (observedGleoPermissionGeneration != view.access.gleoPermissionGeneration) {
                 observedGleoPermissionGeneration = view.access.gleoPermissionGeneration
                 gleoInput = null; gleoReplyAllowed = false; questionOutput = null
@@ -419,8 +464,8 @@ internal class ProductLearningController(private val context: Context, private v
             is UiIntent.StartAnswer -> startAnswer()
             is UiIntent.ConfirmCaptureLanguage -> confirmCaptureLanguage(intent)
             is UiIntent.RetryCaptureConfirmation -> retryCaptureConfirmation(intent.captureId, intent.confirmationToken)
-            is UiIntent.FinishAnswer -> coordinator.snapshot().captureLease?.let { if (coordinator.finishAnswer(it.captureId)) speech.finish(it) }
-            is UiIntent.CancelAnswer -> coordinator.snapshot().owner?.let { speech.cancel(); coordinator.cancelCapture(it) }
+            is UiIntent.FinishAnswer -> coordinator.snapshot().captureLease?.let { if (coordinator.finishAnswer(it.captureId)) input.finish(it) }
+            is UiIntent.CancelAnswer -> coordinator.snapshot().owner?.let { input.cancel(); captureFocusOrigin = null; coordinator.cancelCapture(it) }
             is UiIntent.RetryFeedback -> mutable.value.lastAttemptId?.let { evaluate(it, mutable.value.channel, intent.readOnly) }
             is UiIntent.RetryAnswer -> readyForAnswer()
             is UiIntent.FinishPractice -> finishPractice(intent.declineRetry)
@@ -491,7 +536,7 @@ internal class ProductLearningController(private val context: Context, private v
         if(restored==null && view.preparedListening?.content!=ref.segmentContent())return
         if(restored!=null && restored.contentRef!=ref.source6Wire())return
         if(manifest.taskId!=ref.supportTaskIdentity || manifest.questionRef!=ref.questionRef)return
-        if(restored!=null){speech.cancel();closeSupport()}
+        if(restored!=null){input.cancel();captureFocusOrigin=null;speech.cancel();closeSupport()}
         val displayOnly=readOnly || readOnlyAttempt!=null || restored?.state?.phase=="completed" || restored?.state?.pendingFeedbackAttemptId!=null || restored?.state?.pendingAttemptId!=null
         val operation = coordinator.beginOperation(SessionOperationKind.PRACTICE, call.owner) ?: return
         try {
@@ -597,6 +642,7 @@ internal class ProductLearningController(private val context: Context, private v
     }
 
     suspend fun stopped() {
+        input.cancel(); captureFocusOrigin = null
         speech.cancel()
         profiles.current()?.let { call ->
             val current = mutable.value.practice
@@ -608,7 +654,7 @@ internal class ProductLearningController(private val context: Context, private v
         val view = coordinator.snapshot(); val work = view.listening;val prepared=view.preparedListening; val owner = view.owner ?: return
         if ((prepared?.stage?:work?.stage) != ListeningStage.ARTICLE_OFFER || view.task != null) return
         val route = if (voices.gleo != null) OutputRoute.GLEO else OutputRoute.PARKED_TTS
-        if (route == OutputRoute.PARKED_TTS) { if (!speech.acquireFocus(owner)) return; accessChanged() }
+        if (route == OutputRoute.PARKED_TTS) { if (!parkedOutputMayAcquire() || !speech.acquireFocus(owner)) return; accessChanged() }
         val id = announcement?.requestId?:UUID.randomUUID()
         val token=announcement?:if(view.offerRuntime!=null)coordinator.prepareOfferAnnouncement(owner,id)?:return else null
         val text = if (listeningOnly()) "오늘은 듣기만 할게요. 말씀하지 않으면 다음 뉴스를 이어서 재생할게요" else "말하기 연습을 할까요, 뉴스를 더 들을까요? 말씀하지 않으면 다음 뉴스를 재생할게요"
@@ -617,7 +663,12 @@ internal class ProductLearningController(private val context: Context, private v
         else speech.speak(owner, id, text, "ko", coordinator.state.value.access)
     }
 
-    fun cancelEffects() { speech.releaseFocus() }
+    fun cancelEffects() { input.releaseFocus(); captureFocusOrigin = null; speech.releaseFocus() }
+    private fun parkedOutputMayAcquire(): Boolean {
+        val state = input.state.value
+        return !state.cleanupUnknown && !state.initializing && !state.listening &&
+            coordinator.state.value.inputPhase !in setOf(InputPhase.CAPTURING, InputPhase.FINALIZING)
+    }
 
     private suspend fun updatePractice(result: PracticeResult? = null) {
         val current = mutable.value.practice
@@ -645,28 +696,42 @@ internal class ProductLearningController(private val context: Context, private v
             notice(if (recovered) "답변 상태를 확인했어요. 답변 시작을 다시 눌러 주세요" else "저장된 답변 상태를 확인하지 못했어요. 연결 후 답변 시작을 다시 눌러 주세요")
             return
         }
-        if (!speech.state.value.approved) { notice("이 차량의 직접 음성 입력 경로를 확인하고 있어요. 현재 질문은 유지돼요"); return }
+        val readiness = input.state.value
+        if (!readiness.approved || readiness.processingNotice == null || readiness.cleanupUnknown) {
+            publishInputReadiness()
+            notice(if (readiness.cleanupUnknown) "이전 음성 입력의 종료를 아직 확인하지 못했어요. 같은 질문은 유지돼요"
+                else "직접 음성 입력 경로와 처리 안내를 준비하고 있어요. 현재 질문은 유지돼요")
+            return
+        }
         if (!microphoneGranted) { mutable.update { it.copy(microphonePermissionNeeded = true) }; return }
-        if (!speech.acquireFocus(requireNotNull(view.owner))) { notice("지금은 마이크를 사용할 수 없어요. 잠시 후 다시 눌러 주세요"); return }
+        if (!input.acquireFocus(requireNotNull(view.owner))) { notice("지금은 마이크를 사용할 수 없어요. 잠시 후 다시 눌러 주세요"); return }
         accessChanged()
-        if (view.owner != coordinator.state.value.owner) return
-        val lease = coordinator.startAnswer() ?: return
-        if (!speech.start(lease, coordinator.state.value.access)) { coordinator.cancelCapture(lease.owner, lease.captureId); notice("답변 입력을 시작하지 못했어요. 다시 눌러 주세요") }
-        else captureFocusOrigin = CaptureFocusOrigin(lease.owner, lease.captureId, speech.currentFocusGeneration, speech.currentCaptureGeneration)
+        val live = coordinator.snapshot()
+        if (live.owner != view.owner || live.task != view.task || live.lessonId != view.lessonId ||
+            live.navigationGeneration != view.navigationGeneration || live.practiceModal?.token != view.practiceModal?.token) {
+            input.releaseFocus(); return
+        }
+        val lease = coordinator.startAnswer() ?: run { input.releaseFocus(); return }
+        if (!input.start(lease, coordinator.state.value.access)) {
+            coordinator.cancelCapture(lease.owner, lease.captureId); input.releaseFocus()
+            notice("답변 입력을 시작하지 못했어요. 다시 눌러 주세요")
+        } else captureFocusOrigin = CaptureFocusOrigin(lease.owner, lease.captureId, input.currentFocusGeneration, input.currentCaptureGeneration)
     }
     /** A permission result changes availability only; it never opens a capture. */
     suspend fun permissionResult() { mutable.update { it.copy(microphonePermissionNeeded = false) }; accessChanged() }
-    private suspend fun speechEvent(event: DirectSpeechEvent, confirmationAtArrival: CaptureConfirmationView? = null) {
+    private suspend fun speechEvent(event: DirectSpeechEvent, confirmationAtArrival: CaptureConfirmationView? = null, fromInput: Boolean = false) {
         when (event) {
             is DirectSpeechEvent.Final -> {
-                if (coordinator.state.value.captureLease != event.lease) return
+                if (!fromInput || coordinator.state.value.captureLease != event.lease || !inputCaptureCurrent(event.lease)) return
                 val focusOrigin = captureFocusOrigin?.takeIf { it.owner == event.lease.owner && it.captureId == event.lease.captureId }
-                if (focusOrigin == null || !speech.acceptsEvent(focusOrigin.owner, focusOrigin.generation) || focusOrigin.captureGeneration != speech.currentCaptureGeneration || !speech.state.value.focusGranted) {
+                if (focusOrigin == null || !input.acceptsEvent(focusOrigin.owner, focusOrigin.generation) || focusOrigin.captureGeneration != input.currentCaptureGeneration || !input.state.value.focusGranted) {
                     coordinator.cancelCapture(event.lease.owner, event.lease.captureId); return
                 }
-                coordinator.finishAnswer(event.lease.captureId)
+                // Recognition completion is not the user's submission action. Only the
+                // explicit FinishAnswer path may move this logical capture to FINALIZING.
+                if (coordinator.state.value.inputPhase != InputPhase.FINALIZING) return
                 if(!flushQuestionDeliveries()){coordinator.cancelCapture(event.lease.owner, event.lease.captureId);notice("도움 제공 기록을 확인한 뒤 같은 질문에 다시 답해 주세요");return}
-                if (focusOrigin.captureGeneration != speech.currentCaptureGeneration || !speech.acceptsEvent(focusOrigin.owner, focusOrigin.generation) || !speech.state.value.focusGranted) {
+                if (focusOrigin.captureGeneration != input.currentCaptureGeneration || !input.acceptsEvent(focusOrigin.owner, focusOrigin.generation) || !input.state.value.focusGranted || !inputCaptureCurrent(event.lease)) {
                     coordinator.cancelCapture(event.lease.owner, event.lease.captureId); return
                 }
                 if (requiresCaptureLanguageConfirmation(event.capture)) {
@@ -677,21 +742,31 @@ internal class ProductLearningController(private val context: Context, private v
                     return
                 }
                 val answer = coordinator.acceptFinal(event.lease.captureId, event.text, event.capture, ::persistAnswer) ?: return
+                releaseAcceptedInput(answer.lease)
                 scope.launch { evaluate(answer.lease.attemptId, InteractionChannel.PARKED) }
             }
-            is DirectSpeechEvent.Ended -> outputEnded(event.outputId, event.owner, event.endedAtMs, event.evidenceRef)
+            is DirectSpeechEvent.Ended -> if (!fromInput) outputEnded(event.outputId, event.owner, event.endedAtMs, event.evidenceRef)
             is DirectSpeechEvent.Failed -> {
                 val view = coordinator.snapshot()
-                if (!speech.acceptsEvent(event.owner, event.focusGeneration) || event.owner != null && event.owner != view.owner) return
+                val originalFocus = if (fromInput) input.acceptsEvent(event.owner, event.focusGeneration) else speech.acceptsEvent(event.owner, event.focusGeneration)
+                if (!originalFocus || event.owner != null && event.owner != view.owner || !fromInput && event.captureId != null) return
                 if (event.captureId != null && event.captureId != view.captureLease?.captureId) return
-                if (event.captureId != null) view.owner?.let { coordinator.cancelCapture(it) }
-                if (event.captureId != null || view.inputPhase == InputPhase.IDLE) notice("음성 처리를 완료하지 못했어요. 같은 질문에 다시 답할 수 있어요")
+                if (event.captureId != null) {
+                    captureFocusOrigin = null
+                    coordinator.cancelCapture(requireNotNull(view.owner), event.captureId)
+                }
+                if (event.captureId != null || view.inputPhase == InputPhase.IDLE)
+                    notice(if (fromInput) inputFailureNotice(event.reason) else "음성 처리를 완료하지 못했어요. 같은 질문에 다시 답할 수 있어요")
             }
             is DirectSpeechEvent.Interrupted -> {
                 val view = coordinator.snapshot()
-                if (speech.acceptsEvent(event.owner, event.focusGeneration) && event.owner == view.owner) {
-                    confirmationAtArrival?.let { coordinator.cancelCaptureConfirmation(it.captureId, it.confirmationToken) }
-                    if (event.captureId != null) coordinator.cancelCapture(event.owner, event.captureId)
+                if (fromInput && input.acceptsEvent(event.owner, event.focusGeneration) && event.owner == view.owner &&
+                    event.captureId != null && event.captureId == view.captureLease?.captureId) {
+                    confirmationAtArrival?.takeIf { it.captureId == event.captureId }?.let {
+                        coordinator.cancelCaptureConfirmation(it.captureId, it.confirmationToken)
+                    }
+                    captureFocusOrigin = null
+                    coordinator.cancelCapture(event.owner, event.captureId)
                 }
             }
         }
@@ -710,6 +785,7 @@ internal class ProductLearningController(private val context: Context, private v
         if (intent.choice != CaptureLanguageChoice.ENGLISH) {
             val answer = coordinator.acceptUnverifiedFinal(intent.captureId, intent.confirmationToken,
                 currentRoute = { captureFocusMatches(requireNotNull(intent.origin.owner), intent.captureId) }, persist = ::persistAnswer) ?: return
+            releaseAcceptedInput(answer.lease)
             scope.launch { evaluate(answer.lease.attemptId, InteractionChannel.PARKED) }
             return
         }
@@ -743,8 +819,25 @@ internal class ProductLearningController(private val context: Context, private v
     /** Synchronous original-route check; also called inside coordinator's final local admission lock. */
     private fun captureFocusMatches(owner: OwnerContext, captureId: UUID): Boolean {
         val focus = captureFocusOrigin ?: return false
-        return focus.owner == owner && focus.captureId == captureId && speech.acceptsEvent(owner, focus.generation) &&
-            focus.captureGeneration == speech.currentCaptureGeneration && speech.state.value.focusGranted
+        val lease = coordinator.state.value.captureLease?.takeIf { it.captureId == captureId } ?: return false
+        return focus.owner == owner && focus.captureId == captureId && input.acceptsEvent(owner, focus.generation) &&
+            focus.captureGeneration == input.currentCaptureGeneration && input.state.value.focusGranted && inputCaptureCurrent(lease)
+    }
+    private suspend fun releaseAcceptedInput(lease: CaptureLease) {
+        val origin = captureFocusOrigin?.takeIf { it.owner == lease.owner && it.captureId == lease.captureId } ?: return
+        if (origin.generation == input.currentFocusGeneration && origin.captureGeneration == input.currentCaptureGeneration) {
+            captureFocusOrigin = null
+            input.releaseFocus()
+            accessChanged()
+        }
+    }
+    private fun inputFailureNotice(reason: String): String = when (reason) {
+        "stt_permission_denied" -> "차량의 음성 입력 권한을 확인해 주세요. 질문은 유지돼요"
+        "stt_english_unavailable" -> "이 차량에서 영어 음성 입력을 확인하지 못했어요. 질문은 유지돼요"
+        "stt_not_supported", "stt_on_device_engine_error" -> "이 차량의 음성 입력을 사용할 수 없어요. 질문은 유지돼요"
+        "stt_cleanup_unknown" -> "이전 음성 입력의 종료를 아직 확인하지 못했어요. 질문은 유지돼요"
+        "stt_initialization_timeout", "stt_capture_timeout", "stt_settle_timeout" -> "음성 입력을 마치지 못했어요. 같은 질문에 다시 답해 주세요"
+        else -> "음성 입력을 완료하지 못했어요. 같은 질문에 다시 답할 수 있어요"
     }
     private suspend fun currentConfirmationFocus(owner: OwnerContext, captureId: UUID, token: UUID): Boolean {
         if (!captureFocusMatches(owner, captureId)) {
@@ -777,7 +870,10 @@ internal class ProductLearningController(private val context: Context, private v
                         }
                         val answer = coordinator.acceptConfirmedFinal(captureId, token, result.value.confirmationRef,
                             currentRoute = { captureFocusMatches(owner, captureId) }, persist = ::persistAnswer)
-                        if (answer != null) scope.launch { evaluate(answer.lease.attemptId, InteractionChannel.PARKED) }
+                        if (answer != null) {
+                            releaseAcceptedInput(answer.lease)
+                            scope.launch { evaluate(answer.lease.attemptId, InteractionChannel.PARKED) }
+                        }
                         else captureConfirmations.cancel(owner, captureId, token)
                     }
                 }
@@ -845,6 +941,7 @@ internal class ProductLearningController(private val context: Context, private v
     }
     private suspend fun finishPractice(decline: Boolean): Boolean {
         val call = profiles.current() ?: return false
+        input.cancel(); captureFocusOrigin = null
         speech.cancel(); closeSupport()
         val p = mutable.value.practice ?: return false
         if(preparedReadOnly){
@@ -860,7 +957,7 @@ internal class ProductLearningController(private val context: Context, private v
         }
         if (reply is LearningReply.Failed) { notice("진행 저장을 확인하지 못했어요. 같은 연습을 유지할게요"); return false }
         if(coordinator.state.value.practiceModal!=null && afterPracticeClose?.invoke(call.owner)!=true)return false
-        coordinator.leavePractice(call.owner); speech.releaseFocus()
+        coordinator.leavePractice(call.owner); input.releaseFocus(); speech.releaseFocus()
         mutable.update { it.copy(practice = null, support = null) }
         preparedManifest=null;preparedResumeSelected=false;supportContext=null;source6Binding=null
         coordinator.navigate(call.owner, SessionScreen.PLAYER)
@@ -902,7 +999,7 @@ internal class ProductLearningController(private val context: Context, private v
         val view = coordinator.snapshot(); val owner = view.owner ?: return; val ref = view.task ?: return
         val id = UUID.randomUUID()
         val route = if (mutable.value.channel == InteractionChannel.GLEO) OutputRoute.GLEO else OutputRoute.PARKED_TTS
-        if (route == OutputRoute.PARKED_TTS) { if (!speech.acquireFocus(owner)) return; accessChanged() }
+        if (route == OutputRoute.PARKED_TTS) { if (!parkedOutputMayAcquire() || !speech.acquireFocus(owner)) return; accessChanged() }
         val originalHint = view.lessonId?.takeIf { kind == WaitKind.HINT_METHOD }?.let { HintOutputOrigin(owner,it,source6(owner,it,ref)) }
         if (!coordinator.expectOutput(OutputExpectation(id, kind, owner, ref, view.lessonId, route,modalToken=view.practiceModal?.token))) return
         originalHint?.let { hintOutputOrigins[id]=it; while(hintOutputOrigins.size>16)hintOutputOrigins.remove(hintOutputOrigins.keys.first()) }

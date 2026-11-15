@@ -38,6 +38,7 @@ dependencies {
     implementation(libs.pleos.fused.location)
     // The public 3.3.1 SDK is present in the APK; project approval/registration remain runtime gates.
     implementation(libs.pleos.tts)
+    implementation(libs.pleos.stt)
     implementation(libs.hilt.android)
     ksp(libs.hilt.compiler)
 }

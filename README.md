@@ -229,3 +229,11 @@ Room2→3 명시 migration은8개 feature cache/journal을 더하고 기존 payl
 전송 실패는 같은 명령의 명시 재시도만 허용한다. 취소·이동·권한/포커스/owner/epoch 변경 뒤 늦은 응답은 새 답변이 되지 않는다. 아직 수락하지 않은 인식 문장은 RAM에만 두며 화면에 인용하지 않는다. 재시작 시 남은 metadata intent는 orphan 처리하고 녹음/후보를 복원하지 않는다. 기존 closed 계약·Room 테이블/버전·음성 승인 설정은 유지했다.
 
 검증: 최종 domain103개, AVD 데이터 경계8개와 화면 renderer4개, 서버 Python241개·격리 SQL52개를 구분해 확인했다. 로컬 묶음 debug/release/lint(error0/warning37) 후 최종 경합 guard에 필요한 domain/debug/test APK만 갱신했고 최종 release/lint는 PR CI로 확인한다. 실제 STT/Gleo 입력·정상 원격 receipt·실차·학습 품질 검증은 남아 있다. Sites는 같은 프로젝트용 정적 캡처3장과 범위 설명만 로컬 반영했으며 interactive mock 연결·배포는 하지 않았다.
+
+## ON_DEVICE 제품 출력과 주차 직접 답변 · 2026-11-15
+
+T040은 원 SDK DONE의 완료 사실과 cleanup·다음 출력 허용을 분리하고, 같은 원 완료 증거를 local journal v2에 원자 보존한다. 이전 구간 이동·cold phase ACK는 완료·정리 hold를 바꾸지 않는다. 정상 Application/runtime의 제품 출력 opt-in은 실제 scope·권리 확인한 manifest가 있을 때만 실행한다.
+
+T036은 Pleos SpeechToText3.3.1 ON_DEVICE 입력 port와 기존 generic 입력을 명시 설정으로 분리한다. 입력 처리 안내·review가 없으면 비활성이다. 명시 답변 마치기+final+정상 ended+cleanup+원 lease가 모두 맞을 때만 기존 E1/답변 접수로 이어지고, 정상 마이크 정리는 E1 세대를 유지한다. 미접수 text는 RAM 한정이며 원어/형태는 UNKNOWN을 유지한다. init5초·정리2초·전체60초와 실제 권한/현재성 재검사, process 공유 cleanup hold를 적용했다. 실제 STT/Gleo·외부 처리/보관·영어/원어·실차 승인은 미확인이다.
+
+최종 debug/release·lint(error0/warning37), domain103, data6, platform 고유28(최초27통과/1실패 뒤 관련STT12통과), 화면9를 확인했다. 캡처 저장 경로만 test private files로 보완한 관련 renderer2 재실행은 같은 사례이며 합산하지 않는다. 대상5556/user10 기존32table·17row·보호2파일의 전후 hash는 모두 같다. 실제 뉴스/제품 출력 opt-in은 승인 자료/scope 부재로 미실행이다. [묶음 검증·캡처](../docs/verification/learning-review-20261115/on-device-integration/)에 초기 실패와 수정 결과를 함께 남겼다. Sites는 같은 프로젝트용 정적 합성 캡처만 로컬 추가하며 기존 interactive WIP·공유 범위·배포는 유지한다.

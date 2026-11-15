@@ -159,7 +159,8 @@ data class LearningPresentation(val owner: OwnerContext? = null, val articleTitl
     val support: PresentationUiBinding? = null, val notice: String? = null,
     val questionOrigin: QuestionOrigin? = null, val questionStatus: LoadStatus = LoadStatus.NOT_REQUESTED,
     val questionAnswer: String? = null, val questionNotice: String? = null, val titleConfirmationUsed: Boolean = false,
-    val microphonePermissionNeeded: Boolean = false)
+    val microphonePermissionNeeded: Boolean = false,
+    val directInputReady: Boolean = false, val directInputStatus: String? = null, val directInputNotice: String? = null)
 
 /** R6 current product admission; the retained account SDK/repository is future-only. */
 fun currentProductIntentAllowed(intent: UiIntent): Boolean =

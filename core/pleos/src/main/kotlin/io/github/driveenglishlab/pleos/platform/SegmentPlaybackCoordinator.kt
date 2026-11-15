@@ -17,13 +17,23 @@ enum class SegmentRuntimeStatus { IDLE, READY, PREPARING, SPEAKING, PAUSED, PHAS
 data class SegmentRuntimeState(val snapshot: SegmentPlaybackSnapshot? = null, val status: SegmentRuntimeStatus = SegmentRuntimeStatus.IDLE,
     val reason: String? = null)
 sealed interface SegmentRuntimeEvent {
-    data class PhaseCompleted(val run: SegmentRun, val englishMainCompletionRecorded: Boolean) : SegmentRuntimeEvent
+    data class PhaseCompleted(val run: SegmentRun, val englishMainCompletionRecorded: Boolean,
+        val completedEventId:UUID?=null,val authority:SegmentContinuationAuthority?=null) : SegmentRuntimeEvent
     data class Interrupted(val run: SegmentRun?, val reason: String) : SegmentRuntimeEvent
 }
 
 class SegmentPlaybackCoordinator(private val speech: SegmentSpeechPort, private val journal: SegmentJournalPort,
     private val leases: SegmentOutputLeasePort, private val scope: CoroutineScope,
     private val mayOutput: suspend (SegmentProgram) -> Boolean) {
+    private var completionGuard:suspend(SegmentSpeechEvent)->CompletionDisposition1={CompletionDisposition1.unavailable("COMPLETION_GUARD_UNAVAILABLE")}
+    private var recoverContinuation:suspend(CompletionContinuation1)->OutputContinuationState={OutputContinuationState.UNKNOWN}
+    private var continuationAuthority:suspend(SegmentProgram)->SegmentContinuationAuthority?={null}
+    /** Configure once before attaching any work. No absent guard can admit a product completion. */
+    fun configureCompletion(guard:suspend(SegmentSpeechEvent)->CompletionDisposition1,
+        recover:suspend(CompletionContinuation1)->OutputContinuationState,
+        authority:suspend(SegmentProgram)->SegmentContinuationAuthority?) {
+        check(mutable.value.snapshot==null);completionGuard=guard;recoverContinuation=recover;continuationAuthority=authority
+    }
     private val lane = Mutex()
     private val mutable = MutableStateFlow(SegmentRuntimeState())
     val state = mutable.asStateFlow()
@@ -47,7 +57,10 @@ class SegmentPlaybackCoordinator(private val speech: SegmentSpeechPort, private 
                 return@withLock false
             }
             val first = program.segmentIndices.first()
-            val cursor = if (!explicitlyFromBeginning && saved is PlaybackCursor6.Segment) {
+            val durable=retained?.takeIf{!explicitlyFromBeginning && it.program.source==program.source && it.program.selectionId==program.selectionId &&
+                it.program.owner.profileId==program.owner.profileId && it.program.owner.privacyEpoch==program.owner.privacyEpoch &&
+                it.program.manifest==program.manifest && it.program.phase==program.phase && it.program.purpose==program.purpose}
+            val cursor = durable?.cursor ?: if (!explicitlyFromBeginning && saved is PlaybackCursor6.Segment) {
                 if (!saved.matches(program.manifest) || saved.phase != program.phase || saved.segmentIndex !in program.segmentIndices) {
                     mutable.value = SegmentRuntimeState(status = SegmentRuntimeStatus.UNAVAILABLE, reason = "PINNED_MANIFEST_CHANGED")
                     return@withLock false
@@ -62,7 +75,9 @@ class SegmentPlaybackCoordinator(private val speech: SegmentSpeechPort, private 
             }
             val runId = preserved?.runId ?: UUID.randomUUID()
             val ledger = preserved?.ledger ?: SequentialCompletion.start(program, runId, requireNotNull(cursor.segmentIndex))
-            val snapshot = SegmentPlaybackSnapshot(program, cursor, runId, (preserved?.generation ?: 0) + 1, ledger)
+            val continued=preserved?.continuation?.copy(requiresExplicitResume=true)
+            continued?.takeIf{it.state!=OutputContinuationState.READY}?.let{leases.retainCleanupHold(it)}
+            val snapshot = SegmentPlaybackSnapshot(program, cursor, runId, (preserved?.generation ?: 0) + 1, ledger,continuation=continued)
             journal.save(snapshot)
             mutable.value = SegmentRuntimeState(snapshot, SegmentRuntimeStatus.READY)
             true
@@ -70,7 +85,34 @@ class SegmentPlaybackCoordinator(private val speech: SegmentSpeechPort, private 
     }
 
     /** Only an explicit product play intent invokes this method; attach/focus gain never do. */
-    suspend fun play(): Boolean {
+    suspend fun play(): Boolean = beginPlay(true)
+    private suspend fun beginPlay(explicit:Boolean):Boolean {
+        val continued=lane.withLock{mutable.value.snapshot?.continuation}
+        if(continued!=null) {
+            if(continued.requiresExplicitResume && !explicit)return false
+            if(continued.state!=OutputContinuationState.READY) {
+                if(!explicit || recoverContinuation(continued)!=OutputContinuationState.READY)return false
+                lane.withLock {
+                    val original=mutable.value.snapshot?:return false
+                    if(original.continuation!=continued || !mayOutput(original.program))return false
+                    leases.clearCleanupHold(continued)
+                    val next=original.copy(continuation=continued.copy(state=OutputContinuationState.READY,reasonCode=null,requiresExplicitResume=false))
+                    journal.save(next);mutable.value=mutable.value.copy(snapshot=next)
+                }
+            }
+            if(continued.nextSegmentIndex==null && !continued.phaseEndPending)return false
+            if(continued.phaseEndPending) {
+                return lane.withLock {
+                    val original=mutable.value.snapshot?:return@withLock false
+                    val actual=original.continuation?:return@withLock false
+                    if(actual.completedEventId!=continued.completedEventId || actual.state!=OutputContinuationState.READY || !mayOutput(original.program))return@withLock false
+                    val authority=continuationAuthority(original.program)?:return@withLock false
+                    if(authority.owner!=original.program.owner || authority.selectionId!=original.program.selectionId)return@withLock false
+                    notifications.trySend(SegmentRuntimeEvent.PhaseCompleted(actual.completedRun,original.ledger.englishMainCompletionRecorded,actual.completedEventId,authority))
+                    true
+                }
+            }
+        }
         val request = lane.withLock {
             val original = mutable.value.snapshot ?: return@withLock null
             if (!mayOutput(original.program)) return@withLock null
@@ -91,7 +133,8 @@ class SegmentPlaybackCoordinator(private val speech: SegmentSpeechPort, private 
                 original.program.source, original.program.phase, original.program.purpose, original.program.manifest.scriptId, original.program.manifest.scriptHash,
                 original.program.manifest.manifestId, original.program.manifest.segmentsVersion, original.program.manifest.manifestHash,
                 segment.segmentId, index, segment.textHash, lease)
-            val next = original.copy(cursor = original.cursor.copy(playIntent = true, pauseReason = PauseReason.NONE), activeRequest = run, bindingAcknowledged = false)
+            val next = original.copy(cursor = original.cursor.copy(playIntent = true, pauseReason = PauseReason.NONE), activeRequest = run, bindingAcknowledged = false,
+                continuation=original.continuation?.copy(requiresExplicitResume=false))
             try {
                 journal.save(next)
                 mutable.value = SegmentRuntimeState(next, SegmentRuntimeStatus.PREPARING)
@@ -156,7 +199,11 @@ class SegmentPlaybackCoordinator(private val speech: SegmentSpeechPort, private 
             val current = original.cursor.segmentIndex ?: return@withLock false
             val target = current + delta
             if (target !in original.program.segmentIndices) return@withLock false
-            val next = original.copy(cursor = cursor(original.program, target, playAfterMove, PauseReason.USER), ledger = original.ledger.manuallyMoved())
+            // Explicit navigation replaces the pending phase-end action, never the historical DONE
+            // or its cleanup hold. Once that same hold is resolved, PLAY speaks the chosen segment.
+            val next = original.copy(cursor = cursor(original.program, target, playAfterMove, PauseReason.USER),
+                ledger = original.ledger.manuallyMoved(), continuation = original.continuation?.copy(
+                    nextSegmentIndex = target, phaseEndPending = false, requiresExplicitResume = true))
             journal.save(next)
             mutable.value = SegmentRuntimeState(next, SegmentRuntimeStatus.PAUSED)
             true
@@ -174,7 +221,7 @@ class SegmentPlaybackCoordinator(private val speech: SegmentSpeechPort, private 
             if (!original.bindingAcknowledged || original.activeRequest != event.run || original.generation != event.run.generation) return@withLock
             // Revocation must still accept an exact interrupt event so the old SDK instance stops.
             // A completed/started callback under revoked permission cannot advance the ledger.
-            if (event.kind in setOf(SegmentSpeechEventKind.STARTED, SegmentSpeechEventKind.COMPLETED) &&
+            if (event.kind == SegmentSpeechEventKind.STARTED &&
                 !leases.owns(event.run.outputLeaseId, event.run.owner, event.run.purpose)) error("Output permission revoked.")
             when (event.kind) {
                 SegmentSpeechEventKind.STARTED -> {
@@ -182,20 +229,34 @@ class SegmentPlaybackCoordinator(private val speech: SegmentSpeechPort, private 
                     mutable.value = mutable.value.copy(status = SegmentRuntimeStatus.SPEAKING, reason = null)
                 }
                 SegmentSpeechEventKind.COMPLETED -> {
+                    val disposition=completionGuard(event)
+                    if(!disposition.admissible || !leases.retains(event.run.outputLeaseId,event.run.owner,event.run.purpose)) {
+                        val saved=original.copy(generation=original.generation+1,activeRequest=null,bindingAcknowledged=false,cursor=original.cursor.copy(playIntent=false,pauseReason=PauseReason.SYSTEM))
+                        journal.observed(event.copy(kind=SegmentSpeechEventKind.UNKNOWN,outputContinuation=null),saved,false)
+                        mutable.value=SegmentRuntimeState(saved,SegmentRuntimeStatus.UNAVAILABLE,disposition.reasonCode?:"COMPLETION_CURRENT_FENCE_CHANGED")
+                        release=event.run.outputLeaseId;stop=event.run
+                        notifications.trySend(SegmentRuntimeEvent.Interrupted(event.run,"COMPLETION_CURRENT_FENCE_CHANGED"))
+                        return@withLock
+                    }
                     val observed = original.ledger.completed(event)
                     val newEnglishCompletion = observed.complete && !observed.englishMainCompletionRecorded
                     val ledger = observed.copy(englishMainCompletionRecorded = observed.englishMainCompletionRecorded || newEnglishCompletion)
                     val current = requireNotNull(original.cursor.segmentIndex)
                     val index = original.program.segmentIndices.indexOf(current)
                     val nextIndex = original.program.segmentIndices.getOrNull(index + 1)
-                    val saved = original.copy(ledger = ledger, activeRequest = null, bindingAcknowledged = false,
-                        cursor = if (nextIndex != null) cursor(original.program, nextIndex, original.cursor.playIntent, PauseReason.NONE) else original.cursor)
+                    val blocked=disposition.continuation!=OutputContinuationState.READY
+                    val continuation=CompletionContinuation1(event.eventId,event.run,nextIndex,nextIndex==null,disposition.continuation,disposition.reasonCode,blocked)
+                    val saved = original.copy(ledger = ledger, activeRequest = null, bindingAcknowledged = false,continuation=continuation,
+                        cursor = if (nextIndex != null) cursor(original.program, nextIndex, original.cursor.playIntent,if(blocked)PauseReason.SYSTEM else PauseReason.NONE)
+                            else original.cursor.copy(pauseReason=if(blocked)PauseReason.SYSTEM else original.cursor.pauseReason))
                     // Exact observed evidence, cursor and completion flag are one local commit.
                     journal.observed(event, saved, newEnglishCompletion)
-                    mutable.value = SegmentRuntimeState(saved, if (nextIndex == null) SegmentRuntimeStatus.PHASE_COMPLETED else SegmentRuntimeStatus.PAUSED)
+                    if(blocked)leases.retainCleanupHold(continuation)
+                    mutable.value = SegmentRuntimeState(saved,if(blocked)SegmentRuntimeStatus.UNAVAILABLE else if(nextIndex==null)SegmentRuntimeStatus.PHASE_COMPLETED else SegmentRuntimeStatus.PAUSED,
+                        if(blocked)disposition.reasonCode?:"TTS_CLEANUP_HOLD" else null)
                     release = event.run.outputLeaseId
-                    if (nextIndex == null) notifications.trySend(SegmentRuntimeEvent.PhaseCompleted(event.run, newEnglishCompletion))
-                    else next = original.cursor.playIntent
+                    if (!blocked && nextIndex == null)notifications.trySend(SegmentRuntimeEvent.PhaseCompleted(event.run,newEnglishCompletion,event.eventId,continuationAuthority(original.program)))
+                    else if(!blocked)next=original.cursor.playIntent
                 }
                 SegmentSpeechEventKind.STOPPED, SegmentSpeechEventKind.ERROR, SegmentSpeechEventKind.UNKNOWN -> {
                     val saved = original.copy(generation = original.generation + 1, activeRequest = null, bindingAcknowledged = false,
@@ -212,7 +273,15 @@ class SegmentPlaybackCoordinator(private val speech: SegmentSpeechPort, private 
         release?.let { leases.release(it) }
         stop?.let { speech.stop(it) }
         // play() rechecks current owner/intent/actual access and acquires a new exact lease.
-        if (next) play()
+        if (next) beginPlay(false)
+    }
+
+    suspend fun phaseAcknowledged(run:SegmentRun):Boolean=lane.withLock {
+        val original=mutable.value.snapshot?:return@withLock false
+        val pending=original.continuation?.takeIf{it.completedRun==run && it.phaseEndPending}?:return@withLock false
+        if(!journal.phaseAcknowledged(original,pending.completedEventId))return@withLock false
+        mutable.value=mutable.value.copy(snapshot=original.copy(continuation=pending.copy(phaseEndPending=false)))
+        true
     }
 
     private suspend fun journalFailure(run: SegmentRun) {
