@@ -36,15 +36,14 @@ internal fun PreparedPlayerScreen(state: ProductScreenState, send: (UiIntent) ->
     val script = state.preparedScript?.takeIf { it.scriptId == work.cursor.scriptId && it.textHash == work.cursor.scriptHash }
     Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Text(source?.title ?: "선택한 뉴스", style = MaterialTheme.typography.titleLarge, modifier = Modifier.semantics { heading() })
-        Text(when (work.stage) {
+        PlayerContextRow(when (work.stage) {
             ListeningStage.ARTICLE_OFFER -> "다음으로 할 일을 골라 주세요"
             ListeningStage.FOLLOWUP -> "후속 듣기"
             ListeningStage.MAIN -> if (work.content.listeningMode == ListeningMode.BRIEFING) "짧은 영어 브리핑" else "영어 원문 전체"
-        }, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }, state, send, onFormat, prepared = true)
         if (state.session.reviewPolicy.context?.selectionId == work.selectionId && state.session.reviewPolicy.effectiveEndPolicy == ReviewEndPolicy.MANUAL_HISTORY)
             Text("기록에서 다시 듣는 기사예요. 다음 뉴스는 직접 골라 주세요", style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant)
-        ArticleActions(state, send, onFormat, prepared = true)
         if (state.followupWaiting) {
             ProductStatus("후속 듣기 자료를 확인하고 있어요", "같은 기사와 듣던 단계는 유지돼요. 다시 확인하거나 후속 듣기를 건너뛸 수 있어요",
                 Modifier.weight(1f), loading = state.busy) {
@@ -103,6 +102,7 @@ private fun PreparedReader(state: ProductScreenState, script: SourcePublicScript
 
 /** Same centered 88dp transport, with segment actions and actual runtime status. */
 @Composable
+@OptIn(ExperimentalLayoutApi::class)
 internal fun PreparedPlaybackDock(state: ProductScreenState, send: (UiIntent) -> Unit) {
     val work = state.session.preparedListening ?: return
     val snapshot = state.segmentPlayback.snapshot?.takeIf { it.program.owner == state.session.owner && work.accepts(it.program) &&
@@ -152,7 +152,11 @@ internal fun PreparedPlaybackDock(state: ProductScreenState, send: (UiIntent) ->
                 transport()
                 Box(Modifier.weight(1f), contentAlignment = Alignment.CenterEnd) { activity() }
             } else Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(12.dp)) { transport(); position(); activity() }
+                verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                transport()
+                FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalArrangement = Arrangement.spacedBy(8.dp)) { position(); activity() }
+            }
         }
     }
 }

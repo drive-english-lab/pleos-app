@@ -145,6 +145,45 @@ class PreparedProductScreensTest {
             ?.forEach { it.copyTo(File(target, it.name), overwrite = true) }
     }
 
+    /** Same fixture/capture code is built on the fixed Before and optional After sources. */
+    @Test fun optionalUiComparisonFrames() {
+        validateTypedSources()
+        val narrow = InstrumentationRegistry.getArguments().getString("comparison") == "narrow"
+        val theme = if (narrow) DeviceAppearance.DARK else DeviceAppearance.LIGHT
+        val suffix = if (narrow) "narrow-dark" else "wide-light"
+        val frame = mutableStateOf(player().copy(appearance = theme))
+        val intents = mutableListOf<UiIntent>()
+        render(frame, intents, width = if (narrow) 900 else 1600, scale = if (narrow) 1.3f else 1f)
+        val directory = File(rule.activity.filesDir, "ui-option").apply { mkdirs() }
+        fun shot(name: String, dialog: Boolean = false) {
+            rule.waitForIdle()
+            val node = if (dialog) rule.onNode(isDialog()) else rule.onNodeWithTag("prepared-test-frame")
+            node.captureToImage().asAndroidBitmap().let { bitmap ->
+                File(directory, "$name-$suffix.png").outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
+            }
+        }
+        val reader = rule.onNodeWithTag("focused-transcript").fetchSemanticsNode().boundsInRoot
+        val play = rule.onNodeWithContentDescription("재생").fetchSemanticsNode().boundsInRoot
+        val current = rule.onNodeWithText(fragments[1]).fetchSemanticsNode().boundsInRoot
+        val metrics = org.json.JSONObject().put("fixture", "synthetic-renderer-bridge-3-segments")
+            .put("width", if (narrow) 900 else 1600).put("height", 1100).put("fontScale", if (narrow) 1.3 else 1.0)
+            .put("theme", theme.name).put("readerHeight", reader.height.toDouble())
+            .put("readerCenterX", reader.center.x.toDouble()).put("playCenterX", play.center.x.toDouble())
+            .put("currentCenterY", current.center.y.toDouble()).put("readerCenterY", reader.center.y.toDouble())
+        File(directory, "metrics-$suffix.json").writeText(metrics.toString(2))
+        shot("player")
+        rule.runOnIdle { frame.value = modal(frame.value) }
+        rule.onNodeWithText(question).assertIsDisplayed()
+        shot("practice", dialog = true)
+        rule.runOnIdle {
+            val base = player().copy(appearance = theme)
+            frame.value = base.copy(session = base.session.copy(screen = SessionScreen.SETTINGS), draft = SettingsDraft(settings))
+        }
+        rule.onNodeWithText("듣기 설정").assertIsDisplayed()
+        shot("settings")
+        assertTrue("Renderer capture must not emit a product command", intents.isEmpty())
+    }
+
     @Test fun currentSegmentFollowsInCenterButManualScrollWaitsForExplicitReturn() {
         val frame = mutableStateOf(player()); val intents = mutableListOf<UiIntent>()
         render(frame, intents)

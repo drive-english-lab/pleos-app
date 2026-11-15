@@ -89,7 +89,7 @@ fun NewsScreens(state: ProductScreenState, send: (UiIntent) -> Unit, onDiagnosti
     }
     if (practiceModal != null) Dialog(onDismissRequest = { send(UiIntent.FinishPractice(state.origin)) },
         properties = DialogProperties(usePlatformDefaultWidth = false, dismissOnClickOutside = false)) {
-        Surface(Modifier.widthIn(max = 1440.dp).fillMaxWidth(0.94f).fillMaxHeight(0.94f),
+        Surface(Modifier.widthIn(max = 1200.dp).fillMaxWidth(0.92f).fillMaxHeight(0.84f),
             shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.surface) {
             Column(Modifier.fillMaxSize().padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(24.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -246,18 +246,17 @@ private fun PlayerPage(state: ProductScreenState, send: (UiIntent) -> Unit, onFo
     Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Text(state.selectedArticle?.title ?: "기사 내용을 확인하고 있어요", style = MaterialTheme.typography.titleLarge,
             modifier = Modifier.semantics { heading() })
-        Text(when (work.stage) {
+        PlayerContextRow(when (work.stage) {
             ListeningStage.FOLLOWUP -> "후속 듣기"
             ListeningStage.ARTICLE_OFFER -> "기사 재생이 끝났어요"
             else -> if (work.content.listeningMode == ListeningMode.BRIEFING) "짧은 영어 브리핑" else "영어 원문 전체"
-        }, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }, state, send, onFormat, prepared = false)
         state.learningMaterial.frozen?.takeIf { it.selectionId == work.selectionId && it.content == work.content }?.let { frozen ->
             Text("이번 연습 단계 · ${bandLabel(frozen.selectedBand)}", style = MaterialTheme.typography.bodySmall)
             val source = frozen.view.material.sourceLevel
             Text(if (source.status == "verified") "원문 자료 수준 · ${source.band ?: "미확인"}" else "원문 자료 수준은 아직 확인되지 않았어요", style = MaterialTheme.typography.bodySmall)
             if (!frozen.canPractice) ProductNotice("영어 듣기는 가능해요. 이 단계의 말하기 질문을 준비하고 있어요")
         }
-        ArticleActions(state, send, onFormat, prepared = false)
         NewsReader(state, Modifier.weight(1f).fillMaxWidth())
         if (work.stage == ListeningStage.ARTICLE_OFFER) OfferActions(state, send, compact = true)
         PlaybackDock(state, send)

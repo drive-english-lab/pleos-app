@@ -9,6 +9,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.*
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import io.github.driveenglishlab.pleos.R
 import io.github.driveenglishlab.pleos.ui.theme.ProductMetrics
@@ -26,9 +27,17 @@ fun SettingsSectionHeader(label: String, value: String, expanded: Boolean, onCli
     OutlinedButton(onClick, Modifier.fillMaxWidth().heightIn(min = ProductMetrics.touch)
         .semantics { stateDescription = if (expanded) "펼침" else "접힘" }, shape = MaterialTheme.shapes.medium) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(24.dp)) {
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text(label, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurface)
-                Text(value, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            BoxWithConstraints(Modifier.weight(1f)) {
+                if (maxWidth >= 760.dp) Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(24.dp)) {
+                    Text(label, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.weight(1f))
+                    Text(value, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.End, modifier = Modifier.weight(1.4f))
+                } else Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(label, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurface)
+                    Text(value, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
             }
             Icon(painterResource(R.drawable.news_chevron_right), if (expanded) "접기" else "펼치기",
                 Modifier.size(24.dp).rotate(if (expanded) 90f else 0f))

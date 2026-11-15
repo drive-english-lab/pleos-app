@@ -4,10 +4,28 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.unit.dp
 import io.github.driveenglishlab.pleos.domain.*
 import io.github.driveenglishlab.pleos.ui.*
 import io.github.driveenglishlab.pleos.ui.theme.ProductMetrics
+
+/** Keep optional article actions beside the phase label when the window has room. */
+@Composable
+fun PlayerContextRow(label: String, state: ProductScreenState, send: (UiIntent) -> Unit,
+    onFormat: (ListeningMode) -> Unit, prepared: Boolean) {
+    BoxWithConstraints(Modifier.fillMaxWidth()) {
+        if (maxWidth >= 1200.dp) Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(24.dp)) {
+            Text(label, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.weight(1f))
+            ArticleActions(state, send, onFormat, prepared, Modifier.widthIn(max = 860.dp))
+        } else Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text(label, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            ArticleActions(state, send, onFormat, prepared)
+        }
+    }
+}
 
 /** Two article actions stay visible; optional changes remain in the current-article menu. */
 @Composable
