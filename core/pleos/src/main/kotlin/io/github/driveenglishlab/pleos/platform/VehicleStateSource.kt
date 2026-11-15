@@ -47,9 +47,10 @@ class PublicVehicleStateSource(private val context: Context, private val scope: 
     private var monitor: CarAccessMonitor? = null
     private var collection: Job? = null
     private var started = false
+    private var closed = false
 
     override fun start() {
-        check(Looper.myLooper() == Looper.getMainLooper()); check(!started); started = true
+        check(Looper.myLooper() == Looper.getMainLooper()); check(!started && !closed); started = true
         if (Build.VERSION.SDK_INT < 34) { mutable.value = VehicleSnapshot(status = "unsupported_api"); return }
         val current = CarAccessMonitor(context)
         monitor = current
@@ -64,9 +65,8 @@ class PublicVehicleStateSource(private val context: Context, private val scope: 
 
     override fun close() {
         check(Looper.myLooper() == Looper.getMainLooper())
-        collection?.cancel(); collection = null
-        if (Build.VERSION.SDK_INT >= 34) monitor?.close()
-        monitor = null
+        if (closed) return
+        closed = true
         val previous = mutable.value
         fun reset(value: ComponentAccess) = ComponentAccess(permissionGeneration = value.permissionGeneration + 1)
         mutable.value = VehicleSnapshot(safety = SafetyState(generation = previous.safety.generation + 1), status = "closed",
@@ -74,6 +74,9 @@ class PublicVehicleStateSource(private val context: Context, private val scope: 
                 audio = reset(previous.components.audio), media = reset(previous.components.media), microphone = reset(previous.components.microphone)),
             diagnostics = VehicleSignalDiagnostics(sourceGeneration = previous.diagnostics.sourceGeneration + 1,
                 gear = "closed", speed = "closed", ux = "closed", components = "closed"))
+        collection?.cancel(); collection = null
+        if (Build.VERSION.SDK_INT >= 34) monitor?.close()
+        monitor = null
     }
 }
 

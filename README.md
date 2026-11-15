@@ -2,6 +2,12 @@
 
 Pleos Connect용 Android 앱이다. 기본 진입은 실제 프로필·catalog·대본·단일 기사 미디어 port에 연결한 제품 화면이다. 실제 전원 사실과 화면·미디어·직접 입력·Gleo의 허용 조건을 각각 확인한다. 연결 점검은 별도 destination으로 보존한다. schema5·Room5와 기사 질문·연습의 제품 연결 코드를 갖추며 실제 음성·전원·자료 승인을 별도 확인한다.
 
+## 차량 public I/O 수명 보완 · CAR-LIVE-01 · 2026-11-15
+
+차량 연결·manager 취득·등록·읽기·해제를 main 밖의 process 공유3 lane으로 분리했다. lane당 native slot1/일반 pending1, Car session1/다음 start1을 유지하고 원 단조 기한·source/operation·policy revision/dirty mask로 늦은 결과를 폐기한다. 논리 timeout은 물리 취소가 아니며 미반환 호출/정리 실패의 quota를 지우지 않는다. close는 UNKNOWN을 먼저 게시하고 원 자원 정리를 우선 예약한다. MIC-only 통지·실패는 무관한 AUDIO/MEDIA 허가를 만료시키지 않는다.
+
+최종 선별 합성15개(0.122초)와 같은 최종 코드/설치의 target35/API34 public 진단1개(0.168초)를 확인했다. 실제 P/UXR/3component current·rawPower UNKNOWN/RECORD_AUDIO 미허용, logical close 뒤 원 unregister3개/disconnect의 public 반환을 관찰했다. 초기 property read는 snapshot에서 pending이었고 현재 값은 실제 callback 근거다. 전체 읽기 완료·물리 정리/취소·실차/실제 음성 성공으로 확대하지 않는다. 원 owner/epoch·32table·보호 bytes·QA설정/profile2를 보존했다. local 전체 debug/release/lint/domain/data/UI는 반복하지 않으며 최종 grouped PR의 자동CI를 별도 기록한다. 화면/공유 시연 정책 변경이 없어 Sites 갱신은 제외했다. [원 결과·제약](../docs/verification/learning-review-20261115/car-liveness/summary.json).
+
 ## 실제 Main 진입·빈 관심 분야 요청 보완 · 2026-11-15
 
 같은 설치·기존 owner의 실제 Main에서 온보딩→연결 점검→뒤로와 HOME→재진입을 확인했다. 관심 분야가 비어 있을 때 Ktor가 빈 배열을 bare `topics` query key로 보내 서버에서 `validation_failed`로 거절되던 경로는 해당 키를 생략하도록 고쳤다. 비어 있지 않은 분야는 OpenAPI의 반복 키 전송을 유지한다.

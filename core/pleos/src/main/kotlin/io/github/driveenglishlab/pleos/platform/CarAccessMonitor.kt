@@ -1,17 +1,9 @@
 package io.github.driveenglishlab.pleos.platform
 
-import android.car.Car
 import android.car.VehicleGear
 import android.car.VehiclePropertyIds
-import android.car.drivingstate.CarUxRestrictions
-import android.car.drivingstate.CarUxRestrictionsManager
-import android.car.hardware.CarPropertyValue
-import android.car.hardware.power.CarPowerManager
-import android.car.hardware.power.CarPowerPolicyFilter
 import android.car.hardware.power.PowerComponent
-import android.car.hardware.property.CarPropertyManager
 import android.content.Context
-import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
@@ -24,7 +16,7 @@ import io.github.driveenglishlab.pleos.domain.VehiclePosition
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
-/** Channel status is an observation, never a synthesized permission or raw power state. */
+/** Channel status and cleanup returns are observations, never synthesized permissions. */
 data class VehicleSignalDiagnostics(
     val source: String = "android.car/public-api34",
     val sourceGeneration: Long = 0,
@@ -34,184 +26,397 @@ data class VehicleSignalDiagnostics(
     val components: String = "not_started",
     val policyId: String? = null,
     val connectionFailure: String? = null,
+    val propertyIo: String = "not_started",
+    val uxIo: String = "not_started",
+    val policyIo: String = "not_started",
+    val cleanup: String = "not_requested",
 )
 
-/** Public car reads only. Component policy is not an actual AWAKE/Suspend-state signal. */
+/** Main is the single state writer. Public Binder calls use the process-owned bounded lanes. */
 @RequiresApi(34)
-@Suppress("DEPRECATION")
-class CarAccessMonitor(private val context: Context) : AutoCloseable {
+class CarAccessMonitor internal constructor(
+    private val io: PublicCarIo,
+    private val runtime: CarIoRuntime,
+    private val main: Handler,
+) : AutoCloseable {
+    constructor(context: Context) : this(AndroidPublicCarIo(context.applicationContext, Handler(Looper.getMainLooper())),
+        CarIoRuntime.shared, Handler(Looper.getMainLooper()))
     data class Snapshot(
         val safety: SafetyState = SafetyState(),
         val components: ComponentPolicies = ComponentPolicies(),
         val status: String = "not_started",
         val diagnostics: VehicleSignalDiagnostics = VehicleSignalDiagnostics(),
     ) {
-        /** Compatibility observation only. Features consume individual current components. */
         val componentPolicy: PowerAvailability get() = PowerAvailability.UNKNOWN
+    }
+    private enum class Action { NOT_APPLICABLE, NOT_ATTEMPTED, PENDING, SUCCEEDED, FAILED, UNCONFIRMED }
+    private class Entry(val channel: CarIoRuntime.Channel) {
+        var handle: Any? = null
+        var operation = 0L
+        var registered = false
+        var registrationAttempted = false
+        var cleanup = Action.NOT_ATTEMPTED
+        var retiring = false
+        var cleanupScheduled = false
+        var policyEventRevision = 0L
+        var dirty = 7
+        var bufferedPolicy: PublicCarIo.Policy? = null
+        var bufferedUx: PublicCarIo.Ux? = null
+        val bufferedProperties = mutableMapOf<Int, PublicCarIo.Property>()
+        var uxRevision = 0L
+        val propertyRevisions = mutableMapOf<Int, Long>()
+    }
+    private class Session(val attempt: Long, val source: Long, val connectionDeadline: Long) {
+        var connection: PublicCarIo.Connection? = null
+        var creationReturned = false
+        var nativeStarted = false
+        var cancelConnectionDeadline: (() -> Unit)? = null
+        var ready: Pair<PublicCarIo.Connection, Boolean>? = null
+        var attached = false
+        var retiring = false
+        var disconnectScheduled = false
+        var disconnect = Action.NOT_ATTEMPTED
+        val entries = CarIoRuntime.Channel.entries.map(::Entry)
+    }
+    /** Fixed-key mailbox also bounds callbacks arriving before manager registration returns. */
+    private inner class Mailbox<T>(private val consume: (T) -> Unit) {
+        private val values = LinkedHashMap<Int, T>()
+        private var posted = false
+        fun offer(key: Int, value: T) {
+            if (Looper.myLooper() == main.looper) { consume(value); return }
+            synchronized(this) {
+                values[key] = value
+                if (posted) return
+                posted = true
+            }
+            main.post {
+                val batch = synchronized(this) { val batch = values.values.toList(); values.clear(); posted = false; batch }
+                batch.forEach(consume)
+            }
+        }
     }
     private val mutable = MutableStateFlow(Snapshot())
     val state = mutable.asStateFlow()
-    private val main = Handler(Looper.getMainLooper())
-    private var car: Car? = null
-    private var properties: CarPropertyManager? = null
-    private var restrictions: CarUxRestrictionsManager? = null
-    private var power: CarPowerManager? = null
-    private var propertyCallback: CarPropertyManager.CarPropertyEventCallback? = null
-    private var uxListener: CarUxRestrictionsManager.OnUxRestrictionsChangedListener? = null
-    private var powerListener: CarPowerManager.CarPowerPolicyListener? = null
-    private var gear: Int? = null
-    private var speed: Float? = null
-    private var ux: CarUxRestrictions? = null
-    private var gearTimestamp = -1L
-    private var speedTimestamp = -1L
+    private var session: Session? = null
     private var attempt = 0L
     private var sourceGeneration = 0L
     private var policyGeneration = 0L
     private var started = false
     private var closed = false
+    private var gear: Int? = null
+    private var speed: Float? = null
+    private var ux: PublicCarIo.Ux? = null
+    private var gearTimestamp = -1L
+    private var speedTimestamp = -1L
 
     fun start() {
-        check(Looper.myLooper() == Looper.getMainLooper())
-        check(!started && !closed); started = true
-        if (Build.VERSION.SDK_INT < 34 || !context.packageManager.hasSystemFeature(PackageManager.FEATURE_AUTOMOTIVE)) {
-            invalidate("unsupported"); return
-        }
-        // Missing gear/speed permission must not prevent unrelated UXR or component reads.
+        checkMain(); check(!started && !closed); started = true
+        if (Build.VERSION.SDK_INT < 34 || !io.supported) { invalidate("unsupported"); return }
+        connect()
+    }
+    private fun connect() {
         invalidate("connecting")
-        val thisAttempt = ++attempt
-        main.postDelayed({
-            if (!closed && attempt == thisAttempt && mutable.value.status == "connecting") invalidate("connection_timeout")
-        }, 8_000)
-        try {
-            car = Car.createCar(context, main, Car.CAR_WAIT_TIMEOUT_DO_NOT_WAIT) { connected, ready ->
-                if (closed || attempt != thisAttempt) return@createCar
-                if (!ready) {
-                    releaseManagers(); invalidate("disconnected")
-                    return@createCar
-                }
-                releaseManagers(); invalidate("connected")
-                val generation = sourceGeneration
-                attachProperties(connected, generation)
-                attachRestrictions(connected, generation)
-                attachPower(connected, generation)
-                project()
+        val original = Session(++attempt, sourceGeneration, runtime.admissionDeadline())
+        session = original
+        original.cancelConnectionDeadline = runtime.connectionDeadline(original.connectionDeadline) {
+            if (current(original) && !original.attached) {
+                invalidate("connection_timeout"); runtime.cancelWaiting(original)
+                if (original.nativeStarted) retire(original) else original.retiring = true
             }
-            if (car == null && mutable.value.status == "connecting") invalidate("create_car_unavailable")
-        } catch (failure: SecurityException) {
-            releaseManagers(); invalidate("car_permission_required", failure.javaClass.simpleName)
-        } catch (failure: LinkageError) {
-            releaseManagers(); invalidate("car_api_unavailable", failure.javaClass.simpleName)
-        } catch (failure: Exception) {
-            releaseManagers(); invalidate("car_connection_unavailable", failure.javaClass.simpleName)
+        }
+        if (!runtime.acquire(original) {
+            if (current(original) && !runtime.expired(original.connectionDeadline)) create(original)
+            else {
+                original.cancelConnectionDeadline?.invoke()
+                if (current(original)) invalidate("connection_timeout")
+                original.retiring = true
+                runtime.release(original)
+            }
+        }) {
+            original.cancelConnectionDeadline?.invoke()
+            invalidate("connection_busy"); session = null
         }
     }
-    private fun current(generation: Long): Boolean = !closed && sourceGeneration == generation
-
-    private fun attachProperties(connected: Car, generation: Long) {
-        val gearPermission = context.checkSelfPermission("android.car.permission.CAR_POWERTRAIN") == PackageManager.PERMISSION_GRANTED
-        val speedPermission = context.checkSelfPermission("android.car.permission.CAR_SPEED") == PackageManager.PERMISSION_GRANTED
-        diagnostic(gear = if (gearPermission) "initializing" else "permission_required",
-            speed = if (speedPermission) "initializing" else "permission_required")
-        if (!gearPermission && !speedPermission) return
-        val manager = try { connected.getCarManager(Car.PROPERTY_SERVICE) as? CarPropertyManager } catch (_: Exception) { null }
-        if (manager == null) {
-            diagnostic(gear = if (gearPermission) "manager_unavailable" else null,
-                speed = if (speedPermission) "manager_unavailable" else null)
+    private fun current(s: Session): Boolean = !closed && session === s && !s.retiring &&
+        attempt == s.attempt && sourceGeneration == s.source
+    private fun current(s: Session, e: Entry) = current(s) && !e.retiring && s.entries[e.channel.ordinal] === e
+    private fun create(s: Session) {
+        s.nativeStarted = true
+        val callback: (PublicCarIo.Connection, Boolean) -> Unit = { connection, ready ->
+            main.post {
+                if (current(s)) {
+                    s.ready = connection to ready
+                    if (s.creationReturned) acceptConnection(s)
+                }
+            }
+        }
+        runtime.submit(CarIoRuntime.Channel.PROPERTY, s, "connect", deadline = s.connectionDeadline, prepare = { { io.connect(callback) } },
+            timeout = { if (current(s)) { invalidate("connection_timeout"); retire(s) } },
+            finish = { result, failure, expired ->
+                s.creationReturned = true
+                s.connection = result as? PublicCarIo.Connection ?: s.ready?.first
+                if (!current(s) || expired) { retire(s); cleanup(s); return@submit }
+                if (failure != null || s.connection == null) {
+                    invalidate("car_connection_unavailable", failure?.javaClass?.simpleName); retire(s)
+                } else {
+                    acceptConnection(s)
+                }
+            })
+    }
+    private fun acceptConnection(s: Session) {
+        val event = s.ready ?: return
+        if (!current(s) || event.first !== s.connection) return
+        if (!event.second) {
+            invalidate("disconnected"); retire(s)
+            // At most one next-start intent; no new pool or overlapping native session.
+            if (!closed) connect()
             return
         }
-        properties = manager
-        val callback = object : CarPropertyManager.CarPropertyEventCallback {
-            override fun onChangeEvent(value: CarPropertyValue<*>) {
-                if (!current(generation) || properties !== manager) return
-                if (value.status != CarPropertyValue.STATUS_AVAILABLE) {
-                    when (value.propertyId) {
-                        VehiclePropertyIds.GEAR_SELECTION -> {
-                            if (value.timestamp < gearTimestamp) return
-                            gearTimestamp = maxOf(gearTimestamp, value.timestamp)
-                        }
-                        VehiclePropertyIds.PERF_VEHICLE_SPEED -> {
-                            if (value.timestamp < speedTimestamp) return
-                            speedTimestamp = maxOf(speedTimestamp, value.timestamp)
-                        }
-                    }
-                    onErrorEvent(value.propertyId, value.areaId); return
-                }
-                when (value.propertyId) {
-                    VehiclePropertyIds.GEAR_SELECTION -> {
-                        if (!gearPermission || value.timestamp <= gearTimestamp) return
-                        gearTimestamp = value.timestamp; gear = value.value as? Int
-                        diagnostic(gear = if (gear == null) "invalid_value" else "available")
-                    }
-                    VehiclePropertyIds.PERF_VEHICLE_SPEED -> {
-                        if (!speedPermission || value.timestamp <= speedTimestamp) return
-                        speedTimestamp = value.timestamp; speed = (value.value as? Float)?.takeIf { it.isFinite() }
-                        diagnostic(speed = if (speed == null) "invalid_value" else "available")
-                    }
-                }
-                project()
-            }
-            override fun onErrorEvent(propertyId: Int, areaId: Int) {
-                if (!current(generation) || properties !== manager) return
-                when (propertyId) {
-                    VehiclePropertyIds.GEAR_SELECTION -> { gear = null; diagnostic(gear = "read_unavailable") }
-                    VehiclePropertyIds.PERF_VEHICLE_SPEED -> { speed = null; diagnostic(speed = "read_unavailable") }
-                }
-                project()
+        if (s.attached) return
+        if (runtime.expired(s.connectionDeadline)) { invalidate("connection_timeout"); retire(s); return }
+        s.attached = true
+        s.cancelConnectionDeadline?.invoke()
+        mutable.value = mutable.value.copy(status = "connected")
+        attachProperties(s, s.entries[0]); attachUx(s, s.entries[1]); attachPolicy(s, s.entries[2])
+    }
+
+    private fun attachProperties(s: Session, e: Entry) {
+        val gearAllowed = io.gearPermission; val speedAllowed = io.speedPermission
+        diagnostic(gear = if (gearAllowed) "initializing" else "permission_required",
+            speed = if (speedAllowed) "initializing" else "permission_required")
+        if (!gearAllowed && !speedAllowed) { e.cleanup = Action.NOT_APPLICABLE; return }
+        val mailbox = Mailbox<PublicCarIo.Property> { value ->
+            if (current(s, e)) {
+                e.propertyRevisions[value.key] = (e.propertyRevisions[value.key] ?: 0L) + 1L
+                if (!e.registered) e.bufferedProperties[value.key] = value else property(value)
             }
         }
-        propertyCallback = callback
-        if (gearPermission) try {
-            check(manager.registerCallback(callback, VehiclePropertyIds.GEAR_SELECTION, CarPropertyManager.SENSOR_RATE_ONCHANGE))
-            callback.onChangeEvent(manager.getProperty<Int>(VehiclePropertyIds.GEAR_SELECTION, 0))
-        } catch (_: Exception) { gear = null; diagnostic(gear = "read_unavailable") }
-        if (speedPermission) try {
-            check(manager.registerCallback(callback, VehiclePropertyIds.PERF_VEHICLE_SPEED, CarPropertyManager.SENSOR_RATE_ONCHANGE))
-            callback.onChangeEvent(manager.getProperty<Float>(VehiclePropertyIds.PERF_VEHICLE_SPEED, 0))
-        } catch (_: Exception) { speed = null; diagnostic(speed = "read_unavailable") }
+        val connection = checkNotNull(s.connection)
+        action(s, e, "manager", body = { connection.properties { value ->
+            if ((value.key == VehiclePropertyIds.GEAR_SELECTION && gearAllowed) ||
+                (value.key == VehiclePropertyIds.PERF_VEHICLE_SPEED && speedAllowed)) mailbox.offer(value.key, value)
+        } }, adopt = { result ->
+            val port = result as PublicCarIo.Properties; e.handle = port
+            registerProperties(s, e, port, gearAllowed, speedAllowed)
+        }, resource = true)
     }
-    private fun attachRestrictions(connected: Car, generation: Long) {
-        try {
-            val manager = connected.getCarManager(Car.CAR_UX_RESTRICTION_SERVICE) as? CarUxRestrictionsManager ?: error("UXR unavailable")
-            restrictions = manager
-            val listener = CarUxRestrictionsManager.OnUxRestrictionsChangedListener {
-                if (current(generation) && restrictions === manager) { ux = it; diagnostic(ux = "available"); project() }
-            }
-            uxListener = listener
-            manager.registerListener(listener)
-            ux = manager.currentCarUxRestrictions
-            diagnostic(ux = if (ux == null) "current_value_unavailable" else "available")
-        } catch (_: SecurityException) { ux = null; diagnostic(ux = "permission_required") }
-        catch (_: Exception) { ux = null; diagnostic(ux = "read_unavailable") }
-    }
-    private fun attachPower(connected: Car, generation: Long) {
-        if (context.checkSelfPermission("android.car.permission.READ_CAR_POWER_POLICY") != PackageManager.PERMISSION_GRANTED) {
-            unknownComponents("permission_required"); return
+    private fun registerProperties(s: Session, e: Entry, port: PublicCarIo.Properties, gearAllowed: Boolean, speedAllowed: Boolean) {
+        val keys = buildList { if (gearAllowed) add(VehiclePropertyIds.GEAR_SELECTION); if (speedAllowed) add(VehiclePropertyIds.PERF_VEHICLE_SPEED) }
+        fun read(index: Int) {
+            if (index >= keys.size || !current(s, e)) return
+            val key = keys[index]
+            val revision = e.propertyRevisions[key] ?: 0L
+            action(s, e, "read_$key", body = { port.read(key) }, adopt = {
+                if (revision == (e.propertyRevisions[key] ?: 0L)) property(it as PublicCarIo.Property)
+                read(index + 1)
+            }, failureCurrent = { revision == (e.propertyRevisions[key] ?: 0L) })
         }
-        try {
-            val manager = connected.getCarManager(Car.POWER_SERVICE) as? CarPowerManager ?: error("Power policy unavailable")
-            power = manager
-            val listener = CarPowerManager.CarPowerPolicyListener {
-                if (current(generation) && power === manager) readCurrentPolicy(manager, generation)
+        fun register(index: Int) {
+            if (index == keys.size) {
+                e.registered = true
+                val buffered = e.bufferedProperties.values.toList(); e.bufferedProperties.clear(); buffered.forEach(::property)
+                read(0); return
             }
-            powerListener = listener
-            manager.addPowerPolicyListener(context.mainExecutor, CarPowerPolicyFilter.Builder()
-                .setComponents(PowerComponent.AUDIO, PowerComponent.MEDIA, PowerComponent.MICROPHONE).build(), listener)
-            readCurrentPolicy(manager, generation)
-        } catch (_: SecurityException) { unknownComponents("permission_required") }
-        catch (_: Exception) { unknownComponents("read_unavailable") }
+            e.registrationAttempted = true
+            action(s, e, "register_${keys[index]}", body = { check(port.register(keys[index])); Unit }, adopt = { register(index + 1) })
+        }
+        register(0)
     }
-    private fun readCurrentPolicy(manager: CarPowerManager, generation: Long) {
-        if (!current(generation) || power !== manager) return
-        try {
-            // Listener policies may be partial. Re-read current membership rather than
-            // accumulating old bits or interpreting isComponentEnabled(false) as denial.
-            val policy = manager.currentPowerPolicy ?: run { unknownComponents("current_value_unavailable"); return }
-            val values = advanceComponents(mutable.value.components,
-                projectComponents(policy.enabledComponents, policy.disabledComponents, ++policyGeneration))
-            mutable.value = mutable.value.copy(components = values,
-                diagnostics = mutable.value.diagnostics.copy(components = "current_policy", policyId = policy.policyId))
-        } catch (_: SecurityException) { unknownComponents("permission_required") }
-        catch (_: Exception) { unknownComponents("read_unavailable") }
+    private fun property(value: PublicCarIo.Property) {
+        when (value.key) {
+            VehiclePropertyIds.GEAR_SELECTION -> {
+                if (value.timestamp >= 0 && (value.timestamp < gearTimestamp || value.available && value.timestamp == gearTimestamp)) return
+                if (value.timestamp >= 0) gearTimestamp = value.timestamp
+                gear = if (value.available) value.value as? Int else null
+                diagnostic(gear = if (gear == null) "read_unavailable" else "available")
+            }
+            VehiclePropertyIds.PERF_VEHICLE_SPEED -> {
+                if (value.timestamp >= 0 && (value.timestamp < speedTimestamp || value.available && value.timestamp == speedTimestamp)) return
+                if (value.timestamp >= 0) speedTimestamp = value.timestamp
+                speed = if (value.available) (value.value as? Float)?.takeIf { it.isFinite() } else null
+                diagnostic(speed = if (speed == null) "read_unavailable" else "available")
+            }
+        }
+        project()
+    }
+    private fun attachUx(s: Session, e: Entry) {
+        val mailbox = Mailbox<PublicCarIo.Ux> { value ->
+            if (current(s, e)) {
+                e.uxRevision++
+                if (!e.registered) e.bufferedUx = value else { ux = value; diagnostic(ux = "available"); project() }
+            }
+        }
+        val connection = checkNotNull(s.connection)
+        action(s, e, "manager", body = { connection.ux { mailbox.offer(0, it) } }, adopt = { result ->
+            val port = result as PublicCarIo.Restrictions; e.handle = port; e.registrationAttempted = true
+            action(s, e, "register", body = { port.register() }, adopt = {
+                e.registered = true
+                e.bufferedUx?.let { ux = it; e.bufferedUx = null; diagnostic(ux = "available"); project() }
+                val revision = e.uxRevision
+                action(s, e, "read", body = { port.read() }, adopt = { value ->
+                    if (revision == e.uxRevision) {
+                        ux = value as? PublicCarIo.Ux
+                        diagnostic(ux = if (ux == null) "current_value_unavailable" else "available"); project()
+                    }
+                }, failureCurrent = { revision == e.uxRevision })
+            })
+        }, resource = true)
+    }
+    private fun attachPolicy(s: Session, e: Entry) {
+        if (!io.policyPermission) { unknownComponents("permission_required"); e.cleanup = Action.NOT_APPLICABLE; return }
+        val mailbox = Mailbox<PublicCarIo.Policy> { value ->
+            if (current(s, e)) {
+                // Invalidate immediately even when registration has not returned.
+                policyEvent(e, value)
+                if (!e.registered) e.bufferedPolicy = value else readPolicy(s, e, e.handle as PublicCarIo.Policies)
+            }
+        }
+        val connection = checkNotNull(s.connection)
+        action(s, e, "manager", body = { connection.policy { mailbox.offer(0, it) } }, adopt = { result ->
+            val port = result as PublicCarIo.Policies; e.handle = port; e.registrationAttempted = true
+            action(s, e, "register", body = { port.register() }, adopt = {
+                e.registered = true; e.bufferedPolicy = null
+                readPolicy(s, e, port)
+            })
+        }, resource = true)
+    }
+    private fun policyEvent(e: Entry, value: PublicCarIo.Policy) {
+        e.policyEventRevision++
+        val on = value.enabled.toSet(); val off = value.disabled.toSet()
+        val old = mutable.value.components
+        var dirty = 0
+        fun invalidate(component: Int, bit: Int, access: ComponentAccess): ComponentAccess {
+            if (component !in on && component !in off) return access
+            val contradictory = component in on && component in off
+            val same = !contradictory && access.known && access.sourceGeneration == old.generation && access.allowed == (component in on)
+            if (same) return access
+            dirty = dirty or bit
+            return if (access.known) ComponentAccess(permissionGeneration = access.permissionGeneration + 1) else access
+        }
+        val updated = old.copy(audio = invalidate(PowerComponent.AUDIO, 1, old.audio),
+            media = invalidate(PowerComponent.MEDIA, 2, old.media), microphone = invalidate(PowerComponent.MICROPHONE, 4, old.microphone))
+        e.dirty = e.dirty or dirty
+        mutable.value = mutable.value.copy(components = updated)
+    }
+    private fun readPolicy(s: Session, e: Entry, port: PublicCarIo.Policies) {
+        // Same-key pending request is coalesced by runtime; lease is frozen only on dispatch.
+        var revision = -1L; var mask = 0
+        val operation = e.operation + 1
+        val accepted = runtime.submit(e.channel, s, "policy_read", prepare = {
+            revision = e.policyEventRevision; mask = e.dirty
+            { port.read() }
+        }, timeout = {
+            if (current(s, e) && revision == e.policyEventRevision) policyFailure(mask, "read_timeout")
+        }, finish = { value, failure, expired ->
+            if (s.retiring) { cleanup(s); return@submit }
+            if (!current(s, e) || revision != e.policyEventRevision) return@submit
+            if (!expired && failure == null && value is PublicCarIo.Policy) {
+                val observed = projectComponents(value.enabled, value.disabled, ++policyGeneration)
+                mutable.value = mutable.value.copy(components = advanceComponents(mutable.value.components, observed),
+                    diagnostics = mutable.value.diagnostics.copy(components = "current_policy", policyId = value.id, policyIo = "read:succeeded"))
+                e.dirty = e.dirty and mask.inv()
+            } else if (!expired) {
+                if (failure is SecurityException) { e.dirty = 7; policyFailure(7, "permission_required") }
+                else policyFailure(mask, "read_unavailable")
+            }
+        })
+        if (accepted) { e.operation = operation; ioDiagnostic(e.channel, "read:pending") }
+    }
+    private fun policyFailure(mask: Int, status: String) {
+        val old = mutable.value.components
+        fun reset(bit: Int, value: ComponentAccess) = if (mask and bit != 0 && value.known)
+            ComponentAccess(permissionGeneration = value.permissionGeneration + 1) else value
+        mutable.value = mutable.value.copy(components = old.copy(audio = reset(1, old.audio), media = reset(2, old.media), microphone = reset(4, old.microphone)),
+            diagnostics = mutable.value.diagnostics.copy(components = status, policyIo = status))
+    }
+    private fun action(s: Session, e: Entry, name: String, body: () -> Any?, adopt: (Any?) -> Unit,
+        resource: Boolean = false, failureCurrent: () -> Boolean = { true }) {
+        val operation = ++e.operation
+        ioDiagnostic(e.channel, "$name:pending")
+        val accepted = runtime.submit(e.channel, s, name, prepare = { body }, timeout = {
+            if (current(s, e) && operation == e.operation && failureCurrent()) channelUnknown(e, "${name}_timeout")
+        }, finish = { value, failure, expired ->
+            // Store only the original resource, including late acquisition, for its cleanup.
+            if (resource && value != null) e.handle = value
+            if (s.retiring) { cleanup(s); return@submit }
+            if (!current(s, e) || operation != e.operation) return@submit
+            if (failure != null || expired) {
+                if (failureCurrent()) channelUnknown(e, if (expired) "${name}_timeout" else if (failure is SecurityException) "permission_required" else "${name}_unavailable")
+                // A timed-out/failed registration is uncertain; retire only this channel.
+                if (name.startsWith("register") || resource) { e.retiring = true; cleanupEntry(s, e) }
+            } else { ioDiagnostic(e.channel, "$name:succeeded"); adopt(value) }
+        })
+        if (!accepted && current(s, e)) channelUnknown(e, "busy")
+    }
+    private fun channelUnknown(e: Entry, status: String) {
+        ioDiagnostic(e.channel, status)
+        when (e.channel) {
+            CarIoRuntime.Channel.PROPERTY -> { gear = null; speed = null; diagnostic(gear = status, speed = status); project() }
+            CarIoRuntime.Channel.UXR -> { ux = null; diagnostic(ux = status); project() }
+            CarIoRuntime.Channel.POLICY -> unknownComponents(status)
+        }
+    }
+    private fun retire(s: Session) {
+        s.cancelConnectionDeadline?.invoke()
+        s.retiring = true
+        s.entries.forEach { it.retiring = true }
+        cleanup(s)
+    }
+    private fun cleanup(s: Session) {
+        if (!s.creationReturned) return
+        s.entries.forEach { cleanupEntry(s, it) }
+        if (!s.entries.all { it.cleanup in setOf(Action.SUCCEEDED, Action.FAILED, Action.NOT_APPLICABLE) }) return
+        if (s.disconnectScheduled) return
+        s.disconnectScheduled = true
+        val connection = s.connection
+        if (connection == null) { s.disconnect = Action.NOT_APPLICABLE; finishRetirement(s); return }
+        s.disconnect = Action.PENDING
+        runtime.retire(CarIoRuntime.Channel.PROPERTY, s, prepare = { { connection.disconnect() } }, timeout = {
+            s.disconnect = Action.UNCONFIRMED; cleanupDiagnostic(s)
+        }, finish = { _, failure, _ ->
+            s.disconnect = if (failure == null) Action.SUCCEEDED else Action.FAILED
+            finishRetirement(s)
+        })
+    }
+    private fun cleanupEntry(s: Session, e: Entry) {
+        if (!e.retiring || e.cleanupScheduled) return
+        // A queued cleanup waits behind any original acquire/register/read native call.
+        e.cleanupScheduled = true; e.cleanup = Action.PENDING
+        runtime.retire(e.channel, s, prepare = {
+            val handle = e.handle
+            val needed = e.registrationAttempted
+            {
+                if (needed) when (handle) {
+                    is PublicCarIo.Properties -> handle.unregister()
+                    is PublicCarIo.Restrictions -> handle.unregister()
+                    is PublicCarIo.Policies -> handle.unregister()
+                }
+                needed && handle != null
+            }
+        }, timeout = { e.cleanup = Action.UNCONFIRMED; cleanupDiagnostic(s) }, finish = { value, failure, _ ->
+            e.cleanup = when { failure != null -> Action.FAILED; value == true -> Action.SUCCEEDED; else -> Action.NOT_APPLICABLE }
+            cleanupDiagnostic(s)
+            if (s.retiring) cleanup(s)
+        })
+    }
+    private fun finishRetirement(s: Session) {
+        cleanupDiagnostic(s)
+        if (s.disconnect !in setOf(Action.SUCCEEDED, Action.NOT_APPLICABLE)) return
+        if (s.entries.any { it.cleanup !in setOf(Action.SUCCEEDED, Action.NOT_APPLICABLE) }) return
+        if (CarIoRuntime.Channel.entries.all(runtime::idle)) runtime.release(s)
+    }
+    private fun cleanupDiagnostic(s: Session) {
+        if (session !== s && !closed) return
+        val value = "property=${s.entries[0].cleanup}/uxr=${s.entries[1].cleanup}/policy=${s.entries[2].cleanup}/disconnect=${s.disconnect}"
+        mutable.value = mutable.value.copy(diagnostics = mutable.value.diagnostics.copy(cleanup = value))
+    }
+    private fun ioDiagnostic(channel: CarIoRuntime.Channel, status: String) {
+        val d = mutable.value.diagnostics
+        mutable.value = mutable.value.copy(diagnostics = when (channel) {
+            CarIoRuntime.Channel.PROPERTY -> d.copy(propertyIo = status)
+            CarIoRuntime.Channel.UXR -> d.copy(uxIo = status)
+            CarIoRuntime.Channel.POLICY -> d.copy(policyIo = status)
+        })
     }
     private fun unknownComponents(status: String) {
         mutable.value = mutable.value.copy(components = advanceComponents(mutable.value.components,
@@ -231,7 +436,7 @@ class CarAccessMonitor(private val context: Context) : AutoCloseable {
             gear == VehicleGear.GEAR_DRIVE && speed != null -> VehiclePosition.MOVING_OR_REVERSE_NEUTRAL
             else -> VehiclePosition.UNKNOWN
         }
-        val permitted = ux?.let { !it.isRequiresDistractionOptimization && it.activeRestrictions == 0 } == true
+        val permitted = ux?.detailsAllowed == true
         val previous = mutable.value.safety
         val next = SafetyState(position, ux != null, permitted, permitted, generation = previous.generation)
         if (next != previous) mutable.value = mutable.value.copy(safety = next.copy(generation = previous.generation + 1))
@@ -244,21 +449,17 @@ class CarAccessMonitor(private val context: Context) : AutoCloseable {
             VehicleSignalDiagnostics(sourceGeneration = sourceGeneration, gear = status, speed = status, ux = status,
                 components = status, connectionFailure = failure))
     }
-    private fun releaseManagers() {
-        propertyCallback?.let { callback -> runCatching { properties?.unregisterCallback(callback) } }
-        runCatching { restrictions?.unregisterListener() }
-        powerListener?.let { listener -> runCatching { power?.removePowerPolicyListener(listener) } }
-        properties = null; restrictions = null; power = null
-        propertyCallback = null; uxListener = null; powerListener = null
-    }
     override fun close() {
-        check(Looper.myLooper() == Looper.getMainLooper())
+        checkMain()
         if (closed) return
         closed = true; attempt++
-        releaseManagers()
-        runCatching { car?.disconnect() }; car = null
         invalidate("closed")
+        session?.let { original ->
+            original.cancelConnectionDeadline?.invoke(); runtime.cancelWaiting(original)
+            if (original.nativeStarted) retire(original)
+        }
     }
+    private fun checkMain() = check(Looper.myLooper() == main.looper)
     companion object {
         /** Policy reads refresh source identity. Only a relevant disposition/reset expires
          * that component's grants; an unrelated MICROPHONE change must not expire AUDIO.
