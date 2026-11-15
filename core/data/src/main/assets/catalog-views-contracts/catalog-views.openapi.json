@@ -1,0 +1,199 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Drive English catalog views1",
+    "version": "1.0.0"
+  },
+  "paths": {
+    "/v2/content/catalog": {
+      "get": {
+        "operationId": "readCatalogView",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "catalog_view_contract_version",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "const": 1
+            }
+          },
+          {
+            "name": "view",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "interests",
+                "issues"
+              ]
+            }
+          },
+          {
+            "name": "category_filter_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "technology",
+                    "science",
+                    "business",
+                    "world",
+                    "environment",
+                    "culture"
+                  ]
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50,
+              "default": 20
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 2048
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Stored data only; never an output grant.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "catalog-views.schema.json#/$defs/CatalogViewResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Typed failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "catalog-views.schema.json#/$defs/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Typed failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "catalog-views.schema.json#/$defs/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Typed failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "catalog-views.schema.json#/$defs/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Typed failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "catalog-views.schema.json#/$defs/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Typed failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "catalog-views.schema.json#/$defs/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Typed failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "catalog-views.schema.json#/$defs/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Typed failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "catalog-views.schema.json#/$defs/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Typed failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "catalog-views.schema.json#/$defs/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "x-contract-negotiation": {
+          "in": "query",
+          "name": "catalog_view_contract_version",
+          "const": 1,
+          "legacy": "preparation_contract_version:1 unchanged"
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "BearerAuth": {
+        "type": "http",
+        "scheme": "bearer"
+      }
+    }
+  }
+}

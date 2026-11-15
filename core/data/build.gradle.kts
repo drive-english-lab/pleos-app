@@ -5,6 +5,7 @@ import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 plugins {
     alias(libs.plugins.android.library)
     alias(libs.plugins.kotlin.android)
+    alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.ksp)
     alias(libs.plugins.hilt)
 }
@@ -37,10 +38,12 @@ android {
     compileSdk = 36
     defaultConfig {
         minSdk = 28
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("String", "SUPABASE_URL", "\"$supabaseUrl\"")
         buildConfigField("String", "SUPABASE_PUBLISHABLE_KEY", "\"$supabaseKey\"")
     }
     buildFeatures { buildConfig = true }
+    sourceSets.getByName("androidTest").assets.srcDir("schemas")
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
@@ -54,9 +57,17 @@ kotlin {
 
 dependencies {
     implementation(project(":core:domain"))
+    api(libs.room.runtime)
+    ksp(libs.room.compiler)
+    androidTestImplementation("androidx.test:runner:1.7.0")
+    androidTestImplementation("androidx.test.ext:junit:1.3.0")
     implementation(libs.datastore.preferences)
     implementation(libs.supabase.postgrest)
+    implementation(libs.supabase.auth)
     implementation(libs.ktor.okhttp)
+    implementation(libs.serialization.json)
     implementation(libs.hilt.android)
     ksp(libs.hilt.compiler)
 }
+
+ksp { arg("room.schemaLocation", "$projectDir/schemas") }

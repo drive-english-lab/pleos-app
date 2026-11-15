@@ -10,7 +10,7 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
@@ -19,8 +19,20 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
+          cache: gradle
+          cache-dependency-path: |
+            **/*.gradle.kts
+            **/gradle.lockfile
+            gradle/libs.versions.toml
+            gradle/wrapper/gradle-wrapper.properties
       - name: Verify Android SDK Platform 36
         run: test -f "$ANDROID_HOME/platforms/android-36/android.jar"
+      - name: Check generated learning contracts
+        run: |
+          python3 scripts/sync-learning-contracts.py --check
+          python3 scripts/sync-feature-contracts.py --check
+          python3 scripts/sync-incremental-contracts.py --check
+          python3 scripts/sync-r7-contracts.py --check
       - name: Download verified Gradle distribution
         run: |
           archive="$RUNNER_TEMP/gradle-8.13-bin.zip"
@@ -35,4 +47,4 @@ jobs:
       - run: |
           "$RUNNER_TEMP/gradle-8.13/bin/gradle" --console=plain \
             -PkotlinCompilerRepository=https://maven-central.storage-download.googleapis.com/maven2 \
-            :app:assembleDebug :app:assembleRelease :app:lintDebug
+            :core:domain:test :app:assembleDebug :app:assembleRelease :app:lintDebug

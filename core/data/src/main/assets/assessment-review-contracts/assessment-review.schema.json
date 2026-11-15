@@ -1,0 +1,2844 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://drive-english.invalid/contracts/assessment-review.schema.json",
+  "title": "assessment-review",
+  "x-source-spec-hashes": {
+    "assessment-review.md": "064033067c9f1ea4a218a21756659aa7f1b8def506679c2ad723cb47a527f830",
+    "preparation.md": "efbb2b0ef83a6be73b84454d733746ce6ba096eaf39efc100e18a1e557b265ac"
+  },
+  "x-imported-contract-sha256": {
+    "source6.schema.json": "4e77cd7717e33b899915c26ee053ce688ed9fe1d8c97f176c5641287de351f2e",
+    "common.schema.json": "25f1d860a8ebb949628d86b60edaac1caa1582a07c66b6ec7a08dda91f92f9ac",
+    "inference.openapi.json": "84c074a343ee526baa16db711acee97082278f858da63509f833c2480499af3a"
+  },
+  "$defs": {
+    "Source6CommonProfileContext": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "profile_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "privacy_epoch": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "profile_id",
+        "privacy_epoch"
+      ],
+      "description": "Server-derived owner and deletion generation. Incoming values are expected context only; JWT subject + active session binding authorize the request."
+    },
+    "Source6CommonClientContext": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "profile_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "privacy_epoch": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "context_revision": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "presentation_token": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+        }
+      },
+      "required": [
+        "profile_id",
+        "privacy_epoch",
+        "context_revision",
+        "presentation_token"
+      ],
+      "description": "Owner/epoch are checked against the verified session and stored operation; revision/token only control presentation. They cannot grant access."
+    },
+    "Source6PracticeContentRef6": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/Source6LegacyPracticeRef6"
+        },
+        {
+          "$ref": "#/$defs/Source6PreparedPracticeRef6"
+        }
+      ]
+    },
+    "Source6LegacyPracticeRef6": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "source_kind": {
+          "type": "string",
+          "const": "legacy_bundle"
+        },
+        "legacy_ref": {
+          "$ref": "#/$defs/Source6LegacyPracticeRef5"
+        }
+      },
+      "required": [
+        "source_kind",
+        "legacy_ref"
+      ]
+    },
+    "Source6LegacyPracticeRef5": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "article_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "bundle_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "source_snapshot_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "listening_mode": {
+          "type": "string",
+          "enum": [
+            "original_full",
+            "briefing"
+          ]
+        },
+        "listening_script_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "task_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "basic_question_version_id": {
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "required": [
+        "article_id",
+        "bundle_id",
+        "source_snapshot_id",
+        "listening_mode",
+        "listening_script_id",
+        "task_id",
+        "basic_question_version_id"
+      ],
+      "description": "Mode/script-specific task plus the canonical basic-question version. Server verifies article/snapshot/bundle/script/task/question mappings; caller IDs grant no authority."
+    },
+    "Source6PreparedPracticeRef6": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "source_kind": {
+          "type": "string",
+          "const": "prepared_components"
+        },
+        "article_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "source_snapshot_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "source_hash": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "material_generation_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "main_component_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "main_script_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "main_text_hash": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "listening_mode": {
+          "type": "string",
+          "enum": [
+            "original_full",
+            "briefing"
+          ]
+        },
+        "practice_component_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "basic_question_version_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "task_revision": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        }
+      },
+      "required": [
+        "source_kind",
+        "article_id",
+        "source_snapshot_id",
+        "source_hash",
+        "material_generation_id",
+        "main_component_id",
+        "main_script_id",
+        "main_text_hash",
+        "listening_mode",
+        "practice_component_id",
+        "basic_question_version_id",
+        "task_revision"
+      ]
+    },
+    "AssessmentFeedback5": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "attempt_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "content_ref": {
+          "$ref": "#/$defs/LegacyInferencePracticeContentRef"
+        },
+        "judgement": {
+          "type": "string",
+          "enum": [
+            "sufficient",
+            "needs_more",
+            "factually_incorrect",
+            "unassessable"
+          ]
+        },
+        "focus": {
+          "type": "string",
+          "enum": [
+            "none",
+            "fact",
+            "missing_fact",
+            "language_form",
+            "recognition"
+          ]
+        },
+        "feedback_ko": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 600
+        },
+        "evidence_refs": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 160
+          },
+          "maxItems": 8,
+          "uniqueItems": true
+        },
+        "correction": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LegacyInferenceCorrection"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "example_sentence": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 500
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "support_issued": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "fact_explanation",
+              "sentence_starter",
+              "partial_correction",
+              "complete_example"
+            ]
+          },
+          "maxItems": 4,
+          "uniqueItems": true
+        },
+        "retry": {
+          "$ref": "#/$defs/LegacyInferenceRetry"
+        },
+        "generation": {
+          "$ref": "#/$defs/LegacyInferenceFeedbackGeneration"
+        },
+        "focus_fact_refs": {
+          "type": "array",
+          "maxItems": 4,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          }
+        },
+        "retry_outcome": {
+          "anyOf": [
+            {
+              "type": "string",
+              "enum": [
+                "improved",
+                "unchanged",
+                "unassessable"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "prepared_supports": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/LegacyCommonSupportArtifact"
+          },
+          "minItems": 0,
+          "maxItems": 4,
+          "uniqueItems": true
+        },
+        "english_attempt_status": {
+          "$ref": "#/$defs/LegacyCommonEnglishAttemptStatus"
+        }
+      },
+      "required": [
+        "attempt_id",
+        "content_ref",
+        "judgement",
+        "focus",
+        "feedback_ko",
+        "evidence_refs",
+        "correction",
+        "example_sentence",
+        "support_issued",
+        "retry",
+        "generation",
+        "focus_fact_refs",
+        "retry_outcome",
+        "prepared_supports",
+        "english_attempt_status"
+      ],
+      "description": "Durable semantic feedback shared by personal history and inference GET; no transient presentation context or stale lesson snapshot. Read current LessonState separately. support_issued/prepared_supports record prepared output components, not delivered help or prior-example status. Renderer binds every full example to an exact immutable support artifact and question, including examples embedded in feedback. Actual delivery uses the presentation ticket/observation protocol; generic feedback ACK is separate. Server derives English status from evidence, never from normalized text alone. Non-English/unverified is held via unassessable; no valid anchor/English success and a held retry preserves prior first/content_success with retry_outcome null. Verified English with unknown form can content-judge without form correction.",
+      "allOf": [
+        {
+          "if": {
+            "anyOf": [
+              {
+                "properties": {
+                  "example_sentence": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "example_sentence"
+                ]
+              },
+              {
+                "properties": {
+                  "support_issued": {
+                    "contains": {
+                      "const": "complete_example"
+                    }
+                  }
+                },
+                "required": [
+                  "support_issued"
+                ]
+              }
+            ]
+          },
+          "then": {
+            "properties": {
+              "prepared_supports": {
+                "contains": {
+                  "properties": {
+                    "kind": {
+                      "const": "complete_example"
+                    }
+                  },
+                  "required": [
+                    "kind"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "english_attempt_status": {
+                "enum": [
+                  "not_english",
+                  "unverified"
+                ]
+              }
+            },
+            "required": [
+              "english_attempt_status"
+            ]
+          },
+          "then": {
+            "properties": {
+              "judgement": {
+                "const": "unassessable"
+              },
+              "focus": {
+                "const": "recognition"
+              },
+              "correction": {
+                "type": "null"
+              },
+              "example_sentence": {
+                "type": "null"
+              },
+              "retry_outcome": {
+                "type": "null"
+              },
+              "retry": {
+                "properties": {
+                  "suggested": {
+                    "const": false
+                  },
+                  "mode": {
+                    "const": "none"
+                  },
+                  "prompt_text": {
+                    "type": "null"
+                  }
+                }
+              },
+              "generation": {
+                "properties": {
+                  "mode": {
+                    "const": "input_gate"
+                  }
+                }
+              },
+              "prepared_supports": {
+                "maxItems": 0
+              },
+              "support_issued": {
+                "maxItems": 0
+              }
+            }
+          }
+        }
+      ]
+    },
+    "LegacyInferencePracticeContentRef": {
+      "$ref": "#/$defs/LegacyCommonPracticeContentRef"
+    },
+    "LegacyCommonPracticeContentRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "article_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "bundle_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "source_snapshot_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "listening_mode": {
+          "type": "string",
+          "enum": [
+            "original_full",
+            "briefing"
+          ]
+        },
+        "listening_script_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "task_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "basic_question_version_id": {
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "required": [
+        "article_id",
+        "bundle_id",
+        "source_snapshot_id",
+        "listening_mode",
+        "listening_script_id",
+        "task_id",
+        "basic_question_version_id"
+      ],
+      "description": "Mode/script-specific task plus the canonical basic-question version. Server verifies article/snapshot/bundle/script/task/question mappings; caller IDs grant no authority."
+    },
+    "LegacyInferenceCorrection": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "start_cp": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "end_cp": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "source_fragment": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 240
+        },
+        "replacement": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 240
+        }
+      },
+      "required": [
+        "start_cp",
+        "end_cp",
+        "source_fragment",
+        "replacement"
+      ],
+      "description": "Unicode code point offsets, end exclusive. Fragment must equal the submitted answer slice; replacement changes only one confirmed form."
+    },
+    "LegacyInferenceRetry": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "suggested": {
+          "type": "boolean"
+        },
+        "prompt_text": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 500
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "prompt_language": {
+          "type": "string",
+          "enum": [
+            "ko",
+            "en"
+          ]
+        },
+        "mode": {
+          "type": "string",
+          "enum": [
+            "none",
+            "supplement",
+            "rephrase"
+          ]
+        }
+      },
+      "required": [
+        "suggested",
+        "prompt_text",
+        "prompt_language",
+        "mode"
+      ]
+    },
+    "LegacyInferenceFeedbackGeneration": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "mode": {
+          "type": "string",
+          "enum": [
+            "fixture",
+            "live",
+            "input_gate"
+          ]
+        },
+        "model_revision": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 160
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "prompt_version": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 80
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "validator_version": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "rubric_version": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        }
+      },
+      "required": [
+        "mode",
+        "model_revision",
+        "prompt_version",
+        "validator_version",
+        "rubric_version"
+      ],
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "mode": {
+                "const": "input_gate"
+              }
+            },
+            "required": [
+              "mode"
+            ]
+          },
+          "then": {
+            "properties": {
+              "model_revision": {
+                "type": "null"
+              },
+              "prompt_version": {
+                "type": "null"
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "model_revision": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 160
+              },
+              "prompt_version": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 80
+              }
+            }
+          }
+        }
+      ],
+      "description": "input_gate is a deterministic held-input response, with no model invocation and null model/prompt revisions; validator/rubric revisions remain actual configured values. fixture/live continue their original provenance meaning."
+    },
+    "LegacyCommonSupportArtifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "support_ref": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "kind": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LegacyCommonHelpKind"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "text": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 600
+        },
+        "text_hash": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "origin": {
+          "type": "string",
+          "enum": [
+            "published_task",
+            "validated_feedback"
+          ]
+        },
+        "feedback_attempt_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "role": {
+          "type": "string",
+          "enum": [
+            "question_meaning",
+            "core_explanation",
+            "simple_explanation",
+            "sentence_starter",
+            "partial_correction",
+            "complete_example"
+          ]
+        },
+        "language": {
+          "type": "string",
+          "enum": [
+            "ko",
+            "en",
+            "mixed"
+          ]
+        }
+      },
+      "required": [
+        "support_ref",
+        "kind",
+        "text",
+        "text_hash",
+        "origin",
+        "feedback_attempt_id",
+        "role",
+        "language"
+      ],
+      "description": "Prepared, immutable reviewed output component. Not evidence of received help. Exact text/hash is bound to the question/task; full examples cannot be hidden in untracked generic feedback. Role/language are explicit and do not come from ref suffixes/text detection. kind is a metric HelpKind, nullable only for question_meaning; null still records actual help/ref/role and never means no help. Default question_meaning/core_explanation is ko; an explicit response-language change uses an approved matching artifact, never silent replacement.",
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "origin": {
+                "const": "published_task"
+              }
+            },
+            "required": [
+              "origin"
+            ]
+          },
+          "then": {
+            "properties": {
+              "feedback_attempt_id": {
+                "type": "null"
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "feedback_attempt_id": {
+                "type": "string",
+                "format": "uuid"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "role": {
+                "const": "question_meaning"
+              }
+            },
+            "required": [
+              "role"
+            ]
+          },
+          "then": {
+            "properties": {
+              "kind": {
+                "type": "null"
+              },
+              "language": {
+                "enum": [
+                  "ko",
+                  "en"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "role": {
+                "const": "core_explanation"
+              }
+            },
+            "required": [
+              "role"
+            ]
+          },
+          "then": {
+            "properties": {
+              "kind": {
+                "const": "fact_explanation"
+              },
+              "language": {
+                "enum": [
+                  "ko",
+                  "en"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "role": {
+                "const": "simple_explanation"
+              }
+            },
+            "required": [
+              "role"
+            ]
+          },
+          "then": {
+            "properties": {
+              "kind": {
+                "const": "fact_explanation"
+              },
+              "language": {
+                "enum": [
+                  "en"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "role": {
+                "const": "sentence_starter"
+              }
+            },
+            "required": [
+              "role"
+            ]
+          },
+          "then": {
+            "properties": {
+              "kind": {
+                "const": "sentence_starter"
+              },
+              "language": {
+                "enum": [
+                  "en"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "role": {
+                "const": "partial_correction"
+              }
+            },
+            "required": [
+              "role"
+            ]
+          },
+          "then": {
+            "properties": {
+              "kind": {
+                "const": "partial_correction"
+              },
+              "language": {
+                "enum": [
+                  "ko",
+                  "en",
+                  "mixed"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "role": {
+                "const": "complete_example"
+              }
+            },
+            "required": [
+              "role"
+            ]
+          },
+          "then": {
+            "properties": {
+              "kind": {
+                "const": "complete_example"
+              },
+              "language": {
+                "enum": [
+                  "en"
+                ]
+              }
+            }
+          }
+        }
+      ]
+    },
+    "LegacyCommonHelpKind": {
+      "type": "string",
+      "enum": [
+        "fact_explanation",
+        "sentence_starter",
+        "partial_correction",
+        "complete_example"
+      ]
+    },
+    "LegacyCommonEnglishAttemptStatus": {
+      "type": "string",
+      "enum": [
+        "verified_english",
+        "not_english",
+        "unverified"
+      ],
+      "description": "Read-only server-derived eligibility from validated original-language evidence, independent of content judgement and form fidelity. English-looking normalized text is not proof."
+    },
+    "AssessmentFeedback6": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "attempt_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "content_ref": {
+          "$ref": "#/$defs/Source6InferencePracticeContentRef"
+        },
+        "judgement": {
+          "type": "string",
+          "enum": [
+            "sufficient",
+            "needs_more",
+            "factually_incorrect",
+            "unassessable"
+          ]
+        },
+        "focus": {
+          "type": "string",
+          "enum": [
+            "none",
+            "fact",
+            "missing_fact",
+            "language_form",
+            "recognition"
+          ]
+        },
+        "feedback_ko": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 600
+        },
+        "evidence_refs": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 160
+          },
+          "maxItems": 8,
+          "uniqueItems": true
+        },
+        "correction": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Source6InferenceCorrection"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "example_sentence": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 500
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "support_issued": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "fact_explanation",
+              "sentence_starter",
+              "partial_correction",
+              "complete_example"
+            ]
+          },
+          "maxItems": 4,
+          "uniqueItems": true
+        },
+        "retry": {
+          "$ref": "#/$defs/Source6InferenceRetry"
+        },
+        "generation": {
+          "$ref": "#/$defs/Source6InferenceFeedbackGeneration"
+        },
+        "focus_fact_refs": {
+          "type": "array",
+          "maxItems": 4,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          }
+        },
+        "retry_outcome": {
+          "anyOf": [
+            {
+              "type": "string",
+              "enum": [
+                "improved",
+                "unchanged",
+                "unassessable"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "prepared_supports": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Source6CommonSupportArtifact"
+          },
+          "minItems": 0,
+          "maxItems": 4,
+          "uniqueItems": true
+        },
+        "english_attempt_status": {
+          "$ref": "#/$defs/Source6CommonEnglishAttemptStatus"
+        }
+      },
+      "required": [
+        "attempt_id",
+        "content_ref",
+        "judgement",
+        "focus",
+        "feedback_ko",
+        "evidence_refs",
+        "correction",
+        "example_sentence",
+        "support_issued",
+        "retry",
+        "generation",
+        "focus_fact_refs",
+        "retry_outcome",
+        "prepared_supports",
+        "english_attempt_status"
+      ],
+      "description": "Durable semantic feedback shared by personal history and inference GET; no transient presentation context or stale lesson snapshot. Read current LessonState separately. support_issued/prepared_supports record prepared output components, not delivered help or prior-example status. Renderer binds every full example to an exact immutable support artifact and question, including examples embedded in feedback. Actual delivery uses the presentation ticket/observation protocol; generic feedback ACK is separate. Server derives English status from evidence, never from normalized text alone. Non-English/unverified is held via unassessable; no valid anchor/English success and a held retry preserves prior first/content_success with retry_outcome null. Verified English with unknown form can content-judge without form correction.",
+      "allOf": [
+        {
+          "if": {
+            "anyOf": [
+              {
+                "properties": {
+                  "example_sentence": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "example_sentence"
+                ]
+              },
+              {
+                "properties": {
+                  "support_issued": {
+                    "contains": {
+                      "const": "complete_example"
+                    }
+                  }
+                },
+                "required": [
+                  "support_issued"
+                ]
+              }
+            ]
+          },
+          "then": {
+            "properties": {
+              "prepared_supports": {
+                "contains": {
+                  "properties": {
+                    "kind": {
+                      "const": "complete_example"
+                    }
+                  },
+                  "required": [
+                    "kind"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "english_attempt_status": {
+                "enum": [
+                  "not_english",
+                  "unverified"
+                ]
+              }
+            },
+            "required": [
+              "english_attempt_status"
+            ]
+          },
+          "then": {
+            "properties": {
+              "judgement": {
+                "const": "unassessable"
+              },
+              "focus": {
+                "const": "recognition"
+              },
+              "correction": {
+                "type": "null"
+              },
+              "example_sentence": {
+                "type": "null"
+              },
+              "retry_outcome": {
+                "type": "null"
+              },
+              "retry": {
+                "properties": {
+                  "suggested": {
+                    "const": false
+                  },
+                  "mode": {
+                    "const": "none"
+                  },
+                  "prompt_text": {
+                    "type": "null"
+                  }
+                }
+              },
+              "generation": {
+                "properties": {
+                  "mode": {
+                    "const": "input_gate"
+                  }
+                }
+              },
+              "prepared_supports": {
+                "maxItems": 0
+              },
+              "support_issued": {
+                "maxItems": 0
+              }
+            }
+          }
+        }
+      ]
+    },
+    "Source6InferencePracticeContentRef": {
+      "$ref": "#/$defs/Source6PracticeContentRef6"
+    },
+    "Source6InferenceCorrection": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "start_cp": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "end_cp": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "source_fragment": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 240
+        },
+        "replacement": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 240
+        }
+      },
+      "required": [
+        "start_cp",
+        "end_cp",
+        "source_fragment",
+        "replacement"
+      ],
+      "description": "Unicode code point offsets, end exclusive. Fragment must equal the submitted answer slice; replacement changes only one confirmed form."
+    },
+    "Source6InferenceRetry": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "suggested": {
+          "type": "boolean"
+        },
+        "prompt_text": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 500
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "prompt_language": {
+          "type": "string",
+          "enum": [
+            "ko",
+            "en"
+          ]
+        },
+        "mode": {
+          "type": "string",
+          "enum": [
+            "none",
+            "supplement",
+            "rephrase"
+          ]
+        }
+      },
+      "required": [
+        "suggested",
+        "prompt_text",
+        "prompt_language",
+        "mode"
+      ]
+    },
+    "Source6InferenceFeedbackGeneration": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "mode": {
+          "type": "string",
+          "enum": [
+            "fixture",
+            "live",
+            "input_gate"
+          ]
+        },
+        "model_revision": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 160
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "prompt_version": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 80
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "validator_version": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "rubric_version": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        }
+      },
+      "required": [
+        "mode",
+        "model_revision",
+        "prompt_version",
+        "validator_version",
+        "rubric_version"
+      ],
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "mode": {
+                "const": "input_gate"
+              }
+            },
+            "required": [
+              "mode"
+            ]
+          },
+          "then": {
+            "properties": {
+              "model_revision": {
+                "type": "null"
+              },
+              "prompt_version": {
+                "type": "null"
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "model_revision": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 160
+              },
+              "prompt_version": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 80
+              }
+            }
+          }
+        }
+      ],
+      "description": "input_gate is a deterministic held-input response, with no model invocation and null model/prompt revisions; validator/rubric revisions remain actual configured values. fixture/live continue their original provenance meaning."
+    },
+    "Source6CommonSupportArtifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "support_ref": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "kind": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Source6CommonHelpKind"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "text": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 600
+        },
+        "text_hash": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "origin": {
+          "type": "string",
+          "enum": [
+            "published_task",
+            "validated_feedback"
+          ]
+        },
+        "feedback_attempt_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "role": {
+          "type": "string",
+          "enum": [
+            "question_meaning",
+            "core_explanation",
+            "simple_explanation",
+            "sentence_starter",
+            "partial_correction",
+            "complete_example"
+          ]
+        },
+        "language": {
+          "type": "string",
+          "enum": [
+            "ko",
+            "en",
+            "mixed"
+          ]
+        }
+      },
+      "required": [
+        "support_ref",
+        "kind",
+        "text",
+        "text_hash",
+        "origin",
+        "feedback_attempt_id",
+        "role",
+        "language"
+      ],
+      "description": "Prepared, immutable reviewed output component. Not evidence of received help. Exact text/hash is bound to the question/task; full examples cannot be hidden in untracked generic feedback. Role/language are explicit and do not come from ref suffixes/text detection. kind is a metric HelpKind, nullable only for question_meaning; null still records actual help/ref/role and never means no help. Default question_meaning/core_explanation is ko; an explicit response-language change uses an approved matching artifact, never silent replacement.",
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "origin": {
+                "const": "published_task"
+              }
+            },
+            "required": [
+              "origin"
+            ]
+          },
+          "then": {
+            "properties": {
+              "feedback_attempt_id": {
+                "type": "null"
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "feedback_attempt_id": {
+                "type": "string",
+                "format": "uuid"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "role": {
+                "const": "question_meaning"
+              }
+            },
+            "required": [
+              "role"
+            ]
+          },
+          "then": {
+            "properties": {
+              "kind": {
+                "type": "null"
+              },
+              "language": {
+                "enum": [
+                  "ko",
+                  "en"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "role": {
+                "const": "core_explanation"
+              }
+            },
+            "required": [
+              "role"
+            ]
+          },
+          "then": {
+            "properties": {
+              "kind": {
+                "const": "fact_explanation"
+              },
+              "language": {
+                "enum": [
+                  "ko",
+                  "en"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "role": {
+                "const": "simple_explanation"
+              }
+            },
+            "required": [
+              "role"
+            ]
+          },
+          "then": {
+            "properties": {
+              "kind": {
+                "const": "fact_explanation"
+              },
+              "language": {
+                "enum": [
+                  "en"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "role": {
+                "const": "sentence_starter"
+              }
+            },
+            "required": [
+              "role"
+            ]
+          },
+          "then": {
+            "properties": {
+              "kind": {
+                "const": "sentence_starter"
+              },
+              "language": {
+                "enum": [
+                  "en"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "role": {
+                "const": "partial_correction"
+              }
+            },
+            "required": [
+              "role"
+            ]
+          },
+          "then": {
+            "properties": {
+              "kind": {
+                "const": "partial_correction"
+              },
+              "language": {
+                "enum": [
+                  "ko",
+                  "en",
+                  "mixed"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "role": {
+                "const": "complete_example"
+              }
+            },
+            "required": [
+              "role"
+            ]
+          },
+          "then": {
+            "properties": {
+              "kind": {
+                "const": "complete_example"
+              },
+              "language": {
+                "enum": [
+                  "en"
+                ]
+              }
+            }
+          }
+        }
+      ]
+    },
+    "Source6CommonHelpKind": {
+      "type": "string",
+      "enum": [
+        "fact_explanation",
+        "sentence_starter",
+        "partial_correction",
+        "complete_example"
+      ]
+    },
+    "Source6CommonEnglishAttemptStatus": {
+      "type": "string",
+      "enum": [
+        "verified_english",
+        "not_english",
+        "unverified"
+      ],
+      "description": "Read-only server-derived eligibility from validated original-language evidence, independent of content judgement and form fidelity. English-looking normalized text is not proof."
+    },
+    "AssessmentFeedback": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/AssessmentFeedback5"
+        },
+        {
+          "$ref": "#/$defs/AssessmentFeedback6"
+        }
+      ],
+      "x-content-discriminator": "content_ref.source_kind"
+    },
+    "ErrorEnvelope": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "service_contract_version": {
+          "type": "integer",
+          "const": 1
+        },
+        "error": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "code": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 80
+            },
+            "retryable": {
+              "type": "boolean"
+            },
+            "current_version": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "code",
+            "retryable",
+            "current_version"
+          ]
+        }
+      },
+      "required": [
+        "service_contract_version",
+        "error"
+      ]
+    },
+    "AssessmentReviewRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "service_contract_version": {
+          "type": "integer",
+          "const": 1
+        },
+        "operation_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "profile_context": {
+          "$ref": "#/$defs/Source6CommonProfileContext"
+        },
+        "command": {
+          "type": "string",
+          "enum": [
+            "request",
+            "retry"
+          ]
+        },
+        "review_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "lesson_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "attempt_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "source_ref": {
+          "$ref": "#/$defs/Source6PracticeContentRef6"
+        },
+        "target_assessment_revision": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "target_assessment_hash": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "expected_review_version": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "client_context": {
+          "$ref": "#/$defs/Source6CommonClientContext"
+        },
+        "entry": {
+          "type": "string",
+          "enum": [
+            "parked_feedback",
+            "record",
+            "gleo"
+          ]
+        }
+      },
+      "required": [
+        "service_contract_version",
+        "operation_id",
+        "profile_context",
+        "command",
+        "review_id",
+        "lesson_id",
+        "attempt_id",
+        "source_ref",
+        "target_assessment_revision",
+        "target_assessment_hash",
+        "expected_review_version",
+        "client_context",
+        "entry"
+      ],
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "command": {
+                "type": "string",
+                "const": "request"
+              }
+            },
+            "required": [
+              "command"
+            ]
+          },
+          "then": {
+            "properties": {
+              "expected_review_version": {
+                "type": "integer",
+                "const": 0
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "expected_review_version": {
+                "type": "integer",
+                "minimum": 1
+              }
+            }
+          }
+        }
+      ]
+    },
+    "ReviewAdmissionReceipt": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "review_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "command": {
+          "type": "string",
+          "enum": [
+            "request",
+            "retry"
+          ]
+        },
+        "accepted_version": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "accepted_at": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "(?:Z|\\+00:00)$"
+        },
+        "disposition": {
+          "type": "string",
+          "enum": [
+            "created",
+            "retried",
+            "existing"
+          ]
+        }
+      },
+      "required": [
+        "review_id",
+        "command",
+        "accepted_version",
+        "accepted_at",
+        "disposition"
+      ]
+    },
+    "AssessmentReviewAdmissionResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "service_contract_version": {
+          "type": "integer",
+          "const": 1
+        },
+        "operation_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "profile_context": {
+          "$ref": "#/$defs/Source6CommonProfileContext"
+        },
+        "receipt": {
+          "$ref": "#/$defs/ReviewAdmissionReceipt"
+        }
+      },
+      "required": [
+        "service_contract_version",
+        "operation_id",
+        "profile_context",
+        "receipt"
+      ]
+    },
+    "AssessmentReviewQuery": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "service_contract_version": {
+          "type": "integer",
+          "const": 1
+        },
+        "lookup": {
+          "type": "string",
+          "enum": [
+            "review",
+            "attempt"
+          ]
+        },
+        "profile_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "privacy_epoch": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "service_contract_version",
+        "lookup",
+        "profile_id",
+        "privacy_epoch"
+      ],
+      "description": "profile_id/privacy_epoch are expected protected context, as in preparation GET; JWT binding remains authority. target_id is path only."
+    },
+    "AssessmentReviewView": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "review_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "lesson_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "attempt_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "source_ref": {
+          "$ref": "#/$defs/Source6PracticeContentRef6"
+        },
+        "target_assessment_revision": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "target_assessment_hash": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "basis_hash": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "version": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "state": {
+          "type": "string",
+          "enum": [
+            "queued",
+            "running",
+            "pending",
+            "kept",
+            "corrected",
+            "held",
+            "failed_retryable",
+            "failed_final"
+          ]
+        },
+        "requested_at": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "(?:Z|\\+00:00)$"
+        },
+        "updated_at": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "(?:Z|\\+00:00)$"
+        },
+        "completed_at": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "(?:Z|\\+00:00)$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "outcome": {
+          "anyOf": [
+            {
+              "type": "string",
+              "enum": [
+                "kept",
+                "corrected",
+                "held"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "reason_code": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 80
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "reason_ko": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 600
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "correction_event_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "retry_after": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "(?:Z|\\+00:00)$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "can_retry": {
+          "type": "boolean"
+        },
+        "effective_assessment_revision": {
+          "type": "integer",
+          "minimum": 1
+        }
+      },
+      "required": [
+        "review_id",
+        "lesson_id",
+        "attempt_id",
+        "source_ref",
+        "target_assessment_revision",
+        "target_assessment_hash",
+        "basis_hash",
+        "version",
+        "state",
+        "requested_at",
+        "updated_at",
+        "completed_at",
+        "outcome",
+        "reason_code",
+        "reason_ko",
+        "correction_event_id",
+        "retry_after",
+        "can_retry",
+        "effective_assessment_revision"
+      ],
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "state": {
+                "type": "string",
+                "const": "queued"
+              }
+            },
+            "required": [
+              "state"
+            ]
+          },
+          "then": {
+            "properties": {
+              "outcome": {
+                "type": "null"
+              },
+              "completed_at": {
+                "type": "null"
+              },
+              "correction_event_id": {
+                "type": "null"
+              },
+              "can_retry": {
+                "type": "boolean",
+                "const": false
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "state": {
+                "type": "string",
+                "const": "running"
+              }
+            },
+            "required": [
+              "state"
+            ]
+          },
+          "then": {
+            "properties": {
+              "outcome": {
+                "type": "null"
+              },
+              "completed_at": {
+                "type": "null"
+              },
+              "correction_event_id": {
+                "type": "null"
+              },
+              "can_retry": {
+                "type": "boolean",
+                "const": false
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "state": {
+                "type": "string",
+                "const": "pending"
+              }
+            },
+            "required": [
+              "state"
+            ]
+          },
+          "then": {
+            "properties": {
+              "outcome": {
+                "type": "null"
+              },
+              "completed_at": {
+                "type": "null"
+              },
+              "correction_event_id": {
+                "type": "null"
+              },
+              "can_retry": {
+                "type": "boolean",
+                "const": false
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "state": {
+                "type": "string",
+                "const": "kept"
+              }
+            },
+            "required": [
+              "state"
+            ]
+          },
+          "then": {
+            "properties": {
+              "outcome": {
+                "type": "string",
+                "const": "kept"
+              },
+              "completed_at": {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "(?:Z|\\+00:00)$"
+              },
+              "reason_code": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 80
+              },
+              "reason_ko": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 600
+              },
+              "correction_event_id": {
+                "type": "null"
+              },
+              "can_retry": {
+                "type": "boolean",
+                "const": false
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "state": {
+                "type": "string",
+                "const": "corrected"
+              }
+            },
+            "required": [
+              "state"
+            ]
+          },
+          "then": {
+            "properties": {
+              "outcome": {
+                "type": "string",
+                "const": "corrected"
+              },
+              "completed_at": {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "(?:Z|\\+00:00)$"
+              },
+              "reason_code": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 80
+              },
+              "reason_ko": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 600
+              },
+              "correction_event_id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "can_retry": {
+                "type": "boolean",
+                "const": false
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "state": {
+                "type": "string",
+                "const": "held"
+              }
+            },
+            "required": [
+              "state"
+            ]
+          },
+          "then": {
+            "properties": {
+              "outcome": {
+                "type": "string",
+                "const": "held"
+              },
+              "completed_at": {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "(?:Z|\\+00:00)$"
+              },
+              "reason_code": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 80
+              },
+              "reason_ko": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 600
+              },
+              "correction_event_id": {
+                "type": "null"
+              },
+              "can_retry": {
+                "type": "boolean",
+                "const": false
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "state": {
+                "type": "string",
+                "const": "failed_retryable"
+              }
+            },
+            "required": [
+              "state"
+            ]
+          },
+          "then": {
+            "properties": {
+              "outcome": {
+                "type": "null"
+              },
+              "completed_at": {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "(?:Z|\\+00:00)$"
+              },
+              "reason_code": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 80
+              },
+              "reason_ko": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 600
+              },
+              "correction_event_id": {
+                "type": "null"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "state": {
+                "type": "string",
+                "const": "failed_final"
+              }
+            },
+            "required": [
+              "state"
+            ]
+          },
+          "then": {
+            "properties": {
+              "outcome": {
+                "type": "null"
+              },
+              "completed_at": {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "(?:Z|\\+00:00)$"
+              },
+              "reason_code": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 80
+              },
+              "reason_ko": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 600
+              },
+              "correction_event_id": {
+                "type": "null"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "state": {
+                "type": "string",
+                "const": "failed_final"
+              }
+            },
+            "required": [
+              "state"
+            ]
+          },
+          "then": {
+            "properties": {
+              "can_retry": {
+                "type": "boolean",
+                "const": false
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "can_retry": {
+                "const": true
+              }
+            },
+            "required": [
+              "can_retry"
+            ]
+          },
+          "then": {
+            "properties": {
+              "state": {
+                "type": "string",
+                "const": "failed_retryable"
+              },
+              "retry_after": {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "(?:Z|\\+00:00)$"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "EffectiveAssessment": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "lesson_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "attempt_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "assessment_revision": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "basis_assessment_hash": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "original_feedback_hash": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "effective_feedback_hash": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "review_status": {
+          "type": "string",
+          "enum": [
+            "none",
+            "in_review",
+            "kept",
+            "corrected",
+            "held",
+            "failed"
+          ]
+        },
+        "evaluation_status": {
+          "type": "string",
+          "enum": [
+            "valid",
+            "under_review",
+            "withheld"
+          ]
+        },
+        "reason_code": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 80
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "feedback_format": {
+          "anyOf": [
+            {
+              "type": "string",
+              "enum": [
+                "legacy5",
+                "source6"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "feedback": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AssessmentFeedback"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "correction_event_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "projection_revision": {
+          "type": "integer",
+          "minimum": 1
+        }
+      },
+      "required": [
+        "lesson_id",
+        "attempt_id",
+        "assessment_revision",
+        "basis_assessment_hash",
+        "original_feedback_hash",
+        "effective_feedback_hash",
+        "review_status",
+        "evaluation_status",
+        "reason_code",
+        "feedback_format",
+        "feedback",
+        "correction_event_id",
+        "projection_revision"
+      ],
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "evaluation_status": {
+                "type": "string",
+                "const": "valid"
+              }
+            },
+            "required": [
+              "evaluation_status"
+            ]
+          },
+          "then": {
+            "properties": {
+              "effective_feedback_hash": {
+                "type": "string",
+                "pattern": "^[a-f0-9]{64}$"
+              },
+              "feedback_format": {
+                "type": "string",
+                "enum": [
+                  "legacy5",
+                  "source6"
+                ]
+              },
+              "feedback": {
+                "$ref": "#/$defs/AssessmentFeedback"
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "effective_feedback_hash": {
+                "type": "null"
+              },
+              "feedback_format": {
+                "type": "null"
+              },
+              "feedback": {
+                "type": "null"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "feedback_format": {
+                "type": "string",
+                "const": "legacy5"
+              }
+            },
+            "required": [
+              "feedback_format"
+            ]
+          },
+          "then": {
+            "properties": {
+              "feedback": {
+                "$ref": "#/$defs/AssessmentFeedback5"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "feedback_format": {
+                "type": "string",
+                "const": "source6"
+              }
+            },
+            "required": [
+              "feedback_format"
+            ]
+          },
+          "then": {
+            "properties": {
+              "feedback": {
+                "$ref": "#/$defs/AssessmentFeedback6"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "review_status": {
+                "type": "string",
+                "const": "corrected"
+              }
+            },
+            "required": [
+              "review_status"
+            ]
+          },
+          "then": {
+            "properties": {
+              "correction_event_id": {
+                "type": "string",
+                "format": "uuid"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "AssessmentReviewResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "service_contract_version": {
+          "type": "integer",
+          "const": 1
+        },
+        "profile_context": {
+          "$ref": "#/$defs/Source6CommonProfileContext"
+        },
+        "review": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AssessmentReviewView"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "effective_assessment": {
+          "$ref": "#/$defs/EffectiveAssessment"
+        }
+      },
+      "required": [
+        "service_contract_version",
+        "profile_context",
+        "review",
+        "effective_assessment"
+      ]
+    },
+    "CorrectionEvent": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "correction_event_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "profile_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "privacy_epoch": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "lesson_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "attempt_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "review_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "trigger": {
+          "type": "string",
+          "enum": [
+            "user_review",
+            "validated_material_error"
+          ]
+        },
+        "from_assessment_revision": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "to_assessment_revision": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "prior_feedback_hash": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "new_feedback_hash": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "basis_hash": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "reason_code": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "reason_ko": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 600
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "(?:Z|\\+00:00)$"
+        },
+        "material_correction_ref": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "evidence_revision": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "projection_revision": {
+          "type": "integer",
+          "minimum": 1
+        }
+      },
+      "required": [
+        "correction_event_id",
+        "profile_id",
+        "privacy_epoch",
+        "lesson_id",
+        "attempt_id",
+        "review_id",
+        "trigger",
+        "from_assessment_revision",
+        "to_assessment_revision",
+        "prior_feedback_hash",
+        "new_feedback_hash",
+        "basis_hash",
+        "reason_code",
+        "reason_ko",
+        "created_at",
+        "material_correction_ref",
+        "evidence_revision",
+        "projection_revision"
+      ],
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "trigger": {
+                "type": "string",
+                "const": "user_review"
+              }
+            },
+            "required": [
+              "trigger"
+            ]
+          },
+          "then": {
+            "properties": {
+              "review_id": {
+                "type": "string",
+                "format": "uuid"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "trigger": {
+                "type": "string",
+                "const": "validated_material_error"
+              }
+            },
+            "required": [
+              "trigger"
+            ]
+          },
+          "then": {
+            "properties": {
+              "material_correction_ref": {
+                "type": "string",
+                "format": "uuid"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "AdmissionReceipt": {
+      "$ref": "#/$defs/AssessmentReviewAdmissionResponse"
+    },
+    "ReadQuery": {
+      "$ref": "#/$defs/AssessmentReviewQuery"
+    },
+    "ReviewResponse": {
+      "$ref": "#/$defs/AssessmentReviewResponse"
+    }
+  }
+}

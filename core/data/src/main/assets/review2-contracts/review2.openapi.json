@@ -1,0 +1,412 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Drive English review2 selection/context",
+    "version": "1.0.0"
+  },
+  "paths": {
+    "/v2/listening/next": {
+      "post": {
+        "operationId": "selectReviewNext2",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Stored data only; never an output grant.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "review2.schema.json#/$defs/ReviewNextResponse2"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Typed failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "review2.schema.json#/$defs/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Typed failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "review2.schema.json#/$defs/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Typed failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "review2.schema.json#/$defs/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Typed failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "review2.schema.json#/$defs/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Typed failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "review2.schema.json#/$defs/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Typed failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "review2.schema.json#/$defs/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Typed failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "review2.schema.json#/$defs/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Typed failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "review2.schema.json#/$defs/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "review2.schema.json#/$defs/ReviewNextRequest2"
+              }
+            }
+          }
+        },
+        "x-contract-negotiation": {
+          "in": "body",
+          "name": "review_contract_version",
+          "const": 2,
+          "legacy": "source6 unchanged"
+        },
+        "x-body-limit-bytes": 16384
+      }
+    },
+    "/v1/review/listening-contexts/{selection_id}": {
+      "get": {
+        "operationId": "readListeningContext2",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "selection_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "review_contract_version",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "const": 2
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Stored data only; never an output grant.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "review2.schema.json#/$defs/ListeningContextResponse2"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Typed failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "review2.schema.json#/$defs/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Typed failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "review2.schema.json#/$defs/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Typed failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "review2.schema.json#/$defs/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Typed failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "review2.schema.json#/$defs/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Typed failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "review2.schema.json#/$defs/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Typed failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "review2.schema.json#/$defs/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Typed failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "review2.schema.json#/$defs/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Typed failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "review2.schema.json#/$defs/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "x-contract-negotiation": {
+          "in": "query",
+          "name": "review_contract_version",
+          "const": 2
+        }
+      }
+    },
+    "/v1/review/listening-contexts/{selection_id}/commands": {
+      "post": {
+        "operationId": "commandListeningContext2",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "selection_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Stored data only; never an output grant.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "review2.schema.json#/$defs/ReviewCommandResponse2"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Typed failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "review2.schema.json#/$defs/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Typed failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "review2.schema.json#/$defs/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Typed failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "review2.schema.json#/$defs/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Typed failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "review2.schema.json#/$defs/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Typed failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "review2.schema.json#/$defs/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Typed failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "review2.schema.json#/$defs/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Typed failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "review2.schema.json#/$defs/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Typed failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "review2.schema.json#/$defs/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "review2.schema.json#/$defs/ReviewCommandRequest2"
+              }
+            }
+          }
+        },
+        "x-contract-negotiation": {
+          "in": "body",
+          "name": "review_contract_version",
+          "const": 2
+        },
+        "x-body-limit-bytes": 16384
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "BearerAuth": {
+        "type": "http",
+        "scheme": "bearer"
+      }
+    }
+  }
+}

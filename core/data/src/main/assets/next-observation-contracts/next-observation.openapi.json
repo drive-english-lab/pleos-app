@@ -1,0 +1,432 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Drive English existing next operation observation",
+    "version": "1.0.0"
+  },
+  "paths": {
+    "/v2/listening/next/observations/{operation_id}": {
+      "get": {
+        "operationId": "observeExistingNextOperation1",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "operation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "profile_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "privacy_epoch",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "review_contract_version",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "enum": [
+                2,
+                3
+              ]
+            }
+          },
+          {
+            "name": "request_hash",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$",
+              "minLength": 64,
+              "maxLength": 64
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Unchanged original protocol response; version must match query.",
+            "headers": {
+              "X-Pleos-Observation-Version": {
+                "description": "Single exact value from the actual dedicated read helper; not an execution grant.",
+                "schema": {
+                  "$ref": "next-observation.schema.json#/$defs/ObservationVersion1"
+                },
+                "x-single-value": true
+              },
+              "X-Pleos-Observation-Backend-Revision": {
+                "description": "Single exact value from the actual dedicated read helper; not an execution grant.",
+                "schema": {
+                  "$ref": "next-observation.schema.json#/$defs/ObservationBackendRevision1"
+                },
+                "x-single-value": true
+              },
+              "X-Pleos-Observation-Result": {
+                "description": "Single exact value from the actual dedicated read helper; not an execution grant.",
+                "schema": {
+                  "$ref": "next-observation.schema.json#/$defs/ObservationResult1"
+                },
+                "x-single-value": true
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "review2.schema.json#/$defs/ReviewNextResponse2"
+                    },
+                    {
+                      "$ref": "review3.schema.json#/$defs/ReviewNextResponse3"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Typed failure. Fresh headers only with actual dedicated-helper proof.",
+            "headers": {
+              "X-Pleos-Observation-Version": {
+                "description": "Single exact value from the actual dedicated read helper; not an execution grant.",
+                "schema": {
+                  "$ref": "next-observation.schema.json#/$defs/ObservationVersion1"
+                },
+                "x-single-value": true
+              },
+              "X-Pleos-Observation-Backend-Revision": {
+                "description": "Single exact value from the actual dedicated read helper; not an execution grant.",
+                "schema": {
+                  "$ref": "next-observation.schema.json#/$defs/ObservationBackendRevision1"
+                },
+                "x-single-value": true
+              },
+              "X-Pleos-Observation-Result": {
+                "description": "Single exact value from the actual dedicated read helper; not an execution grant.",
+                "schema": {
+                  "$ref": "next-observation.schema.json#/$defs/ObservationResult1"
+                },
+                "x-single-value": true
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "next-observation.schema.json#/$defs/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Typed failure. Fresh headers only with actual dedicated-helper proof.",
+            "headers": {
+              "X-Pleos-Observation-Version": {
+                "description": "Single exact value from the actual dedicated read helper; not an execution grant.",
+                "schema": {
+                  "$ref": "next-observation.schema.json#/$defs/ObservationVersion1"
+                },
+                "x-single-value": true
+              },
+              "X-Pleos-Observation-Backend-Revision": {
+                "description": "Single exact value from the actual dedicated read helper; not an execution grant.",
+                "schema": {
+                  "$ref": "next-observation.schema.json#/$defs/ObservationBackendRevision1"
+                },
+                "x-single-value": true
+              },
+              "X-Pleos-Observation-Result": {
+                "description": "Single exact value from the actual dedicated read helper; not an execution grant.",
+                "schema": {
+                  "$ref": "next-observation.schema.json#/$defs/ObservationResult1"
+                },
+                "x-single-value": true
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "next-observation.schema.json#/$defs/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Typed failure. Fresh headers only with actual dedicated-helper proof.",
+            "headers": {
+              "X-Pleos-Observation-Version": {
+                "description": "Single exact value from the actual dedicated read helper; not an execution grant.",
+                "schema": {
+                  "$ref": "next-observation.schema.json#/$defs/ObservationVersion1"
+                },
+                "x-single-value": true
+              },
+              "X-Pleos-Observation-Backend-Revision": {
+                "description": "Single exact value from the actual dedicated read helper; not an execution grant.",
+                "schema": {
+                  "$ref": "next-observation.schema.json#/$defs/ObservationBackendRevision1"
+                },
+                "x-single-value": true
+              },
+              "X-Pleos-Observation-Result": {
+                "description": "Single exact value from the actual dedicated read helper; not an execution grant.",
+                "schema": {
+                  "$ref": "next-observation.schema.json#/$defs/ObservationResult1"
+                },
+                "x-single-value": true
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "next-observation.schema.json#/$defs/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "Typed failure. Fresh headers only with actual dedicated-helper proof.",
+            "headers": {
+              "X-Pleos-Observation-Version": {
+                "description": "Single exact value from the actual dedicated read helper; not an execution grant.",
+                "schema": {
+                  "$ref": "next-observation.schema.json#/$defs/ObservationVersion1"
+                },
+                "x-single-value": true
+              },
+              "X-Pleos-Observation-Backend-Revision": {
+                "description": "Single exact value from the actual dedicated read helper; not an execution grant.",
+                "schema": {
+                  "$ref": "next-observation.schema.json#/$defs/ObservationBackendRevision1"
+                },
+                "x-single-value": true
+              },
+              "X-Pleos-Observation-Result": {
+                "description": "Single exact value from the actual dedicated read helper; not an execution grant.",
+                "schema": {
+                  "$ref": "next-observation.schema.json#/$defs/ObservationResult1"
+                },
+                "x-single-value": true
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "next-observation.schema.json#/$defs/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Typed failure. Fresh headers only with actual dedicated-helper proof.",
+            "headers": {
+              "X-Pleos-Observation-Version": {
+                "description": "Single exact value from the actual dedicated read helper; not an execution grant.",
+                "schema": {
+                  "$ref": "next-observation.schema.json#/$defs/ObservationVersion1"
+                },
+                "x-single-value": true
+              },
+              "X-Pleos-Observation-Backend-Revision": {
+                "description": "Single exact value from the actual dedicated read helper; not an execution grant.",
+                "schema": {
+                  "$ref": "next-observation.schema.json#/$defs/ObservationBackendRevision1"
+                },
+                "x-single-value": true
+              },
+              "X-Pleos-Observation-Result": {
+                "description": "Single exact value from the actual dedicated read helper; not an execution grant.",
+                "schema": {
+                  "$ref": "next-observation.schema.json#/$defs/ObservationResult1"
+                },
+                "x-single-value": true
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "next-observation.schema.json#/$defs/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Typed failure. Fresh headers only with actual dedicated-helper proof.",
+            "headers": {
+              "X-Pleos-Observation-Version": {
+                "description": "Single exact value from the actual dedicated read helper; not an execution grant.",
+                "schema": {
+                  "$ref": "next-observation.schema.json#/$defs/ObservationVersion1"
+                },
+                "x-single-value": true
+              },
+              "X-Pleos-Observation-Backend-Revision": {
+                "description": "Single exact value from the actual dedicated read helper; not an execution grant.",
+                "schema": {
+                  "$ref": "next-observation.schema.json#/$defs/ObservationBackendRevision1"
+                },
+                "x-single-value": true
+              },
+              "X-Pleos-Observation-Result": {
+                "description": "Single exact value from the actual dedicated read helper; not an execution grant.",
+                "schema": {
+                  "$ref": "next-observation.schema.json#/$defs/ObservationResult1"
+                },
+                "x-single-value": true
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "next-observation.schema.json#/$defs/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Typed failure. Fresh headers only with actual dedicated-helper proof.",
+            "headers": {
+              "X-Pleos-Observation-Version": {
+                "description": "Single exact value from the actual dedicated read helper; not an execution grant.",
+                "schema": {
+                  "$ref": "next-observation.schema.json#/$defs/ObservationVersion1"
+                },
+                "x-single-value": true
+              },
+              "X-Pleos-Observation-Backend-Revision": {
+                "description": "Single exact value from the actual dedicated read helper; not an execution grant.",
+                "schema": {
+                  "$ref": "next-observation.schema.json#/$defs/ObservationBackendRevision1"
+                },
+                "x-single-value": true
+              },
+              "X-Pleos-Observation-Result": {
+                "description": "Single exact value from the actual dedicated read helper; not an execution grant.",
+                "schema": {
+                  "$ref": "next-observation.schema.json#/$defs/ObservationResult1"
+                },
+                "x-single-value": true
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "next-observation.schema.json#/$defs/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Typed failure. Fresh headers only with actual dedicated-helper proof.",
+            "headers": {
+              "X-Pleos-Observation-Version": {
+                "description": "Single exact value from the actual dedicated read helper; not an execution grant.",
+                "schema": {
+                  "$ref": "next-observation.schema.json#/$defs/ObservationVersion1"
+                },
+                "x-single-value": true
+              },
+              "X-Pleos-Observation-Backend-Revision": {
+                "description": "Single exact value from the actual dedicated read helper; not an execution grant.",
+                "schema": {
+                  "$ref": "next-observation.schema.json#/$defs/ObservationBackendRevision1"
+                },
+                "x-single-value": true
+              },
+              "X-Pleos-Observation-Result": {
+                "description": "Single exact value from the actual dedicated read helper; not an execution grant.",
+                "schema": {
+                  "$ref": "next-observation.schema.json#/$defs/ObservationResult1"
+                },
+                "x-single-value": true
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "next-observation.schema.json#/$defs/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Typed failure. Fresh headers only with actual dedicated-helper proof.",
+            "headers": {
+              "X-Pleos-Observation-Version": {
+                "description": "Single exact value from the actual dedicated read helper; not an execution grant.",
+                "schema": {
+                  "$ref": "next-observation.schema.json#/$defs/ObservationVersion1"
+                },
+                "x-single-value": true
+              },
+              "X-Pleos-Observation-Backend-Revision": {
+                "description": "Single exact value from the actual dedicated read helper; not an execution grant.",
+                "schema": {
+                  "$ref": "next-observation.schema.json#/$defs/ObservationBackendRevision1"
+                },
+                "x-single-value": true
+              },
+              "X-Pleos-Observation-Result": {
+                "description": "Single exact value from the actual dedicated read helper; not an execution grant.",
+                "schema": {
+                  "$ref": "next-observation.schema.json#/$defs/ObservationResult1"
+                },
+                "x-single-value": true
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "next-observation.schema.json#/$defs/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "x-unknown-query": "reject",
+        "x-request-body": "absent",
+        "x-no-post-fallback": true,
+        "x-observation-header-policy": {
+          "required_on_200": [
+            "X-Pleos-Observation-Version",
+            "X-Pleos-Observation-Backend-Revision",
+            "X-Pleos-Observation-Result"
+          ],
+          "result_on_200": "found",
+          "not_admitted_requires_status": 404,
+          "not_admitted_requires_code": "review_operation_not_admitted",
+          "unsupported_or_auth_error_has_no_fresh_proof": true
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "BearerAuth": {
+        "type": "http",
+        "scheme": "bearer"
+      }
+    }
+  }
+}

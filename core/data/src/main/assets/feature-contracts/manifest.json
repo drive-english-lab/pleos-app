@@ -1,0 +1,9 @@
+{
+  "common.schema.json": "25f1d860a8ebb949628d86b60edaac1caa1582a07c66b6ec7a08dda91f92f9ac",
+  "personal-data.openapi.json": "fbfa48801295f2a951e39ec82290d36410f93a47bed4e26008121cab4caae42f",
+  "inference.openapi.json": "84c074a343ee526baa16db711acee97082278f858da63509f833c2480499af3a",
+  "learning-progress.schema.json": "aa277bb7ed98fef642a2bb6b22dbb38035fea2082112206764c8e44308ecc113",
+  "learning-progress.openapi.json": "67ad64674140ae0a435f4c79896d13fcd64fbf57c032094608bb23e84098fe89",
+  "ai-learning.schema.json": "4297fbabfa251ecbd06e394f9eac73b154c8460dacf495d824af053e0f7dbf06",
+  "ai-learning.openapi.json": "afd417412c7df1213dafd61045ef48d979c4ab7afa6f436b889cba7f9e1e072d"
+}

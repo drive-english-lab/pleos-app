@@ -1,0 +1,3170 @@
+[
+  {
+    "document": "learning-progress.schema.json",
+    "pointer": "#/$defs/DailyPreferenceRequest",
+    "payload": {
+      "schema_version": "5",
+      "feature_contract_version": "1",
+      "operation_id": "10000000-0000-4000-8000-000000000001",
+      "profile_context": {
+        "profile_id": "10000000-0000-4000-8000-000000000002"
+      },
+      "expected_preference_version": 0,
+      "expected_choice_id": null,
+      "local_sequence": 1,
+      "choice": {
+        "choice_id": "10000000-0000-4000-8000-000000000003",
+        "decision": "listen_only",
+        "boundary": {
+          "status": "confirmed",
+          "selected_local_date": "2026-11-12",
+          "selected_zone_id": "Asia/Seoul",
+          "selected_at_utc": "2026-11-12T00:00:00Z",
+          "expires_at_utc": "2026-11-12T15:00:00Z",
+          "clock_evidence_ref": "fixture-original-clock-1"
+        }
+      }
+    },
+    "valid": true,
+    "label": "DailyPreferenceRequest:0"
+  },
+  {
+    "document": "learning-progress.schema.json",
+    "pointer": "#/$defs/DailyPreferenceRequest",
+    "payload": {
+      "schema_version": "5",
+      "feature_contract_version": "1",
+      "operation_id": "10000000-0000-4000-8000-000000000001",
+      "profile_context": {
+        "profile_id": "10000000-0000-4000-8000-000000000002"
+      },
+      "expected_preference_version": 0,
+      "expected_choice_id": null,
+      "local_sequence": 1,
+      "choice": {
+        "choice_id": "10000000-0000-4000-8000-000000000003",
+        "decision": "listen_only",
+        "boundary": {
+          "status": "confirmed",
+          "selected_local_date": "2026-11-12",
+          "selected_zone_id": "Asia/Seoul",
+          "selected_at_utc": "2026-11-12T00:00:00Z",
+          "expires_at_utc": "2026-11-12T15:00:00Z",
+          "clock_evidence_ref": "fixture-original-clock-1"
+        }
+      },
+      "unexpected": true
+    },
+    "valid": false,
+    "label": "DailyPreferenceRequest:0:extra"
+  },
+  {
+    "document": "learning-progress.schema.json",
+    "pointer": "#/$defs/DailyPreferenceRequest",
+    "payload": {
+      "feature_contract_version": "1",
+      "operation_id": "10000000-0000-4000-8000-000000000001",
+      "profile_context": {
+        "profile_id": "10000000-0000-4000-8000-000000000002"
+      },
+      "expected_preference_version": 0,
+      "expected_choice_id": null,
+      "local_sequence": 1,
+      "choice": {
+        "choice_id": "10000000-0000-4000-8000-000000000003",
+        "decision": "listen_only",
+        "boundary": {
+          "status": "confirmed",
+          "selected_local_date": "2026-11-12",
+          "selected_zone_id": "Asia/Seoul",
+          "selected_at_utc": "2026-11-12T00:00:00Z",
+          "expires_at_utc": "2026-11-12T15:00:00Z",
+          "clock_evidence_ref": "fixture-original-clock-1"
+        }
+      }
+    },
+    "valid": false,
+    "label": "DailyPreferenceRequest:0:missing:schema_version"
+  },
+  {
+    "document": "learning-progress.schema.json",
+    "pointer": "#/$defs/DailyPreferenceRequest",
+    "payload": {
+      "schema_version": "5",
+      "operation_id": "10000000-0000-4000-8000-000000000001",
+      "profile_context": {
+        "profile_id": "10000000-0000-4000-8000-000000000002"
+      },
+      "expected_preference_version": 0,
+      "expected_choice_id": null,
+      "local_sequence": 1,
+      "choice": {
+        "choice_id": "10000000-0000-4000-8000-000000000003",
+        "decision": "listen_only",
+        "boundary": {
+          "status": "confirmed",
+          "selected_local_date": "2026-11-12",
+          "selected_zone_id": "Asia/Seoul",
+          "selected_at_utc": "2026-11-12T00:00:00Z",
+          "expires_at_utc": "2026-11-12T15:00:00Z",
+          "clock_evidence_ref": "fixture-original-clock-1"
+        }
+      }
+    },
+    "valid": false,
+    "label": "DailyPreferenceRequest:0:missing:feature_contract_version"
+  },
+  {
+    "document": "learning-progress.schema.json",
+    "pointer": "#/$defs/DailyPreferenceRequest",
+    "payload": {
+      "schema_version": "5",
+      "feature_contract_version": "1",
+      "profile_context": {
+        "profile_id": "10000000-0000-4000-8000-000000000002"
+      },
+      "expected_preference_version": 0,
+      "expected_choice_id": null,
+      "local_sequence": 1,
+      "choice": {
+        "choice_id": "10000000-0000-4000-8000-000000000003",
+        "decision": "listen_only",
+        "boundary": {
+          "status": "confirmed",
+          "selected_local_date": "2026-11-12",
+          "selected_zone_id": "Asia/Seoul",
+          "selected_at_utc": "2026-11-12T00:00:00Z",
+          "expires_at_utc": "2026-11-12T15:00:00Z",
+          "clock_evidence_ref": "fixture-original-clock-1"
+        }
+      }
+    },
+    "valid": false,
+    "label": "DailyPreferenceRequest:0:missing:operation_id"
+  },
+  {
+    "document": "learning-progress.schema.json",
+    "pointer": "#/$defs/DailyPreferenceRequest",
+    "payload": {
+      "schema_version": "5",
+      "feature_contract_version": "1",
+      "operation_id": "10000000-0000-4000-8000-000000000001",
+      "expected_preference_version": 0,
+      "expected_choice_id": null,
+      "local_sequence": 1,
+      "choice": {
+        "choice_id": "10000000-0000-4000-8000-000000000003",
+        "decision": "listen_only",
+        "boundary": {
+          "status": "confirmed",
+          "selected_local_date": "2026-11-12",
+          "selected_zone_id": "Asia/Seoul",
+          "selected_at_utc": "2026-11-12T00:00:00Z",
+          "expires_at_utc": "2026-11-12T15:00:00Z",
+          "clock_evidence_ref": "fixture-original-clock-1"
+        }
+      }
+    },
+    "valid": false,
+    "label": "DailyPreferenceRequest:0:missing:profile_context"
+  },
+  {
+    "document": "learning-progress.schema.json",
+    "pointer": "#/$defs/DailyPreferenceRequest",
+    "payload": {
+      "schema_version": "5",
+      "feature_contract_version": "1",
+      "operation_id": "10000000-0000-4000-8000-000000000001",
+      "profile_context": {
+        "profile_id": "10000000-0000-4000-8000-000000000002"
+      },
+      "expected_choice_id": null,
+      "local_sequence": 1,
+      "choice": {
+        "choice_id": "10000000-0000-4000-8000-000000000003",
+        "decision": "listen_only",
+        "boundary": {
+          "status": "confirmed",
+          "selected_local_date": "2026-11-12",
+          "selected_zone_id": "Asia/Seoul",
+          "selected_at_utc": "2026-11-12T00:00:00Z",
+          "expires_at_utc": "2026-11-12T15:00:00Z",
+          "clock_evidence_ref": "fixture-original-clock-1"
+        }
+      }
+    },
+    "valid": false,
+    "label": "DailyPreferenceRequest:0:missing:expected_preference_version"
+  },
+  {
+    "document": "learning-progress.schema.json",
+    "pointer": "#/$defs/DailyPreferenceRequest",
+    "payload": {
+      "schema_version": "5",
+      "feature_contract_version": "1",
+      "operation_id": "10000000-0000-4000-8000-000000000001",
+      "profile_context": {
+        "profile_id": "10000000-0000-4000-8000-000000000002"
+      },
+      "expected_preference_version": 0,
+      "local_sequence": 1,
+      "choice": {
+        "choice_id": "10000000-0000-4000-8000-000000000003",
+        "decision": "listen_only",
+        "boundary": {
+          "status": "confirmed",
+          "selected_local_date": "2026-11-12",
+          "selected_zone_id": "Asia/Seoul",
+          "selected_at_utc": "2026-11-12T00:00:00Z",
+          "expires_at_utc": "2026-11-12T15:00:00Z",
+          "clock_evidence_ref": "fixture-original-clock-1"
+        }
+      }
+    },
+    "valid": false,
+    "label": "DailyPreferenceRequest:0:missing:expected_choice_id"
+  },
+  {
+    "document": "learning-progress.schema.json",
+    "pointer": "#/$defs/DailyPreferenceRequest",
+    "payload": {
+      "schema_version": "5",
+      "feature_contract_version": "1",
+      "operation_id": "10000000-0000-4000-8000-000000000001",
+      "profile_context": {
+        "profile_id": "10000000-0000-4000-8000-000000000002"
+      },
+      "expected_preference_version": 0,
+      "expected_choice_id": null,
+      "choice": {
+        "choice_id": "10000000-0000-4000-8000-000000000003",
+        "decision": "listen_only",
+        "boundary": {
+          "status": "confirmed",
+          "selected_local_date": "2026-11-12",
+          "selected_zone_id": "Asia/Seoul",
+          "selected_at_utc": "2026-11-12T00:00:00Z",
+          "expires_at_utc": "2026-11-12T15:00:00Z",
+          "clock_evidence_ref": "fixture-original-clock-1"
+        }
+      }
+    },
+    "valid": false,
+    "label": "DailyPreferenceRequest:0:missing:local_sequence"
+  },
+  {
+    "document": "learning-progress.schema.json",
+    "pointer": "#/$defs/DailyPreferenceRequest",
+    "payload": {
+      "schema_version": "5",
+      "feature_contract_version": "1",
+      "operation_id": "10000000-0000-4000-8000-000000000001",
+      "profile_context": {
+        "profile_id": "10000000-0000-4000-8000-000000000002"
+      },
+      "expected_preference_version": 0,
+      "expected_choice_id": null,
+      "local_sequence": 1
+    },
+    "valid": false,
+    "label": "DailyPreferenceRequest:0:missing:choice"
+  },
+  {
+    "document": "learning-progress.schema.json",
+    "pointer": "#/$defs/DailyPreferenceRequest",
+    "payload": {
+      "schema_version": "5",
+      "feature_contract_version": "1",
+      "operation_id": "10000000-0000-4000-8000-000000000001",
+      "profile_context": {
+        "profile_id": "10000000-0000-4000-8000-000000000002"
+      },
+      "expected_preference_version": 0,
+      "expected_choice_id": null,
+      "local_sequence": 1,
+      "choice": {
+        "choice_id": "10000000-0000-4000-8000-000000000003",
+        "decision": "listen_only",
+        "boundary": {
+          "status": "unresolved",
+          "selected_local_date": null,
+          "selected_zone_id": null,
+          "selected_at_utc": null,
+          "expires_at_utc": null,
+          "clock_evidence_ref": null
+        }
+      }
+    },
+    "valid": true,
+    "label": "DailyPreferenceRequest:1"
+  },
+  {
+    "document": "learning-progress.schema.json",
+    "pointer": "#/$defs/DailyPreferenceRequest",
+    "payload": {
+      "schema_version": "5",
+      "feature_contract_version": "1",
+      "operation_id": "10000000-0000-4000-8000-000000000001",
+      "profile_context": {
+        "profile_id": "10000000-0000-4000-8000-000000000002"
+      },
+      "expected_preference_version": 0,
+      "expected_choice_id": null,
+      "local_sequence": 1,
+      "choice": {
+        "choice_id": "10000000-0000-4000-8000-000000000003",
+        "decision": "listen_only",
+        "boundary": {
+          "status": "unresolved",
+          "selected_local_date": null,
+          "selected_zone_id": null,
+          "selected_at_utc": null,
+          "expires_at_utc": null,
+          "clock_evidence_ref": null
+        }
+      },
+      "unexpected": true
+    },
+    "valid": false,
+    "label": "DailyPreferenceRequest:1:extra"
+  },
+  {
+    "document": "learning-progress.schema.json",
+    "pointer": "#/$defs/DailyPreferenceRequest",
+    "payload": {
+      "feature_contract_version": "1",
+      "operation_id": "10000000-0000-4000-8000-000000000001",
+      "profile_context": {
+        "profile_id": "10000000-0000-4000-8000-000000000002"
+      },
+      "expected_preference_version": 0,
+      "expected_choice_id": null,
+      "local_sequence": 1,
+      "choice": {
+        "choice_id": "10000000-0000-4000-8000-000000000003",
+        "decision": "listen_only",
+        "boundary": {
+          "status": "unresolved",
+          "selected_local_date": null,
+          "selected_zone_id": null,
+          "selected_at_utc": null,
+          "expires_at_utc": null,
+          "clock_evidence_ref": null
+        }
+      }
+    },
+    "valid": false,
+    "label": "DailyPreferenceRequest:1:missing:schema_version"
+  },
+  {
+    "document": "learning-progress.schema.json",
+    "pointer": "#/$defs/DailyPreferenceRequest",
+    "payload": {
+      "schema_version": "5",
+      "operation_id": "10000000-0000-4000-8000-000000000001",
+      "profile_context": {
+        "profile_id": "10000000-0000-4000-8000-000000000002"
+      },
+      "expected_preference_version": 0,
+      "expected_choice_id": null,
+      "local_sequence": 1,
+      "choice": {
+        "choice_id": "10000000-0000-4000-8000-000000000003",
+        "decision": "listen_only",
+        "boundary": {
+          "status": "unresolved",
+          "selected_local_date": null,
+          "selected_zone_id": null,
+          "selected_at_utc": null,
+          "expires_at_utc": null,
+          "clock_evidence_ref": null
+        }
+      }
+    },
+    "valid": false,
+    "label": "DailyPreferenceRequest:1:missing:feature_contract_version"
+  },
+  {
+    "document": "learning-progress.schema.json",
+    "pointer": "#/$defs/DailyPreferenceRequest",
+    "payload": {
+      "schema_version": "5",
+      "feature_contract_version": "1",
+      "profile_context": {
+        "profile_id": "10000000-0000-4000-8000-000000000002"
+      },
+      "expected_preference_version": 0,
+      "expected_choice_id": null,
+      "local_sequence": 1,
+      "choice": {
+        "choice_id": "10000000-0000-4000-8000-000000000003",
+        "decision": "listen_only",
+        "boundary": {
+          "status": "unresolved",
+          "selected_local_date": null,
+          "selected_zone_id": null,
+          "selected_at_utc": null,
+          "expires_at_utc": null,
+          "clock_evidence_ref": null
+        }
+      }
+    },
+    "valid": false,
+    "label": "DailyPreferenceRequest:1:missing:operation_id"
+  },
+  {
+    "document": "learning-progress.schema.json",
+    "pointer": "#/$defs/DailyPreferenceRequest",
+    "payload": {
+      "schema_version": "5",
+      "feature_contract_version": "1",
+      "operation_id": "10000000-0000-4000-8000-000000000001",
+      "expected_preference_version": 0,
+      "expected_choice_id": null,
+      "local_sequence": 1,
+      "choice": {
+        "choice_id": "10000000-0000-4000-8000-000000000003",
+        "decision": "listen_only",
+        "boundary": {
+          "status": "unresolved",
+          "selected_local_date": null,
+          "selected_zone_id": null,
+          "selected_at_utc": null,
+          "expires_at_utc": null,
+          "clock_evidence_ref": null
+        }
+      }
+    },
+    "valid": false,
+    "label": "DailyPreferenceRequest:1:missing:profile_context"
+  },
+  {
+    "document": "learning-progress.schema.json",
+    "pointer": "#/$defs/DailyPreferenceRequest",
+    "payload": {
+      "schema_version": "5",
+      "feature_contract_version": "1",
+      "operation_id": "10000000-0000-4000-8000-000000000001",
+      "profile_context": {
+        "profile_id": "10000000-0000-4000-8000-000000000002"
+      },
+      "expected_choice_id": null,
+      "local_sequence": 1,
+      "choice": {
+        "choice_id": "10000000-0000-4000-8000-000000000003",
+        "decision": "listen_only",
+        "boundary": {
+          "status": "unresolved",
+          "selected_local_date": null,
+          "selected_zone_id": null,
+          "selected_at_utc": null,
+          "expires_at_utc": null,
+          "clock_evidence_ref": null
+        }
+      }
+    },
+    "valid": false,
+    "label": "DailyPreferenceRequest:1:missing:expected_preference_version"
+  },
+  {
+    "document": "learning-progress.schema.json",
+    "pointer": "#/$defs/DailyPreferenceRequest",
+    "payload": {
+      "schema_version": "5",
+      "feature_contract_version": "1",
+      "operation_id": "10000000-0000-4000-8000-000000000001",
+      "profile_context": {
+        "profile_id": "10000000-0000-4000-8000-000000000002"
+      },
+      "expected_preference_version": 0,
+      "local_sequence": 1,
+      "choice": {
+        "choice_id": "10000000-0000-4000-8000-000000000003",
+        "decision": "listen_only",
+        "boundary": {
+          "status": "unresolved",
+          "selected_local_date": null,
+          "selected_zone_id": null,
+          "selected_at_utc": null,
+          "expires_at_utc": null,
+          "clock_evidence_ref": null
+        }
+      }
+    },
+    "valid": false,
+    "label": "DailyPreferenceRequest:1:missing:expected_choice_id"
+  },
+  {
+    "document": "learning-progress.schema.json",
+    "pointer": "#/$defs/DailyPreferenceRequest",
+    "payload": {
+      "schema_version": "5",
+      "feature_contract_version": "1",
+      "operation_id": "10000000-0000-4000-8000-000000000001",
+      "profile_context": {
+        "profile_id": "10000000-0000-4000-8000-000000000002"
+      },
+      "expected_preference_version": 0,
+      "expected_choice_id": null,
+      "choice": {
+        "choice_id": "10000000-0000-4000-8000-000000000003",
+        "decision": "listen_only",
+        "boundary": {
+          "status": "unresolved",
+          "selected_local_date": null,
+          "selected_zone_id": null,
+          "selected_at_utc": null,
+          "expires_at_utc": null,
+          "clock_evidence_ref": null
+        }
+      }
+    },
+    "valid": false,
+    "label": "DailyPreferenceRequest:1:missing:local_sequence"
+  },
+  {
+    "document": "learning-progress.schema.json",
+    "pointer": "#/$defs/DailyPreferenceRequest",
+    "payload": {
+      "schema_version": "5",
+      "feature_contract_version": "1",
+      "operation_id": "10000000-0000-4000-8000-000000000001",
+      "profile_context": {
+        "profile_id": "10000000-0000-4000-8000-000000000002"
+      },
+      "expected_preference_version": 0,
+      "expected_choice_id": null,
+      "local_sequence": 1
+    },
+    "valid": false,
+    "label": "DailyPreferenceRequest:1:missing:choice"
+  },
+  {
+    "document": "learning-progress.schema.json",
+    "pointer": "#/$defs/DailyPreferenceRequest",
+    "payload": {
+      "schema_version": "5",
+      "feature_contract_version": "1",
+      "operation_id": "10000000-0000-4000-8000-000000000001",
+      "profile_context": {
+        "profile_id": "10000000-0000-4000-8000-000000000002"
+      },
+      "expected_preference_version": 1,
+      "expected_choice_id": "10000000-0000-4000-8000-000000000003",
+      "local_sequence": 1,
+      "choice": {
+        "choice_id": "10000000-0000-4000-8000-000000000002",
+        "decision": "explicit_default",
+        "boundary": {
+          "status": "confirmed",
+          "selected_local_date": "2026-11-12",
+          "selected_zone_id": "Asia/Seoul",
+          "selected_at_utc": "2026-11-12T00:00:00Z",
+          "expires_at_utc": "2026-11-12T15:00:00Z",
+          "clock_evidence_ref": "fixture-original-clock-1"
+        }
+      }
+    },
+    "valid": true,
+    "label": "DailyPreferenceRequest:2"
+  },
+  {
+    "document": "learning-progress.schema.json",
+    "pointer": "#/$defs/DailyPreferenceRequest",
+    "payload": {
+      "schema_version": "5",
+      "feature_contract_version": "1",
+      "operation_id": "10000000-0000-4000-8000-000000000001",
+      "profile_context": {
+        "profile_id": "10000000-0000-4000-8000-000000000002"
+      },
+      "expected_preference_version": 1,
+      "expected_choice_id": "10000000-0000-4000-8000-000000000003",
+      "local_sequence": 1,
+      "choice": {
+        "choice_id": "10000000-0000-4000-8000-000000000002",
+        "decision": "explicit_default",
+        "boundary": {
+          "status": "confirmed",
+          "selected_local_date": "2026-11-12",
+          "selected_zone_id": "Asia/Seoul",
+          "selected_at_utc": "2026-11-12T00:00:00Z",
+          "expires_at_utc": "2026-11-12T15:00:00Z",
+          "clock_evidence_ref": "fixture-original-clock-1"
+        }
+      },
+      "unexpected": true
+    },
+    "valid": false,
+    "label": "DailyPreferenceRequest:2:extra"
+  },
+  {
+    "document": "learning-progress.schema.json",
+    "pointer": "#/$defs/DailyPreferenceRequest",
+    "payload": {
+      "feature_contract_version": "1",
+      "operation_id": "10000000-0000-4000-8000-000000000001",
+      "profile_context": {
+        "profile_id": "10000000-0000-4000-8000-000000000002"
+      },
+      "expected_preference_version": 1,
+      "expected_choice_id": "10000000-0000-4000-8000-000000000003",
+      "local_sequence": 1,
+      "choice": {
+        "choice_id": "10000000-0000-4000-8000-000000000002",
+        "decision": "explicit_default",
+        "boundary": {
+          "status": "confirmed",
+          "selected_local_date": "2026-11-12",
+          "selected_zone_id": "Asia/Seoul",
+          "selected_at_utc": "2026-11-12T00:00:00Z",
+          "expires_at_utc": "2026-11-12T15:00:00Z",
+          "clock_evidence_ref": "fixture-original-clock-1"
+        }
+      }
+    },
+    "valid": false,
+    "label": "DailyPreferenceRequest:2:missing:schema_version"
+  },
+  {
+    "document": "learning-progress.schema.json",
+    "pointer": "#/$defs/DailyPreferenceRequest",
+    "payload": {
+      "schema_version": "5",
+      "operation_id": "10000000-0000-4000-8000-000000000001",
+      "profile_context": {
+        "profile_id": "10000000-0000-4000-8000-000000000002"
+      },
+      "expected_preference_version": 1,
+      "expected_choice_id": "10000000-0000-4000-8000-000000000003",
+      "local_sequence": 1,
+      "choice": {
+        "choice_id": "10000000-0000-4000-8000-000000000002",
+        "decision": "explicit_default",
+        "boundary": {
+          "status": "confirmed",
+          "selected_local_date": "2026-11-12",
+          "selected_zone_id": "Asia/Seoul",
+          "selected_at_utc": "2026-11-12T00:00:00Z",
+          "expires_at_utc": "2026-11-12T15:00:00Z",
+          "clock_evidence_ref": "fixture-original-clock-1"
+        }
+      }
+    },
+    "valid": false,
+    "label": "DailyPreferenceRequest:2:missing:feature_contract_version"
+  },
+  {
+    "document": "learning-progress.schema.json",
+    "pointer": "#/$defs/DailyPreferenceRequest",
+    "payload": {
+      "schema_version": "5",
+      "feature_contract_version": "1",
+      "profile_context": {
+        "profile_id": "10000000-0000-4000-8000-000000000002"
+      },
+      "expected_preference_version": 1,
+      "expected_choice_id": "10000000-0000-4000-8000-000000000003",
+      "local_sequence": 1,
+      "choice": {
+        "choice_id": "10000000-0000-4000-8000-000000000002",
+        "decision": "explicit_default",
+        "boundary": {
+          "status": "confirmed",
+          "selected_local_date": "2026-11-12",
+          "selected_zone_id": "Asia/Seoul",
+          "selected_at_utc": "2026-11-12T00:00:00Z",
+          "expires_at_utc": "2026-11-12T15:00:00Z",
+          "clock_evidence_ref": "fixture-original-clock-1"
+        }
+      }
+    },
+    "valid": false,
+    "label": "DailyPreferenceRequest:2:missing:operation_id"
+  },
+  {
+    "document": "learning-progress.schema.json",
+    "pointer": "#/$defs/DailyPreferenceRequest",
+    "payload": {
+      "schema_version": "5",
+      "feature_contract_version": "1",
+      "operation_id": "10000000-0000-4000-8000-000000000001",
+      "expected_preference_version": 1,
+      "expected_choice_id": "10000000-0000-4000-8000-000000000003",
+      "local_sequence": 1,
+      "choice": {
+        "choice_id": "10000000-0000-4000-8000-000000000002",
+        "decision": "explicit_default",
+        "boundary": {
+          "status": "confirmed",
+          "selected_local_date": "2026-11-12",
+          "selected_zone_id": "Asia/Seoul",
+          "selected_at_utc": "2026-11-12T00:00:00Z",
+          "expires_at_utc": "2026-11-12T15:00:00Z",
+          "clock_evidence_ref": "fixture-original-clock-1"
+        }
+      }
+    },
+    "valid": false,
+    "label": "DailyPreferenceRequest:2:missing:profile_context"
+  },
+  {
+    "document": "learning-progress.schema.json",
+    "pointer": "#/$defs/DailyPreferenceRequest",
+    "payload": {
+      "schema_version": "5",
+      "feature_contract_version": "1",
+      "operation_id": "10000000-0000-4000-8000-000000000001",
+      "profile_context": {
+        "profile_id": "10000000-0000-4000-8000-000000000002"
+      },
+      "expected_choice_id": "10000000-0000-4000-8000-000000000003",
+      "local_sequence": 1,
+      "choice": {
+        "choice_id": "10000000-0000-4000-8000-000000000002",
+        "decision": "explicit_default",
+        "boundary": {
+          "status": "confirmed",
+          "selected_local_date": "2026-11-12",
+          "selected_zone_id": "Asia/Seoul",
+          "selected_at_utc": "2026-11-12T00:00:00Z",
+          "expires_at_utc": "2026-11-12T15:00:00Z",
+          "clock_evidence_ref": "fixture-original-clock-1"
+        }
+      }
+    },
+    "valid": false,
+    "label": "DailyPreferenceRequest:2:missing:expected_preference_version"
+  },
+  {
+    "document": "learning-progress.schema.json",
+    "pointer": "#/$defs/DailyPreferenceRequest",
+    "payload": {
+      "schema_version": "5",
+      "feature_contract_version": "1",
+      "operation_id": "10000000-0000-4000-8000-000000000001",
+      "profile_context": {
+        "profile_id": "10000000-0000-4000-8000-000000000002"
+      },
+      "expected_preference_version": 1,
+      "local_sequence": 1,
+      "choice": {
+        "choice_id": "10000000-0000-4000-8000-000000000002",
+        "decision": "explicit_default",
+        "boundary": {
+          "status": "confirmed",
+          "selected_local_date": "2026-11-12",
+          "selected_zone_id": "Asia/Seoul",
+          "selected_at_utc": "2026-11-12T00:00:00Z",
+          "expires_at_utc": "2026-11-12T15:00:00Z",
+          "clock_evidence_ref": "fixture-original-clock-1"
+        }
+      }
+    },
+    "valid": false,
+    "label": "DailyPreferenceRequest:2:missing:expected_choice_id"
+  },
+  {
+    "document": "learning-progress.schema.json",
+    "pointer": "#/$defs/DailyPreferenceRequest",
+    "payload": {
+      "schema_version": "5",
+      "feature_contract_version": "1",
+      "operation_id": "10000000-0000-4000-8000-000000000001",
+      "profile_context": {
+        "profile_id": "10000000-0000-4000-8000-000000000002"
+      },
+      "expected_preference_version": 1,
+      "expected_choice_id": "10000000-0000-4000-8000-000000000003",
+      "choice": {
+        "choice_id": "10000000-0000-4000-8000-000000000002",
+        "decision": "explicit_default",
+        "boundary": {
+          "status": "confirmed",
+          "selected_local_date": "2026-11-12",
+          "selected_zone_id": "Asia/Seoul",
+          "selected_at_utc": "2026-11-12T00:00:00Z",
+          "expires_at_utc": "2026-11-12T15:00:00Z",
+          "clock_evidence_ref": "fixture-original-clock-1"
+        }
+      }
+    },
+    "valid": false,
+    "label": "DailyPreferenceRequest:2:missing:local_sequence"
+  },
+  {
+    "document": "learning-progress.schema.json",
+    "pointer": "#/$defs/DailyPreferenceRequest",
+    "payload": {
+      "schema_version": "5",
+      "feature_contract_version": "1",
+      "operation_id": "10000000-0000-4000-8000-000000000001",
+      "profile_context": {
+        "profile_id": "10000000-0000-4000-8000-000000000002"
+      },
+      "expected_preference_version": 1,
+      "expected_choice_id": "10000000-0000-4000-8000-000000000003",
+      "local_sequence": 1
+    },
+    "valid": false,
+    "label": "DailyPreferenceRequest:2:missing:choice"
+  },
+  {
+    "document": "learning-progress.schema.json",
+    "pointer": "#/$defs/DailyPreferenceRequest",
+    "payload": {
+      "schema_version": "5",
+      "feature_contract_version": "1",
+      "operation_id": "10000000-0000-4000-8000-000000000001",
+      "profile_context": {
+        "profile_id": "10000000-0000-4000-8000-000000000002"
+      },
+      "expected_preference_version": 1,
+      "expected_choice_id": "10000000-0000-4000-8000-000000000003",
+      "local_sequence": 1,
+      "choice": {
+        "choice_id": "10000000-0000-4000-8000-000000000003",
+        "decision": "listen_only",
+        "boundary": {
+          "status": "confirmed",
+          "selected_local_date": "2026-11-12",
+          "selected_zone_id": "Asia/Seoul",
+          "selected_at_utc": "2026-11-12T00:00:00Z",
+          "expires_at_utc": "2026-11-12T15:00:00Z",
+          "clock_evidence_ref": "fixture-original-clock-1"
+        }
+      }
+    },
+    "valid": true,
+    "label": "DailyPreferenceRequest:3"
+  },
+  {
+    "document": "learning-progress.schema.json",
+    "pointer": "#/$defs/DailyPreferenceRequest",
+    "payload": {
+      "schema_version": "5",
+      "feature_contract_version": "1",
+      "operation_id": "10000000-0000-4000-8000-000000000001",
+      "profile_context": {
+        "profile_id": "10000000-0000-4000-8000-000000000002"
+      },
+      "expected_preference_version": 1,
+      "expected_choice_id": "10000000-0000-4000-8000-000000000003",
+      "local_sequence": 1,
+      "choice": {
+        "choice_id": "10000000-0000-4000-8000-000000000003",
+        "decision": "listen_only",
+        "boundary": {
+          "status": "confirmed",
+          "selected_local_date": "2026-11-12",
+          "selected_zone_id": "Asia/Seoul",
+          "selected_at_utc": "2026-11-12T00:00:00Z",
+          "expires_at_utc": "2026-11-12T15:00:00Z",
+          "clock_evidence_ref": "fixture-original-clock-1"
+        }
+      },
+      "unexpected": true
+    },
+    "valid": false,
+    "label": "DailyPreferenceRequest:3:extra"
+  },
+  {
+    "document": "learning-progress.schema.json",
+    "pointer": "#/$defs/DailyPreferenceRequest",
+    "payload": {
+      "feature_contract_version": "1",
+      "operation_id": "10000000-0000-4000-8000-000000000001",
+      "profile_context": {
+        "profile_id": "10000000-0000-4000-8000-000000000002"
+      },
+      "expected_preference_version": 1,
+      "expected_choice_id": "10000000-0000-4000-8000-000000000003",
+      "local_sequence": 1,
+      "choice": {
+        "choice_id": "10000000-0000-4000-8000-000000000003",
+        "decision": "listen_only",
+        "boundary": {
+          "status": "confirmed",
+          "selected_local_date": "2026-11-12",
+          "selected_zone_id": "Asia/Seoul",
+          "selected_at_utc": "2026-11-12T00:00:00Z",
+          "expires_at_utc": "2026-11-12T15:00:00Z",
+          "clock_evidence_ref": "fixture-original-clock-1"
+        }
+      }
+    },
+    "valid": false,
+    "label": "DailyPreferenceRequest:3:missing:schema_version"
+  },
+  {
+    "document": "learning-progress.schema.json",
+    "pointer": "#/$defs/DailyPreferenceRequest",
+    "payload": {
+      "schema_version": "5",
+      "operation_id": "10000000-0000-4000-8000-000000000001",
+      "profile_context": {
+        "profile_id": "10000000-0000-4000-8000-000000000002"
+      },
+      "expected_preference_version": 1,
+      "expected_choice_id": "10000000-0000-4000-8000-000000000003",
+      "local_sequence": 1,
+      "choice": {
+        "choice_id": "10000000-0000-4000-8000-000000000003",
+        "decision": "listen_only",
+        "boundary": {
+          "status": "confirmed",
+          "selected_local_date": "2026-11-12",
+          "selected_zone_id": "Asia/Seoul",
+          "selected_at_utc": "2026-11-12T00:00:00Z",
+          "expires_at_utc": "2026-11-12T15:00:00Z",
+          "clock_evidence_ref": "fixture-original-clock-1"
+        }
+      }
+    },
+    "valid": false,
+    "label": "DailyPreferenceRequest:3:missing:feature_contract_version"
+  },
+  {
+    "document": "learning-progress.schema.json",
+    "pointer": "#/$defs/DailyPreferenceRequest",
+    "payload": {
+      "schema_version": "5",
+      "feature_contract_version": "1",
+      "profile_context": {
+        "profile_id": "10000000-0000-4000-8000-000000000002"
+      },
+      "expected_preference_version": 1,
+      "expected_choice_id": "10000000-0000-4000-8000-000000000003",
+      "local_sequence": 1,
+      "choice": {
+        "choice_id": "10000000-0000-4000-8000-000000000003",
+        "decision": "listen_only",
+        "boundary": {
+          "status": "confirmed",
+          "selected_local_date": "2026-11-12",
+          "selected_zone_id": "Asia/Seoul",
+          "selected_at_utc": "2026-11-12T00:00:00Z",
+          "expires_at_utc": "2026-11-12T15:00:00Z",
+          "clock_evidence_ref": "fixture-original-clock-1"
+        }
+      }
+    },
+    "valid": false,
+    "label": "DailyPreferenceRequest:3:missing:operation_id"
+  },
+  {
+    "document": "learning-progress.schema.json",
+    "pointer": "#/$defs/DailyPreferenceRequest",
+    "payload": {
+      "schema_version": "5",
+      "feature_contract_version": "1",
+      "operation_id": "10000000-0000-4000-8000-000000000001",
+      "expected_preference_version": 1,
+      "expected_choice_id": "10000000-0000-4000-8000-000000000003",
+      "local_sequence": 1,
+      "choice": {
+        "choice_id": "10000000-0000-4000-8000-000000000003",
+        "decision": "listen_only",
+        "boundary": {
+          "status": "confirmed",
+          "selected_local_date": "2026-11-12",
+          "selected_zone_id": "Asia/Seoul",
+          "selected_at_utc": "2026-11-12T00:00:00Z",
+          "expires_at_utc": "2026-11-12T15:00:00Z",
+          "clock_evidence_ref": "fixture-original-clock-1"
+        }
+      }
+    },
+    "valid": false,
+    "label": "DailyPreferenceRequest:3:missing:profile_context"
+  },
+  {
+    "document": "learning-progress.schema.json",
+    "pointer": "#/$defs/DailyPreferenceRequest",
+    "payload": {
+      "schema_version": "5",
+      "feature_contract_version": "1",
+      "operation_id": "10000000-0000-4000-8000-000000000001",
+      "profile_context": {
+        "profile_id": "10000000-0000-4000-8000-000000000002"
+      },
+      "expected_choice_id": "10000000-0000-4000-8000-000000000003",
+      "local_sequence": 1,
+      "choice": {
+        "choice_id": "10000000-0000-4000-8000-000000000003",
+        "decision": "listen_only",
+        "boundary": {
+          "status": "confirmed",
+          "selected_local_date": "2026-11-12",
+          "selected_zone_id": "Asia/Seoul",
+          "selected_at_utc": "2026-11-12T00:00:00Z",
+          "expires_at_utc": "2026-11-12T15:00:00Z",
+          "clock_evidence_ref": "fixture-original-clock-1"
+        }
+      }
+    },
+    "valid": false,
+    "label": "DailyPreferenceRequest:3:missing:expected_preference_version"
+  },
+  {
+    "document": "learning-progress.schema.json",
+    "pointer": "#/$defs/DailyPreferenceRequest",
+    "payload": {
+      "schema_version": "5",
+      "feature_contract_version": "1",
+      "operation_id": "10000000-0000-4000-8000-000000000001",
+      "profile_context": {
+        "profile_id": "10000000-0000-4000-8000-000000000002"
+      },
+      "expected_preference_version": 1,
+      "local_sequence": 1,
+      "choice": {
+        "choice_id": "10000000-0000-4000-8000-000000000003",
+        "decision": "listen_only",
+        "boundary": {
+          "status": "confirmed",
+          "selected_local_date": "2026-11-12",
+          "selected_zone_id": "Asia/Seoul",
+          "selected_at_utc": "2026-11-12T00:00:00Z",
+          "expires_at_utc": "2026-11-12T15:00:00Z",
+          "clock_evidence_ref": "fixture-original-clock-1"
+        }
+      }
+    },
+    "valid": false,
+    "label": "DailyPreferenceRequest:3:missing:expected_choice_id"
+  },
+  {
+    "document": "learning-progress.schema.json",
+    "pointer": "#/$defs/DailyPreferenceRequest",
+    "payload": {
+      "schema_version": "5",
+      "feature_contract_version": "1",
+      "operation_id": "10000000-0000-4000-8000-000000000001",
+      "profile_context": {
+        "profile_id": "10000000-0000-4000-8000-000000000002"
+      },
+      "expected_preference_version": 1,
+      "expected_choice_id": "10000000-0000-4000-8000-000000000003",
+      "choice": {
+        "choice_id": "10000000-0000-4000-8000-000000000003",
+        "decision": "listen_only",
+        "boundary": {
+          "status": "confirmed",
+          "selected_local_date": "2026-11-12",
+          "selected_zone_id": "Asia/Seoul",
+          "selected_at_utc": "2026-11-12T00:00:00Z",
+          "expires_at_utc": "2026-11-12T15:00:00Z",
+          "clock_evidence_ref": "fixture-original-clock-1"
+        }
+      }
+    },
+    "valid": false,
+    "label": "DailyPreferenceRequest:3:missing:local_sequence"
+  },
+  {
+    "document": "learning-progress.schema.json",
+    "pointer": "#/$defs/DailyPreferenceRequest",
+    "payload": {
+      "schema_version": "5",
+      "feature_contract_version": "1",
+      "operation_id": "10000000-0000-4000-8000-000000000001",
+      "profile_context": {
+        "profile_id": "10000000-0000-4000-8000-000000000002"
+      },
+      "expected_preference_version": 1,
+      "expected_choice_id": "10000000-0000-4000-8000-000000000003",
+      "local_sequence": 1
+    },
+    "valid": false,
+    "label": "DailyPreferenceRequest:3:missing:choice"
+  },
+  {
+    "document": "learning-progress.schema.json",
+    "pointer": "#/$defs/PracticeTimeRequest",
+    "payload": {
+      "schema_version": "5",
+      "feature_contract_version": "1",
+      "operation_id": "10000000-0000-4000-8000-000000000001",
+      "profile_context": {
+        "profile_id": "10000000-0000-4000-8000-000000000002",
+        "privacy_epoch": 0
+      },
+      "expected_time_version": 0,
+      "evidence": {
+        "recorded_at_utc": "2026-11-12T00:01:00Z",
+        "zone_id": "Asia/Seoul",
+        "clock_evidence_ref": "fixture-original-attempt-clock"
+      }
+    },
+    "valid": true,
+    "label": "PracticeTimeRequest:0"
+  },
+  {
+    "document": "learning-progress.schema.json",
+    "pointer": "#/$defs/PracticeTimeRequest",
+    "payload": {
+      "schema_version": "5",
+      "feature_contract_version": "1",
+      "operation_id": "10000000-0000-4000-8000-000000000001",
+      "profile_context": {
+        "profile_id": "10000000-0000-4000-8000-000000000002",
+        "privacy_epoch": 0
+      },
+      "expected_time_version": 0,
+      "evidence": {
+        "recorded_at_utc": "2026-11-12T00:01:00Z",
+        "zone_id": "Asia/Seoul",
+        "clock_evidence_ref": "fixture-original-attempt-clock"
+      },
+      "unexpected": true
+    },
+    "valid": false,
+    "label": "PracticeTimeRequest:0:extra"
+  },
+  {
+    "document": "learning-progress.schema.json",
+    "pointer": "#/$defs/PracticeTimeRequest",
+    "payload": {
+      "feature_contract_version": "1",
+      "operation_id": "10000000-0000-4000-8000-000000000001",
+      "profile_context": {
+        "profile_id": "10000000-0000-4000-8000-000000000002",
+        "privacy_epoch": 0
+      },
+      "expected_time_version": 0,
+      "evidence": {
+        "recorded_at_utc": "2026-11-12T00:01:00Z",
+        "zone_id": "Asia/Seoul",
+        "clock_evidence_ref": "fixture-original-attempt-clock"
+      }
+    },
+    "valid": false,
+    "label": "PracticeTimeRequest:0:missing:schema_version"
+  },
+  {
+    "document": "learning-progress.schema.json",
+    "pointer": "#/$defs/PracticeTimeRequest",
+    "payload": {
+      "schema_version": "5",
+      "operation_id": "10000000-0000-4000-8000-000000000001",
+      "profile_context": {
+        "profile_id": "10000000-0000-4000-8000-000000000002",
+        "privacy_epoch": 0
+      },
+      "expected_time_version": 0,
+      "evidence": {
+        "recorded_at_utc": "2026-11-12T00:01:00Z",
+        "zone_id": "Asia/Seoul",
+        "clock_evidence_ref": "fixture-original-attempt-clock"
+      }
+    },
+    "valid": false,
+    "label": "PracticeTimeRequest:0:missing:feature_contract_version"
+  },
+  {
+    "document": "learning-progress.schema.json",
+    "pointer": "#/$defs/PracticeTimeRequest",
+    "payload": {
+      "schema_version": "5",
+      "feature_contract_version": "1",
+      "profile_context": {
+        "profile_id": "10000000-0000-4000-8000-000000000002",
+        "privacy_epoch": 0
+      },
+      "expected_time_version": 0,
+      "evidence": {
+        "recorded_at_utc": "2026-11-12T00:01:00Z",
+        "zone_id": "Asia/Seoul",
+        "clock_evidence_ref": "fixture-original-attempt-clock"
+      }
+    },
+    "valid": false,
+    "label": "PracticeTimeRequest:0:missing:operation_id"
+  },
+  {
+    "document": "learning-progress.schema.json",
+    "pointer": "#/$defs/PracticeTimeRequest",
+    "payload": {
+      "schema_version": "5",
+      "feature_contract_version": "1",
+      "operation_id": "10000000-0000-4000-8000-000000000001",
+      "expected_time_version": 0,
+      "evidence": {
+        "recorded_at_utc": "2026-11-12T00:01:00Z",
+        "zone_id": "Asia/Seoul",
+        "clock_evidence_ref": "fixture-original-attempt-clock"
+      }
+    },
+    "valid": false,
+    "label": "PracticeTimeRequest:0:missing:profile_context"
+  },
+  {
+    "document": "learning-progress.schema.json",
+    "pointer": "#/$defs/PracticeTimeRequest",
+    "payload": {
+      "schema_version": "5",
+      "feature_contract_version": "1",
+      "operation_id": "10000000-0000-4000-8000-000000000001",
+      "profile_context": {
+        "profile_id": "10000000-0000-4000-8000-000000000002",
+        "privacy_epoch": 0
+      },
+      "evidence": {
+        "recorded_at_utc": "2026-11-12T00:01:00Z",
+        "zone_id": "Asia/Seoul",
+        "clock_evidence_ref": "fixture-original-attempt-clock"
+      }
+    },
+    "valid": false,
+    "label": "PracticeTimeRequest:0:missing:expected_time_version"
+  },
+  {
+    "document": "learning-progress.schema.json",
+    "pointer": "#/$defs/PracticeTimeRequest",
+    "payload": {
+      "schema_version": "5",
+      "feature_contract_version": "1",
+      "operation_id": "10000000-0000-4000-8000-000000000001",
+      "profile_context": {
+        "profile_id": "10000000-0000-4000-8000-000000000002",
+        "privacy_epoch": 0
+      },
+      "expected_time_version": 0
+    },
+    "valid": false,
+    "label": "PracticeTimeRequest:0:missing:evidence"
+  },
+  {
+    "document": "learning-progress.schema.json",
+    "pointer": "#/$defs/PracticeTimeRequest",
+    "payload": {
+      "schema_version": "5",
+      "feature_contract_version": "1",
+      "operation_id": "10000000-0000-4000-8000-000000000001",
+      "profile_context": {
+        "profile_id": "10000000-0000-4000-8000-000000000002",
+        "privacy_epoch": 0
+      },
+      "expected_time_version": 0,
+      "evidence": {
+        "recorded_at_utc": null,
+        "zone_id": null,
+        "clock_evidence_ref": null
+      }
+    },
+    "valid": true,
+    "label": "PracticeTimeRequest:1"
+  },
+  {
+    "document": "learning-progress.schema.json",
+    "pointer": "#/$defs/PracticeTimeRequest",
+    "payload": {
+      "schema_version": "5",
+      "feature_contract_version": "1",
+      "operation_id": "10000000-0000-4000-8000-000000000001",
+      "profile_context": {
+        "profile_id": "10000000-0000-4000-8000-000000000002",
+        "privacy_epoch": 0
+      },
+      "expected_time_version": 0,
+      "evidence": {
+        "recorded_at_utc": null,
+        "zone_id": null,
+        "clock_evidence_ref": null
+      },
+      "unexpected": true
+    },
+    "valid": false,
+    "label": "PracticeTimeRequest:1:extra"
+  },
+  {
+    "document": "learning-progress.schema.json",
+    "pointer": "#/$defs/PracticeTimeRequest",
+    "payload": {
+      "feature_contract_version": "1",
+      "operation_id": "10000000-0000-4000-8000-000000000001",
+      "profile_context": {
+        "profile_id": "10000000-0000-4000-8000-000000000002",
+        "privacy_epoch": 0
+      },
+      "expected_time_version": 0,
+      "evidence": {
+        "recorded_at_utc": null,
+        "zone_id": null,
+        "clock_evidence_ref": null
+      }
+    },
+    "valid": false,
+    "label": "PracticeTimeRequest:1:missing:schema_version"
+  },
+  {
+    "document": "learning-progress.schema.json",
+    "pointer": "#/$defs/PracticeTimeRequest",
+    "payload": {
+      "schema_version": "5",
+      "operation_id": "10000000-0000-4000-8000-000000000001",
+      "profile_context": {
+        "profile_id": "10000000-0000-4000-8000-000000000002",
+        "privacy_epoch": 0
+      },
+      "expected_time_version": 0,
+      "evidence": {
+        "recorded_at_utc": null,
+        "zone_id": null,
+        "clock_evidence_ref": null
+      }
+    },
+    "valid": false,
+    "label": "PracticeTimeRequest:1:missing:feature_contract_version"
+  },
+  {
+    "document": "learning-progress.schema.json",
+    "pointer": "#/$defs/PracticeTimeRequest",
+    "payload": {
+      "schema_version": "5",
+      "feature_contract_version": "1",
+      "profile_context": {
+        "profile_id": "10000000-0000-4000-8000-000000000002",
+        "privacy_epoch": 0
+      },
+      "expected_time_version": 0,
+      "evidence": {
+        "recorded_at_utc": null,
+        "zone_id": null,
+        "clock_evidence_ref": null
+      }
+    },
+    "valid": false,
+    "label": "PracticeTimeRequest:1:missing:operation_id"
+  },
+  {
+    "document": "learning-progress.schema.json",
+    "pointer": "#/$defs/PracticeTimeRequest",
+    "payload": {
+      "schema_version": "5",
+      "feature_contract_version": "1",
+      "operation_id": "10000000-0000-4000-8000-000000000001",
+      "expected_time_version": 0,
+      "evidence": {
+        "recorded_at_utc": null,
+        "zone_id": null,
+        "clock_evidence_ref": null
+      }
+    },
+    "valid": false,
+    "label": "PracticeTimeRequest:1:missing:profile_context"
+  },
+  {
+    "document": "learning-progress.schema.json",
+    "pointer": "#/$defs/PracticeTimeRequest",
+    "payload": {
+      "schema_version": "5",
+      "feature_contract_version": "1",
+      "operation_id": "10000000-0000-4000-8000-000000000001",
+      "profile_context": {
+        "profile_id": "10000000-0000-4000-8000-000000000002",
+        "privacy_epoch": 0
+      },
+      "evidence": {
+        "recorded_at_utc": null,
+        "zone_id": null,
+        "clock_evidence_ref": null
+      }
+    },
+    "valid": false,
+    "label": "PracticeTimeRequest:1:missing:expected_time_version"
+  },
+  {
+    "document": "learning-progress.schema.json",
+    "pointer": "#/$defs/PracticeTimeRequest",
+    "payload": {
+      "schema_version": "5",
+      "feature_contract_version": "1",
+      "operation_id": "10000000-0000-4000-8000-000000000001",
+      "profile_context": {
+        "profile_id": "10000000-0000-4000-8000-000000000002",
+        "privacy_epoch": 0
+      },
+      "expected_time_version": 0
+    },
+    "valid": false,
+    "label": "PracticeTimeRequest:1:missing:evidence"
+  },
+  {
+    "document": "learning-progress.schema.json",
+    "pointer": "#/$defs/VisibilityRequest",
+    "payload": {
+      "schema_version": "5",
+      "feature_contract_version": "1",
+      "operation_id": "10000000-0000-4000-8000-000000000001",
+      "profile_context": {
+        "profile_id": "10000000-0000-4000-8000-000000000002",
+        "privacy_epoch": 0
+      },
+      "expected_visibility_version": 0,
+      "hidden": true
+    },
+    "valid": true,
+    "label": "VisibilityRequest:0"
+  },
+  {
+    "document": "learning-progress.schema.json",
+    "pointer": "#/$defs/VisibilityRequest",
+    "payload": {
+      "schema_version": "5",
+      "feature_contract_version": "1",
+      "operation_id": "10000000-0000-4000-8000-000000000001",
+      "profile_context": {
+        "profile_id": "10000000-0000-4000-8000-000000000002",
+        "privacy_epoch": 0
+      },
+      "expected_visibility_version": 0,
+      "hidden": true,
+      "unexpected": true
+    },
+    "valid": false,
+    "label": "VisibilityRequest:0:extra"
+  },
+  {
+    "document": "learning-progress.schema.json",
+    "pointer": "#/$defs/VisibilityRequest",
+    "payload": {
+      "feature_contract_version": "1",
+      "operation_id": "10000000-0000-4000-8000-000000000001",
+      "profile_context": {
+        "profile_id": "10000000-0000-4000-8000-000000000002",
+        "privacy_epoch": 0
+      },
+      "expected_visibility_version": 0,
+      "hidden": true
+    },
+    "valid": false,
+    "label": "VisibilityRequest:0:missing:schema_version"
+  },
+  {
+    "document": "learning-progress.schema.json",
+    "pointer": "#/$defs/VisibilityRequest",
+    "payload": {
+      "schema_version": "5",
+      "operation_id": "10000000-0000-4000-8000-000000000001",
+      "profile_context": {
+        "profile_id": "10000000-0000-4000-8000-000000000002",
+        "privacy_epoch": 0
+      },
+      "expected_visibility_version": 0,
+      "hidden": true
+    },
+    "valid": false,
+    "label": "VisibilityRequest:0:missing:feature_contract_version"
+  },
+  {
+    "document": "learning-progress.schema.json",
+    "pointer": "#/$defs/VisibilityRequest",
+    "payload": {
+      "schema_version": "5",
+      "feature_contract_version": "1",
+      "profile_context": {
+        "profile_id": "10000000-0000-4000-8000-000000000002",
+        "privacy_epoch": 0
+      },
+      "expected_visibility_version": 0,
+      "hidden": true
+    },
+    "valid": false,
+    "label": "VisibilityRequest:0:missing:operation_id"
+  },
+  {
+    "document": "learning-progress.schema.json",
+    "pointer": "#/$defs/VisibilityRequest",
+    "payload": {
+      "schema_version": "5",
+      "feature_contract_version": "1",
+      "operation_id": "10000000-0000-4000-8000-000000000001",
+      "expected_visibility_version": 0,
+      "hidden": true
+    },
+    "valid": false,
+    "label": "VisibilityRequest:0:missing:profile_context"
+  },
+  {
+    "document": "learning-progress.schema.json",
+    "pointer": "#/$defs/VisibilityRequest",
+    "payload": {
+      "schema_version": "5",
+      "feature_contract_version": "1",
+      "operation_id": "10000000-0000-4000-8000-000000000001",
+      "profile_context": {
+        "profile_id": "10000000-0000-4000-8000-000000000002",
+        "privacy_epoch": 0
+      },
+      "hidden": true
+    },
+    "valid": false,
+    "label": "VisibilityRequest:0:missing:expected_visibility_version"
+  },
+  {
+    "document": "learning-progress.schema.json",
+    "pointer": "#/$defs/VisibilityRequest",
+    "payload": {
+      "schema_version": "5",
+      "feature_contract_version": "1",
+      "operation_id": "10000000-0000-4000-8000-000000000001",
+      "profile_context": {
+        "profile_id": "10000000-0000-4000-8000-000000000002",
+        "privacy_epoch": 0
+      },
+      "expected_visibility_version": 0
+    },
+    "valid": false,
+    "label": "VisibilityRequest:0:missing:hidden"
+  },
+  {
+    "document": "learning-progress.schema.json",
+    "pointer": "#/$defs/VisibilityRequest",
+    "payload": {
+      "schema_version": "5",
+      "feature_contract_version": "1",
+      "operation_id": "10000000-0000-4000-8000-000000000001",
+      "profile_context": {
+        "profile_id": "10000000-0000-4000-8000-000000000002",
+        "privacy_epoch": 0
+      },
+      "expected_visibility_version": 1,
+      "hidden": false
+    },
+    "valid": true,
+    "label": "VisibilityRequest:1"
+  },
+  {
+    "document": "learning-progress.schema.json",
+    "pointer": "#/$defs/VisibilityRequest",
+    "payload": {
+      "schema_version": "5",
+      "feature_contract_version": "1",
+      "operation_id": "10000000-0000-4000-8000-000000000001",
+      "profile_context": {
+        "profile_id": "10000000-0000-4000-8000-000000000002",
+        "privacy_epoch": 0
+      },
+      "expected_visibility_version": 1,
+      "hidden": false,
+      "unexpected": true
+    },
+    "valid": false,
+    "label": "VisibilityRequest:1:extra"
+  },
+  {
+    "document": "learning-progress.schema.json",
+    "pointer": "#/$defs/VisibilityRequest",
+    "payload": {
+      "feature_contract_version": "1",
+      "operation_id": "10000000-0000-4000-8000-000000000001",
+      "profile_context": {
+        "profile_id": "10000000-0000-4000-8000-000000000002",
+        "privacy_epoch": 0
+      },
+      "expected_visibility_version": 1,
+      "hidden": false
+    },
+    "valid": false,
+    "label": "VisibilityRequest:1:missing:schema_version"
+  },
+  {
+    "document": "learning-progress.schema.json",
+    "pointer": "#/$defs/VisibilityRequest",
+    "payload": {
+      "schema_version": "5",
+      "operation_id": "10000000-0000-4000-8000-000000000001",
+      "profile_context": {
+        "profile_id": "10000000-0000-4000-8000-000000000002",
+        "privacy_epoch": 0
+      },
+      "expected_visibility_version": 1,
+      "hidden": false
+    },
+    "valid": false,
+    "label": "VisibilityRequest:1:missing:feature_contract_version"
+  },
+  {
+    "document": "learning-progress.schema.json",
+    "pointer": "#/$defs/VisibilityRequest",
+    "payload": {
+      "schema_version": "5",
+      "feature_contract_version": "1",
+      "profile_context": {
+        "profile_id": "10000000-0000-4000-8000-000000000002",
+        "privacy_epoch": 0
+      },
+      "expected_visibility_version": 1,
+      "hidden": false
+    },
+    "valid": false,
+    "label": "VisibilityRequest:1:missing:operation_id"
+  },
+  {
+    "document": "learning-progress.schema.json",
+    "pointer": "#/$defs/VisibilityRequest",
+    "payload": {
+      "schema_version": "5",
+      "feature_contract_version": "1",
+      "operation_id": "10000000-0000-4000-8000-000000000001",
+      "expected_visibility_version": 1,
+      "hidden": false
+    },
+    "valid": false,
+    "label": "VisibilityRequest:1:missing:profile_context"
+  },
+  {
+    "document": "learning-progress.schema.json",
+    "pointer": "#/$defs/VisibilityRequest",
+    "payload": {
+      "schema_version": "5",
+      "feature_contract_version": "1",
+      "operation_id": "10000000-0000-4000-8000-000000000001",
+      "profile_context": {
+        "profile_id": "10000000-0000-4000-8000-000000000002",
+        "privacy_epoch": 0
+      },
+      "hidden": false
+    },
+    "valid": false,
+    "label": "VisibilityRequest:1:missing:expected_visibility_version"
+  },
+  {
+    "document": "learning-progress.schema.json",
+    "pointer": "#/$defs/VisibilityRequest",
+    "payload": {
+      "schema_version": "5",
+      "feature_contract_version": "1",
+      "operation_id": "10000000-0000-4000-8000-000000000001",
+      "profile_context": {
+        "profile_id": "10000000-0000-4000-8000-000000000002",
+        "privacy_epoch": 0
+      },
+      "expected_visibility_version": 1
+    },
+    "valid": false,
+    "label": "VisibilityRequest:1:missing:hidden"
+  },
+  {
+    "document": "ai-learning.schema.json",
+    "pointer": "#/$defs/LearningPreferenceView",
+    "payload": {
+      "schema_version": "5",
+      "ai_learning_contract_version": "1",
+      "profile_id": "20000000-0000-4000-8000-000000000001",
+      "preference_version": 0,
+      "choice": null,
+      "effective_band": "basic",
+      "applies_from": "next_selection"
+    },
+    "valid": true,
+    "label": "LearningPreferenceView:0"
+  },
+  {
+    "document": "ai-learning.schema.json",
+    "pointer": "#/$defs/LearningPreferenceView",
+    "payload": {
+      "schema_version": "5",
+      "ai_learning_contract_version": "1",
+      "profile_id": "20000000-0000-4000-8000-000000000001",
+      "preference_version": 0,
+      "choice": null,
+      "effective_band": "basic",
+      "applies_from": "next_selection",
+      "unexpected": true
+    },
+    "valid": false,
+    "label": "LearningPreferenceView:0:extra"
+  },
+  {
+    "document": "ai-learning.schema.json",
+    "pointer": "#/$defs/LearningPreferenceView",
+    "payload": {
+      "ai_learning_contract_version": "1",
+      "profile_id": "20000000-0000-4000-8000-000000000001",
+      "preference_version": 0,
+      "choice": null,
+      "effective_band": "basic",
+      "applies_from": "next_selection"
+    },
+    "valid": false,
+    "label": "LearningPreferenceView:0:missing:schema_version"
+  },
+  {
+    "document": "ai-learning.schema.json",
+    "pointer": "#/$defs/LearningPreferenceView",
+    "payload": {
+      "schema_version": "5",
+      "profile_id": "20000000-0000-4000-8000-000000000001",
+      "preference_version": 0,
+      "choice": null,
+      "effective_band": "basic",
+      "applies_from": "next_selection"
+    },
+    "valid": false,
+    "label": "LearningPreferenceView:0:missing:ai_learning_contract_version"
+  },
+  {
+    "document": "ai-learning.schema.json",
+    "pointer": "#/$defs/LearningPreferenceView",
+    "payload": {
+      "schema_version": "5",
+      "ai_learning_contract_version": "1",
+      "preference_version": 0,
+      "choice": null,
+      "effective_band": "basic",
+      "applies_from": "next_selection"
+    },
+    "valid": false,
+    "label": "LearningPreferenceView:0:missing:profile_id"
+  },
+  {
+    "document": "ai-learning.schema.json",
+    "pointer": "#/$defs/LearningPreferenceView",
+    "payload": {
+      "schema_version": "5",
+      "ai_learning_contract_version": "1",
+      "profile_id": "20000000-0000-4000-8000-000000000001",
+      "choice": null,
+      "effective_band": "basic",
+      "applies_from": "next_selection"
+    },
+    "valid": false,
+    "label": "LearningPreferenceView:0:missing:preference_version"
+  },
+  {
+    "document": "ai-learning.schema.json",
+    "pointer": "#/$defs/LearningPreferenceView",
+    "payload": {
+      "schema_version": "5",
+      "ai_learning_contract_version": "1",
+      "profile_id": "20000000-0000-4000-8000-000000000001",
+      "preference_version": 0,
+      "effective_band": "basic",
+      "applies_from": "next_selection"
+    },
+    "valid": false,
+    "label": "LearningPreferenceView:0:missing:choice"
+  },
+  {
+    "document": "ai-learning.schema.json",
+    "pointer": "#/$defs/LearningPreferenceView",
+    "payload": {
+      "schema_version": "5",
+      "ai_learning_contract_version": "1",
+      "profile_id": "20000000-0000-4000-8000-000000000001",
+      "preference_version": 0,
+      "choice": null,
+      "applies_from": "next_selection"
+    },
+    "valid": false,
+    "label": "LearningPreferenceView:0:missing:effective_band"
+  },
+  {
+    "document": "ai-learning.schema.json",
+    "pointer": "#/$defs/LearningPreferenceView",
+    "payload": {
+      "schema_version": "5",
+      "ai_learning_contract_version": "1",
+      "profile_id": "20000000-0000-4000-8000-000000000001",
+      "preference_version": 0,
+      "choice": null,
+      "effective_band": "basic"
+    },
+    "valid": false,
+    "label": "LearningPreferenceView:0:missing:applies_from"
+  },
+  {
+    "document": "ai-learning.schema.json",
+    "pointer": "#/$defs/LearningPreferenceRequest",
+    "payload": {
+      "schema_version": "5",
+      "ai_learning_contract_version": "1",
+      "operation_id": "20000000-0000-4000-8000-000000000001",
+      "profile_id": "20000000-0000-4000-8000-000000000002",
+      "expected_preference_version": 0,
+      "expected_choice_id": null,
+      "choice": {
+        "choice_id": "20000000-0000-4000-8000-000000000001",
+        "band": "intermediate",
+        "explicit": true
+      }
+    },
+    "valid": true,
+    "label": "LearningPreferenceRequest:0"
+  },
+  {
+    "document": "ai-learning.schema.json",
+    "pointer": "#/$defs/LearningPreferenceRequest",
+    "payload": {
+      "schema_version": "5",
+      "ai_learning_contract_version": "1",
+      "operation_id": "20000000-0000-4000-8000-000000000001",
+      "profile_id": "20000000-0000-4000-8000-000000000002",
+      "expected_preference_version": 0,
+      "expected_choice_id": null,
+      "choice": {
+        "choice_id": "20000000-0000-4000-8000-000000000001",
+        "band": "intermediate",
+        "explicit": true
+      },
+      "unexpected": true
+    },
+    "valid": false,
+    "label": "LearningPreferenceRequest:0:extra"
+  },
+  {
+    "document": "ai-learning.schema.json",
+    "pointer": "#/$defs/LearningPreferenceRequest",
+    "payload": {
+      "ai_learning_contract_version": "1",
+      "operation_id": "20000000-0000-4000-8000-000000000001",
+      "profile_id": "20000000-0000-4000-8000-000000000002",
+      "expected_preference_version": 0,
+      "expected_choice_id": null,
+      "choice": {
+        "choice_id": "20000000-0000-4000-8000-000000000001",
+        "band": "intermediate",
+        "explicit": true
+      }
+    },
+    "valid": false,
+    "label": "LearningPreferenceRequest:0:missing:schema_version"
+  },
+  {
+    "document": "ai-learning.schema.json",
+    "pointer": "#/$defs/LearningPreferenceRequest",
+    "payload": {
+      "schema_version": "5",
+      "operation_id": "20000000-0000-4000-8000-000000000001",
+      "profile_id": "20000000-0000-4000-8000-000000000002",
+      "expected_preference_version": 0,
+      "expected_choice_id": null,
+      "choice": {
+        "choice_id": "20000000-0000-4000-8000-000000000001",
+        "band": "intermediate",
+        "explicit": true
+      }
+    },
+    "valid": false,
+    "label": "LearningPreferenceRequest:0:missing:ai_learning_contract_version"
+  },
+  {
+    "document": "ai-learning.schema.json",
+    "pointer": "#/$defs/LearningPreferenceRequest",
+    "payload": {
+      "schema_version": "5",
+      "ai_learning_contract_version": "1",
+      "profile_id": "20000000-0000-4000-8000-000000000002",
+      "expected_preference_version": 0,
+      "expected_choice_id": null,
+      "choice": {
+        "choice_id": "20000000-0000-4000-8000-000000000001",
+        "band": "intermediate",
+        "explicit": true
+      }
+    },
+    "valid": false,
+    "label": "LearningPreferenceRequest:0:missing:operation_id"
+  },
+  {
+    "document": "ai-learning.schema.json",
+    "pointer": "#/$defs/LearningPreferenceRequest",
+    "payload": {
+      "schema_version": "5",
+      "ai_learning_contract_version": "1",
+      "operation_id": "20000000-0000-4000-8000-000000000001",
+      "expected_preference_version": 0,
+      "expected_choice_id": null,
+      "choice": {
+        "choice_id": "20000000-0000-4000-8000-000000000001",
+        "band": "intermediate",
+        "explicit": true
+      }
+    },
+    "valid": false,
+    "label": "LearningPreferenceRequest:0:missing:profile_id"
+  },
+  {
+    "document": "ai-learning.schema.json",
+    "pointer": "#/$defs/LearningPreferenceRequest",
+    "payload": {
+      "schema_version": "5",
+      "ai_learning_contract_version": "1",
+      "operation_id": "20000000-0000-4000-8000-000000000001",
+      "profile_id": "20000000-0000-4000-8000-000000000002",
+      "expected_choice_id": null,
+      "choice": {
+        "choice_id": "20000000-0000-4000-8000-000000000001",
+        "band": "intermediate",
+        "explicit": true
+      }
+    },
+    "valid": false,
+    "label": "LearningPreferenceRequest:0:missing:expected_preference_version"
+  },
+  {
+    "document": "ai-learning.schema.json",
+    "pointer": "#/$defs/LearningPreferenceRequest",
+    "payload": {
+      "schema_version": "5",
+      "ai_learning_contract_version": "1",
+      "operation_id": "20000000-0000-4000-8000-000000000001",
+      "profile_id": "20000000-0000-4000-8000-000000000002",
+      "expected_preference_version": 0,
+      "choice": {
+        "choice_id": "20000000-0000-4000-8000-000000000001",
+        "band": "intermediate",
+        "explicit": true
+      }
+    },
+    "valid": false,
+    "label": "LearningPreferenceRequest:0:missing:expected_choice_id"
+  },
+  {
+    "document": "ai-learning.schema.json",
+    "pointer": "#/$defs/LearningPreferenceRequest",
+    "payload": {
+      "schema_version": "5",
+      "ai_learning_contract_version": "1",
+      "operation_id": "20000000-0000-4000-8000-000000000001",
+      "profile_id": "20000000-0000-4000-8000-000000000002",
+      "expected_preference_version": 0,
+      "expected_choice_id": null
+    },
+    "valid": false,
+    "label": "LearningPreferenceRequest:0:missing:choice"
+  },
+  {
+    "document": "ai-learning.schema.json",
+    "pointer": "#/$defs/MaterialLevelAssessment",
+    "payload": {
+      "status": "unknown",
+      "band": null,
+      "rubric_version": "unassessed-v1",
+      "assessment_ref": null
+    },
+    "valid": true,
+    "label": "MaterialLevelAssessment:0"
+  },
+  {
+    "document": "ai-learning.schema.json",
+    "pointer": "#/$defs/MaterialLevelAssessment",
+    "payload": {
+      "status": "unknown",
+      "band": null,
+      "rubric_version": "unassessed-v1",
+      "assessment_ref": null,
+      "unexpected": true
+    },
+    "valid": false,
+    "label": "MaterialLevelAssessment:0:extra"
+  },
+  {
+    "document": "ai-learning.schema.json",
+    "pointer": "#/$defs/MaterialLevelAssessment",
+    "payload": {
+      "band": null,
+      "rubric_version": "unassessed-v1",
+      "assessment_ref": null
+    },
+    "valid": false,
+    "label": "MaterialLevelAssessment:0:missing:status"
+  },
+  {
+    "document": "ai-learning.schema.json",
+    "pointer": "#/$defs/MaterialLevelAssessment",
+    "payload": {
+      "status": "unknown",
+      "rubric_version": "unassessed-v1",
+      "assessment_ref": null
+    },
+    "valid": false,
+    "label": "MaterialLevelAssessment:0:missing:band"
+  },
+  {
+    "document": "ai-learning.schema.json",
+    "pointer": "#/$defs/MaterialLevelAssessment",
+    "payload": {
+      "status": "unknown",
+      "band": null,
+      "assessment_ref": null
+    },
+    "valid": false,
+    "label": "MaterialLevelAssessment:0:missing:rubric_version"
+  },
+  {
+    "document": "ai-learning.schema.json",
+    "pointer": "#/$defs/MaterialLevelAssessment",
+    "payload": {
+      "status": "unknown",
+      "band": null,
+      "rubric_version": "unassessed-v1"
+    },
+    "valid": false,
+    "label": "MaterialLevelAssessment:0:missing:assessment_ref"
+  },
+  {
+    "document": "ai-learning.schema.json",
+    "pointer": "#/$defs/MaterialLevelAssessment",
+    "payload": {
+      "status": "verified",
+      "band": "basic",
+      "rubric_version": "fixture-rubric-v1",
+      "assessment_ref": "fixture-review"
+    },
+    "valid": true,
+    "label": "MaterialLevelAssessment:1"
+  },
+  {
+    "document": "ai-learning.schema.json",
+    "pointer": "#/$defs/MaterialLevelAssessment",
+    "payload": {
+      "status": "verified",
+      "band": "basic",
+      "rubric_version": "fixture-rubric-v1",
+      "assessment_ref": "fixture-review",
+      "unexpected": true
+    },
+    "valid": false,
+    "label": "MaterialLevelAssessment:1:extra"
+  },
+  {
+    "document": "ai-learning.schema.json",
+    "pointer": "#/$defs/MaterialLevelAssessment",
+    "payload": {
+      "band": "basic",
+      "rubric_version": "fixture-rubric-v1",
+      "assessment_ref": "fixture-review"
+    },
+    "valid": false,
+    "label": "MaterialLevelAssessment:1:missing:status"
+  },
+  {
+    "document": "ai-learning.schema.json",
+    "pointer": "#/$defs/MaterialLevelAssessment",
+    "payload": {
+      "status": "verified",
+      "rubric_version": "fixture-rubric-v1",
+      "assessment_ref": "fixture-review"
+    },
+    "valid": false,
+    "label": "MaterialLevelAssessment:1:missing:band"
+  },
+  {
+    "document": "ai-learning.schema.json",
+    "pointer": "#/$defs/MaterialLevelAssessment",
+    "payload": {
+      "status": "verified",
+      "band": "basic",
+      "assessment_ref": "fixture-review"
+    },
+    "valid": false,
+    "label": "MaterialLevelAssessment:1:missing:rubric_version"
+  },
+  {
+    "document": "ai-learning.schema.json",
+    "pointer": "#/$defs/MaterialLevelAssessment",
+    "payload": {
+      "status": "verified",
+      "band": "basic",
+      "rubric_version": "fixture-rubric-v1"
+    },
+    "valid": false,
+    "label": "MaterialLevelAssessment:1:missing:assessment_ref"
+  },
+  {
+    "document": "ai-learning.schema.json",
+    "pointer": "#/$defs/LearningRecommendationView",
+    "payload": {
+      "schema_version": "5",
+      "ai_learning_contract_version": "1",
+      "profile_context": {
+        "profile_id": "20000000-0000-4000-8000-000000000001",
+        "privacy_epoch": 0
+      },
+      "recommendation_revision": 0,
+      "window_coverage": "complete",
+      "window_lesson_count": 0,
+      "eligible_first_answer_count": 0,
+      "distinct_article_count": 0,
+      "status": "insufficient_evidence",
+      "recommendation": null,
+      "evidence": []
+    },
+    "valid": true,
+    "label": "LearningRecommendationView:0"
+  },
+  {
+    "document": "ai-learning.schema.json",
+    "pointer": "#/$defs/LearningRecommendationView",
+    "payload": {
+      "schema_version": "5",
+      "ai_learning_contract_version": "1",
+      "profile_context": {
+        "profile_id": "20000000-0000-4000-8000-000000000001",
+        "privacy_epoch": 0
+      },
+      "recommendation_revision": 0,
+      "window_coverage": "complete",
+      "window_lesson_count": 0,
+      "eligible_first_answer_count": 0,
+      "distinct_article_count": 0,
+      "status": "insufficient_evidence",
+      "recommendation": null,
+      "evidence": [],
+      "unexpected": true
+    },
+    "valid": false,
+    "label": "LearningRecommendationView:0:extra"
+  },
+  {
+    "document": "ai-learning.schema.json",
+    "pointer": "#/$defs/LearningRecommendationView",
+    "payload": {
+      "ai_learning_contract_version": "1",
+      "profile_context": {
+        "profile_id": "20000000-0000-4000-8000-000000000001",
+        "privacy_epoch": 0
+      },
+      "recommendation_revision": 0,
+      "window_coverage": "complete",
+      "window_lesson_count": 0,
+      "eligible_first_answer_count": 0,
+      "distinct_article_count": 0,
+      "status": "insufficient_evidence",
+      "recommendation": null,
+      "evidence": []
+    },
+    "valid": false,
+    "label": "LearningRecommendationView:0:missing:schema_version"
+  },
+  {
+    "document": "ai-learning.schema.json",
+    "pointer": "#/$defs/LearningRecommendationView",
+    "payload": {
+      "schema_version": "5",
+      "profile_context": {
+        "profile_id": "20000000-0000-4000-8000-000000000001",
+        "privacy_epoch": 0
+      },
+      "recommendation_revision": 0,
+      "window_coverage": "complete",
+      "window_lesson_count": 0,
+      "eligible_first_answer_count": 0,
+      "distinct_article_count": 0,
+      "status": "insufficient_evidence",
+      "recommendation": null,
+      "evidence": []
+    },
+    "valid": false,
+    "label": "LearningRecommendationView:0:missing:ai_learning_contract_version"
+  },
+  {
+    "document": "ai-learning.schema.json",
+    "pointer": "#/$defs/LearningRecommendationView",
+    "payload": {
+      "schema_version": "5",
+      "ai_learning_contract_version": "1",
+      "recommendation_revision": 0,
+      "window_coverage": "complete",
+      "window_lesson_count": 0,
+      "eligible_first_answer_count": 0,
+      "distinct_article_count": 0,
+      "status": "insufficient_evidence",
+      "recommendation": null,
+      "evidence": []
+    },
+    "valid": false,
+    "label": "LearningRecommendationView:0:missing:profile_context"
+  },
+  {
+    "document": "ai-learning.schema.json",
+    "pointer": "#/$defs/LearningRecommendationView",
+    "payload": {
+      "schema_version": "5",
+      "ai_learning_contract_version": "1",
+      "profile_context": {
+        "profile_id": "20000000-0000-4000-8000-000000000001",
+        "privacy_epoch": 0
+      },
+      "window_coverage": "complete",
+      "window_lesson_count": 0,
+      "eligible_first_answer_count": 0,
+      "distinct_article_count": 0,
+      "status": "insufficient_evidence",
+      "recommendation": null,
+      "evidence": []
+    },
+    "valid": false,
+    "label": "LearningRecommendationView:0:missing:recommendation_revision"
+  },
+  {
+    "document": "ai-learning.schema.json",
+    "pointer": "#/$defs/LearningRecommendationView",
+    "payload": {
+      "schema_version": "5",
+      "ai_learning_contract_version": "1",
+      "profile_context": {
+        "profile_id": "20000000-0000-4000-8000-000000000001",
+        "privacy_epoch": 0
+      },
+      "recommendation_revision": 0,
+      "window_lesson_count": 0,
+      "eligible_first_answer_count": 0,
+      "distinct_article_count": 0,
+      "status": "insufficient_evidence",
+      "recommendation": null,
+      "evidence": []
+    },
+    "valid": false,
+    "label": "LearningRecommendationView:0:missing:window_coverage"
+  },
+  {
+    "document": "ai-learning.schema.json",
+    "pointer": "#/$defs/LearningRecommendationView",
+    "payload": {
+      "schema_version": "5",
+      "ai_learning_contract_version": "1",
+      "profile_context": {
+        "profile_id": "20000000-0000-4000-8000-000000000001",
+        "privacy_epoch": 0
+      },
+      "recommendation_revision": 0,
+      "window_coverage": "complete",
+      "eligible_first_answer_count": 0,
+      "distinct_article_count": 0,
+      "status": "insufficient_evidence",
+      "recommendation": null,
+      "evidence": []
+    },
+    "valid": false,
+    "label": "LearningRecommendationView:0:missing:window_lesson_count"
+  },
+  {
+    "document": "ai-learning.schema.json",
+    "pointer": "#/$defs/LearningRecommendationView",
+    "payload": {
+      "schema_version": "5",
+      "ai_learning_contract_version": "1",
+      "profile_context": {
+        "profile_id": "20000000-0000-4000-8000-000000000001",
+        "privacy_epoch": 0
+      },
+      "recommendation_revision": 0,
+      "window_coverage": "complete",
+      "window_lesson_count": 0,
+      "distinct_article_count": 0,
+      "status": "insufficient_evidence",
+      "recommendation": null,
+      "evidence": []
+    },
+    "valid": false,
+    "label": "LearningRecommendationView:0:missing:eligible_first_answer_count"
+  },
+  {
+    "document": "ai-learning.schema.json",
+    "pointer": "#/$defs/LearningRecommendationView",
+    "payload": {
+      "schema_version": "5",
+      "ai_learning_contract_version": "1",
+      "profile_context": {
+        "profile_id": "20000000-0000-4000-8000-000000000001",
+        "privacy_epoch": 0
+      },
+      "recommendation_revision": 0,
+      "window_coverage": "complete",
+      "window_lesson_count": 0,
+      "eligible_first_answer_count": 0,
+      "status": "insufficient_evidence",
+      "recommendation": null,
+      "evidence": []
+    },
+    "valid": false,
+    "label": "LearningRecommendationView:0:missing:distinct_article_count"
+  },
+  {
+    "document": "ai-learning.schema.json",
+    "pointer": "#/$defs/LearningRecommendationView",
+    "payload": {
+      "schema_version": "5",
+      "ai_learning_contract_version": "1",
+      "profile_context": {
+        "profile_id": "20000000-0000-4000-8000-000000000001",
+        "privacy_epoch": 0
+      },
+      "recommendation_revision": 0,
+      "window_coverage": "complete",
+      "window_lesson_count": 0,
+      "eligible_first_answer_count": 0,
+      "distinct_article_count": 0,
+      "recommendation": null,
+      "evidence": []
+    },
+    "valid": false,
+    "label": "LearningRecommendationView:0:missing:status"
+  },
+  {
+    "document": "ai-learning.schema.json",
+    "pointer": "#/$defs/LearningRecommendationView",
+    "payload": {
+      "schema_version": "5",
+      "ai_learning_contract_version": "1",
+      "profile_context": {
+        "profile_id": "20000000-0000-4000-8000-000000000001",
+        "privacy_epoch": 0
+      },
+      "recommendation_revision": 0,
+      "window_coverage": "complete",
+      "window_lesson_count": 0,
+      "eligible_first_answer_count": 0,
+      "distinct_article_count": 0,
+      "status": "insufficient_evidence",
+      "evidence": []
+    },
+    "valid": false,
+    "label": "LearningRecommendationView:0:missing:recommendation"
+  },
+  {
+    "document": "ai-learning.schema.json",
+    "pointer": "#/$defs/LearningRecommendationView",
+    "payload": {
+      "schema_version": "5",
+      "ai_learning_contract_version": "1",
+      "profile_context": {
+        "profile_id": "20000000-0000-4000-8000-000000000001",
+        "privacy_epoch": 0
+      },
+      "recommendation_revision": 0,
+      "window_coverage": "complete",
+      "window_lesson_count": 0,
+      "eligible_first_answer_count": 0,
+      "distinct_article_count": 0,
+      "status": "insufficient_evidence",
+      "recommendation": null
+    },
+    "valid": false,
+    "label": "LearningRecommendationView:0:missing:evidence"
+  },
+  {
+    "document": "ai-learning.schema.json",
+    "pointer": "#/$defs/LearningRecommendationActionRequest",
+    "payload": {
+      "schema_version": "5",
+      "ai_learning_contract_version": "1",
+      "operation_id": "20000000-0000-4000-8000-000000000001",
+      "profile_context": {
+        "profile_id": "20000000-0000-4000-8000-000000000002",
+        "privacy_epoch": 0
+      },
+      "recommendation_id": "20000000-0000-4000-8000-000000000001",
+      "expected_recommendation_version": 1,
+      "expected_evidence_revision": 2,
+      "expected_basis_signature": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "expected_preference_version": 0,
+      "expected_choice_id": null,
+      "action": "apply"
+    },
+    "valid": true,
+    "label": "LearningRecommendationActionRequest:0"
+  },
+  {
+    "document": "ai-learning.schema.json",
+    "pointer": "#/$defs/LearningRecommendationActionRequest",
+    "payload": {
+      "schema_version": "5",
+      "ai_learning_contract_version": "1",
+      "operation_id": "20000000-0000-4000-8000-000000000001",
+      "profile_context": {
+        "profile_id": "20000000-0000-4000-8000-000000000002",
+        "privacy_epoch": 0
+      },
+      "recommendation_id": "20000000-0000-4000-8000-000000000001",
+      "expected_recommendation_version": 1,
+      "expected_evidence_revision": 2,
+      "expected_basis_signature": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "expected_preference_version": 0,
+      "expected_choice_id": null,
+      "action": "apply",
+      "unexpected": true
+    },
+    "valid": false,
+    "label": "LearningRecommendationActionRequest:0:extra"
+  },
+  {
+    "document": "ai-learning.schema.json",
+    "pointer": "#/$defs/LearningRecommendationActionRequest",
+    "payload": {
+      "ai_learning_contract_version": "1",
+      "operation_id": "20000000-0000-4000-8000-000000000001",
+      "profile_context": {
+        "profile_id": "20000000-0000-4000-8000-000000000002",
+        "privacy_epoch": 0
+      },
+      "recommendation_id": "20000000-0000-4000-8000-000000000001",
+      "expected_recommendation_version": 1,
+      "expected_evidence_revision": 2,
+      "expected_basis_signature": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "expected_preference_version": 0,
+      "expected_choice_id": null,
+      "action": "apply"
+    },
+    "valid": false,
+    "label": "LearningRecommendationActionRequest:0:missing:schema_version"
+  },
+  {
+    "document": "ai-learning.schema.json",
+    "pointer": "#/$defs/LearningRecommendationActionRequest",
+    "payload": {
+      "schema_version": "5",
+      "operation_id": "20000000-0000-4000-8000-000000000001",
+      "profile_context": {
+        "profile_id": "20000000-0000-4000-8000-000000000002",
+        "privacy_epoch": 0
+      },
+      "recommendation_id": "20000000-0000-4000-8000-000000000001",
+      "expected_recommendation_version": 1,
+      "expected_evidence_revision": 2,
+      "expected_basis_signature": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "expected_preference_version": 0,
+      "expected_choice_id": null,
+      "action": "apply"
+    },
+    "valid": false,
+    "label": "LearningRecommendationActionRequest:0:missing:ai_learning_contract_version"
+  },
+  {
+    "document": "ai-learning.schema.json",
+    "pointer": "#/$defs/LearningRecommendationActionRequest",
+    "payload": {
+      "schema_version": "5",
+      "ai_learning_contract_version": "1",
+      "profile_context": {
+        "profile_id": "20000000-0000-4000-8000-000000000002",
+        "privacy_epoch": 0
+      },
+      "recommendation_id": "20000000-0000-4000-8000-000000000001",
+      "expected_recommendation_version": 1,
+      "expected_evidence_revision": 2,
+      "expected_basis_signature": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "expected_preference_version": 0,
+      "expected_choice_id": null,
+      "action": "apply"
+    },
+    "valid": false,
+    "label": "LearningRecommendationActionRequest:0:missing:operation_id"
+  },
+  {
+    "document": "ai-learning.schema.json",
+    "pointer": "#/$defs/LearningRecommendationActionRequest",
+    "payload": {
+      "schema_version": "5",
+      "ai_learning_contract_version": "1",
+      "operation_id": "20000000-0000-4000-8000-000000000001",
+      "recommendation_id": "20000000-0000-4000-8000-000000000001",
+      "expected_recommendation_version": 1,
+      "expected_evidence_revision": 2,
+      "expected_basis_signature": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "expected_preference_version": 0,
+      "expected_choice_id": null,
+      "action": "apply"
+    },
+    "valid": false,
+    "label": "LearningRecommendationActionRequest:0:missing:profile_context"
+  },
+  {
+    "document": "ai-learning.schema.json",
+    "pointer": "#/$defs/LearningRecommendationActionRequest",
+    "payload": {
+      "schema_version": "5",
+      "ai_learning_contract_version": "1",
+      "operation_id": "20000000-0000-4000-8000-000000000001",
+      "profile_context": {
+        "profile_id": "20000000-0000-4000-8000-000000000002",
+        "privacy_epoch": 0
+      },
+      "expected_recommendation_version": 1,
+      "expected_evidence_revision": 2,
+      "expected_basis_signature": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "expected_preference_version": 0,
+      "expected_choice_id": null,
+      "action": "apply"
+    },
+    "valid": false,
+    "label": "LearningRecommendationActionRequest:0:missing:recommendation_id"
+  },
+  {
+    "document": "ai-learning.schema.json",
+    "pointer": "#/$defs/LearningRecommendationActionRequest",
+    "payload": {
+      "schema_version": "5",
+      "ai_learning_contract_version": "1",
+      "operation_id": "20000000-0000-4000-8000-000000000001",
+      "profile_context": {
+        "profile_id": "20000000-0000-4000-8000-000000000002",
+        "privacy_epoch": 0
+      },
+      "recommendation_id": "20000000-0000-4000-8000-000000000001",
+      "expected_evidence_revision": 2,
+      "expected_basis_signature": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "expected_preference_version": 0,
+      "expected_choice_id": null,
+      "action": "apply"
+    },
+    "valid": false,
+    "label": "LearningRecommendationActionRequest:0:missing:expected_recommendation_version"
+  },
+  {
+    "document": "ai-learning.schema.json",
+    "pointer": "#/$defs/LearningRecommendationActionRequest",
+    "payload": {
+      "schema_version": "5",
+      "ai_learning_contract_version": "1",
+      "operation_id": "20000000-0000-4000-8000-000000000001",
+      "profile_context": {
+        "profile_id": "20000000-0000-4000-8000-000000000002",
+        "privacy_epoch": 0
+      },
+      "recommendation_id": "20000000-0000-4000-8000-000000000001",
+      "expected_recommendation_version": 1,
+      "expected_basis_signature": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "expected_preference_version": 0,
+      "expected_choice_id": null,
+      "action": "apply"
+    },
+    "valid": false,
+    "label": "LearningRecommendationActionRequest:0:missing:expected_evidence_revision"
+  },
+  {
+    "document": "ai-learning.schema.json",
+    "pointer": "#/$defs/LearningRecommendationActionRequest",
+    "payload": {
+      "schema_version": "5",
+      "ai_learning_contract_version": "1",
+      "operation_id": "20000000-0000-4000-8000-000000000001",
+      "profile_context": {
+        "profile_id": "20000000-0000-4000-8000-000000000002",
+        "privacy_epoch": 0
+      },
+      "recommendation_id": "20000000-0000-4000-8000-000000000001",
+      "expected_recommendation_version": 1,
+      "expected_evidence_revision": 2,
+      "expected_preference_version": 0,
+      "expected_choice_id": null,
+      "action": "apply"
+    },
+    "valid": false,
+    "label": "LearningRecommendationActionRequest:0:missing:expected_basis_signature"
+  },
+  {
+    "document": "ai-learning.schema.json",
+    "pointer": "#/$defs/LearningRecommendationActionRequest",
+    "payload": {
+      "schema_version": "5",
+      "ai_learning_contract_version": "1",
+      "operation_id": "20000000-0000-4000-8000-000000000001",
+      "profile_context": {
+        "profile_id": "20000000-0000-4000-8000-000000000002",
+        "privacy_epoch": 0
+      },
+      "recommendation_id": "20000000-0000-4000-8000-000000000001",
+      "expected_recommendation_version": 1,
+      "expected_evidence_revision": 2,
+      "expected_basis_signature": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "expected_choice_id": null,
+      "action": "apply"
+    },
+    "valid": false,
+    "label": "LearningRecommendationActionRequest:0:missing:expected_preference_version"
+  },
+  {
+    "document": "ai-learning.schema.json",
+    "pointer": "#/$defs/LearningRecommendationActionRequest",
+    "payload": {
+      "schema_version": "5",
+      "ai_learning_contract_version": "1",
+      "operation_id": "20000000-0000-4000-8000-000000000001",
+      "profile_context": {
+        "profile_id": "20000000-0000-4000-8000-000000000002",
+        "privacy_epoch": 0
+      },
+      "recommendation_id": "20000000-0000-4000-8000-000000000001",
+      "expected_recommendation_version": 1,
+      "expected_evidence_revision": 2,
+      "expected_basis_signature": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "expected_preference_version": 0,
+      "action": "apply"
+    },
+    "valid": false,
+    "label": "LearningRecommendationActionRequest:0:missing:expected_choice_id"
+  },
+  {
+    "document": "ai-learning.schema.json",
+    "pointer": "#/$defs/LearningRecommendationActionRequest",
+    "payload": {
+      "schema_version": "5",
+      "ai_learning_contract_version": "1",
+      "operation_id": "20000000-0000-4000-8000-000000000001",
+      "profile_context": {
+        "profile_id": "20000000-0000-4000-8000-000000000002",
+        "privacy_epoch": 0
+      },
+      "recommendation_id": "20000000-0000-4000-8000-000000000001",
+      "expected_recommendation_version": 1,
+      "expected_evidence_revision": 2,
+      "expected_basis_signature": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "expected_preference_version": 0,
+      "expected_choice_id": null
+    },
+    "valid": false,
+    "label": "LearningRecommendationActionRequest:0:missing:action"
+  },
+  {
+    "document": "ai-learning.schema.json",
+    "pointer": "#/$defs/LearningRecommendationActionRequest",
+    "payload": {
+      "schema_version": "5",
+      "ai_learning_contract_version": "1",
+      "operation_id": "20000000-0000-4000-8000-000000000001",
+      "profile_context": {
+        "profile_id": "20000000-0000-4000-8000-000000000002",
+        "privacy_epoch": 0
+      },
+      "recommendation_id": "20000000-0000-4000-8000-000000000001",
+      "expected_recommendation_version": 1,
+      "expected_evidence_revision": 2,
+      "expected_basis_signature": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "expected_preference_version": 0,
+      "expected_choice_id": null,
+      "action": "keep"
+    },
+    "valid": true,
+    "label": "LearningRecommendationActionRequest:1"
+  },
+  {
+    "document": "ai-learning.schema.json",
+    "pointer": "#/$defs/LearningRecommendationActionRequest",
+    "payload": {
+      "schema_version": "5",
+      "ai_learning_contract_version": "1",
+      "operation_id": "20000000-0000-4000-8000-000000000001",
+      "profile_context": {
+        "profile_id": "20000000-0000-4000-8000-000000000002",
+        "privacy_epoch": 0
+      },
+      "recommendation_id": "20000000-0000-4000-8000-000000000001",
+      "expected_recommendation_version": 1,
+      "expected_evidence_revision": 2,
+      "expected_basis_signature": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "expected_preference_version": 0,
+      "expected_choice_id": null,
+      "action": "keep",
+      "unexpected": true
+    },
+    "valid": false,
+    "label": "LearningRecommendationActionRequest:1:extra"
+  },
+  {
+    "document": "ai-learning.schema.json",
+    "pointer": "#/$defs/LearningRecommendationActionRequest",
+    "payload": {
+      "ai_learning_contract_version": "1",
+      "operation_id": "20000000-0000-4000-8000-000000000001",
+      "profile_context": {
+        "profile_id": "20000000-0000-4000-8000-000000000002",
+        "privacy_epoch": 0
+      },
+      "recommendation_id": "20000000-0000-4000-8000-000000000001",
+      "expected_recommendation_version": 1,
+      "expected_evidence_revision": 2,
+      "expected_basis_signature": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "expected_preference_version": 0,
+      "expected_choice_id": null,
+      "action": "keep"
+    },
+    "valid": false,
+    "label": "LearningRecommendationActionRequest:1:missing:schema_version"
+  },
+  {
+    "document": "ai-learning.schema.json",
+    "pointer": "#/$defs/LearningRecommendationActionRequest",
+    "payload": {
+      "schema_version": "5",
+      "operation_id": "20000000-0000-4000-8000-000000000001",
+      "profile_context": {
+        "profile_id": "20000000-0000-4000-8000-000000000002",
+        "privacy_epoch": 0
+      },
+      "recommendation_id": "20000000-0000-4000-8000-000000000001",
+      "expected_recommendation_version": 1,
+      "expected_evidence_revision": 2,
+      "expected_basis_signature": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "expected_preference_version": 0,
+      "expected_choice_id": null,
+      "action": "keep"
+    },
+    "valid": false,
+    "label": "LearningRecommendationActionRequest:1:missing:ai_learning_contract_version"
+  },
+  {
+    "document": "ai-learning.schema.json",
+    "pointer": "#/$defs/LearningRecommendationActionRequest",
+    "payload": {
+      "schema_version": "5",
+      "ai_learning_contract_version": "1",
+      "profile_context": {
+        "profile_id": "20000000-0000-4000-8000-000000000002",
+        "privacy_epoch": 0
+      },
+      "recommendation_id": "20000000-0000-4000-8000-000000000001",
+      "expected_recommendation_version": 1,
+      "expected_evidence_revision": 2,
+      "expected_basis_signature": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "expected_preference_version": 0,
+      "expected_choice_id": null,
+      "action": "keep"
+    },
+    "valid": false,
+    "label": "LearningRecommendationActionRequest:1:missing:operation_id"
+  },
+  {
+    "document": "ai-learning.schema.json",
+    "pointer": "#/$defs/LearningRecommendationActionRequest",
+    "payload": {
+      "schema_version": "5",
+      "ai_learning_contract_version": "1",
+      "operation_id": "20000000-0000-4000-8000-000000000001",
+      "recommendation_id": "20000000-0000-4000-8000-000000000001",
+      "expected_recommendation_version": 1,
+      "expected_evidence_revision": 2,
+      "expected_basis_signature": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "expected_preference_version": 0,
+      "expected_choice_id": null,
+      "action": "keep"
+    },
+    "valid": false,
+    "label": "LearningRecommendationActionRequest:1:missing:profile_context"
+  },
+  {
+    "document": "ai-learning.schema.json",
+    "pointer": "#/$defs/LearningRecommendationActionRequest",
+    "payload": {
+      "schema_version": "5",
+      "ai_learning_contract_version": "1",
+      "operation_id": "20000000-0000-4000-8000-000000000001",
+      "profile_context": {
+        "profile_id": "20000000-0000-4000-8000-000000000002",
+        "privacy_epoch": 0
+      },
+      "expected_recommendation_version": 1,
+      "expected_evidence_revision": 2,
+      "expected_basis_signature": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "expected_preference_version": 0,
+      "expected_choice_id": null,
+      "action": "keep"
+    },
+    "valid": false,
+    "label": "LearningRecommendationActionRequest:1:missing:recommendation_id"
+  },
+  {
+    "document": "ai-learning.schema.json",
+    "pointer": "#/$defs/LearningRecommendationActionRequest",
+    "payload": {
+      "schema_version": "5",
+      "ai_learning_contract_version": "1",
+      "operation_id": "20000000-0000-4000-8000-000000000001",
+      "profile_context": {
+        "profile_id": "20000000-0000-4000-8000-000000000002",
+        "privacy_epoch": 0
+      },
+      "recommendation_id": "20000000-0000-4000-8000-000000000001",
+      "expected_evidence_revision": 2,
+      "expected_basis_signature": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "expected_preference_version": 0,
+      "expected_choice_id": null,
+      "action": "keep"
+    },
+    "valid": false,
+    "label": "LearningRecommendationActionRequest:1:missing:expected_recommendation_version"
+  },
+  {
+    "document": "ai-learning.schema.json",
+    "pointer": "#/$defs/LearningRecommendationActionRequest",
+    "payload": {
+      "schema_version": "5",
+      "ai_learning_contract_version": "1",
+      "operation_id": "20000000-0000-4000-8000-000000000001",
+      "profile_context": {
+        "profile_id": "20000000-0000-4000-8000-000000000002",
+        "privacy_epoch": 0
+      },
+      "recommendation_id": "20000000-0000-4000-8000-000000000001",
+      "expected_recommendation_version": 1,
+      "expected_basis_signature": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "expected_preference_version": 0,
+      "expected_choice_id": null,
+      "action": "keep"
+    },
+    "valid": false,
+    "label": "LearningRecommendationActionRequest:1:missing:expected_evidence_revision"
+  },
+  {
+    "document": "ai-learning.schema.json",
+    "pointer": "#/$defs/LearningRecommendationActionRequest",
+    "payload": {
+      "schema_version": "5",
+      "ai_learning_contract_version": "1",
+      "operation_id": "20000000-0000-4000-8000-000000000001",
+      "profile_context": {
+        "profile_id": "20000000-0000-4000-8000-000000000002",
+        "privacy_epoch": 0
+      },
+      "recommendation_id": "20000000-0000-4000-8000-000000000001",
+      "expected_recommendation_version": 1,
+      "expected_evidence_revision": 2,
+      "expected_preference_version": 0,
+      "expected_choice_id": null,
+      "action": "keep"
+    },
+    "valid": false,
+    "label": "LearningRecommendationActionRequest:1:missing:expected_basis_signature"
+  },
+  {
+    "document": "ai-learning.schema.json",
+    "pointer": "#/$defs/LearningRecommendationActionRequest",
+    "payload": {
+      "schema_version": "5",
+      "ai_learning_contract_version": "1",
+      "operation_id": "20000000-0000-4000-8000-000000000001",
+      "profile_context": {
+        "profile_id": "20000000-0000-4000-8000-000000000002",
+        "privacy_epoch": 0
+      },
+      "recommendation_id": "20000000-0000-4000-8000-000000000001",
+      "expected_recommendation_version": 1,
+      "expected_evidence_revision": 2,
+      "expected_basis_signature": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "expected_choice_id": null,
+      "action": "keep"
+    },
+    "valid": false,
+    "label": "LearningRecommendationActionRequest:1:missing:expected_preference_version"
+  },
+  {
+    "document": "ai-learning.schema.json",
+    "pointer": "#/$defs/LearningRecommendationActionRequest",
+    "payload": {
+      "schema_version": "5",
+      "ai_learning_contract_version": "1",
+      "operation_id": "20000000-0000-4000-8000-000000000001",
+      "profile_context": {
+        "profile_id": "20000000-0000-4000-8000-000000000002",
+        "privacy_epoch": 0
+      },
+      "recommendation_id": "20000000-0000-4000-8000-000000000001",
+      "expected_recommendation_version": 1,
+      "expected_evidence_revision": 2,
+      "expected_basis_signature": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "expected_preference_version": 0,
+      "action": "keep"
+    },
+    "valid": false,
+    "label": "LearningRecommendationActionRequest:1:missing:expected_choice_id"
+  },
+  {
+    "document": "ai-learning.schema.json",
+    "pointer": "#/$defs/LearningRecommendationActionRequest",
+    "payload": {
+      "schema_version": "5",
+      "ai_learning_contract_version": "1",
+      "operation_id": "20000000-0000-4000-8000-000000000001",
+      "profile_context": {
+        "profile_id": "20000000-0000-4000-8000-000000000002",
+        "privacy_epoch": 0
+      },
+      "recommendation_id": "20000000-0000-4000-8000-000000000001",
+      "expected_recommendation_version": 1,
+      "expected_evidence_revision": 2,
+      "expected_basis_signature": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "expected_preference_version": 0,
+      "expected_choice_id": null
+    },
+    "valid": false,
+    "label": "LearningRecommendationActionRequest:1:missing:action"
+  },
+  {
+    "document": "ai-learning.schema.json",
+    "pointer": "#/$defs/LearningRecommendationActionRequest",
+    "payload": {
+      "schema_version": "5",
+      "ai_learning_contract_version": "1",
+      "operation_id": "20000000-0000-4000-8000-000000000001",
+      "profile_context": {
+        "profile_id": "20000000-0000-4000-8000-000000000002",
+        "privacy_epoch": 0
+      },
+      "recommendation_id": "20000000-0000-4000-8000-000000000001",
+      "expected_recommendation_version": 1,
+      "expected_evidence_revision": 2,
+      "expected_basis_signature": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "expected_preference_version": 0,
+      "expected_choice_id": null,
+      "action": "dismiss"
+    },
+    "valid": true,
+    "label": "LearningRecommendationActionRequest:2"
+  },
+  {
+    "document": "ai-learning.schema.json",
+    "pointer": "#/$defs/LearningRecommendationActionRequest",
+    "payload": {
+      "schema_version": "5",
+      "ai_learning_contract_version": "1",
+      "operation_id": "20000000-0000-4000-8000-000000000001",
+      "profile_context": {
+        "profile_id": "20000000-0000-4000-8000-000000000002",
+        "privacy_epoch": 0
+      },
+      "recommendation_id": "20000000-0000-4000-8000-000000000001",
+      "expected_recommendation_version": 1,
+      "expected_evidence_revision": 2,
+      "expected_basis_signature": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "expected_preference_version": 0,
+      "expected_choice_id": null,
+      "action": "dismiss",
+      "unexpected": true
+    },
+    "valid": false,
+    "label": "LearningRecommendationActionRequest:2:extra"
+  },
+  {
+    "document": "ai-learning.schema.json",
+    "pointer": "#/$defs/LearningRecommendationActionRequest",
+    "payload": {
+      "ai_learning_contract_version": "1",
+      "operation_id": "20000000-0000-4000-8000-000000000001",
+      "profile_context": {
+        "profile_id": "20000000-0000-4000-8000-000000000002",
+        "privacy_epoch": 0
+      },
+      "recommendation_id": "20000000-0000-4000-8000-000000000001",
+      "expected_recommendation_version": 1,
+      "expected_evidence_revision": 2,
+      "expected_basis_signature": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "expected_preference_version": 0,
+      "expected_choice_id": null,
+      "action": "dismiss"
+    },
+    "valid": false,
+    "label": "LearningRecommendationActionRequest:2:missing:schema_version"
+  },
+  {
+    "document": "ai-learning.schema.json",
+    "pointer": "#/$defs/LearningRecommendationActionRequest",
+    "payload": {
+      "schema_version": "5",
+      "operation_id": "20000000-0000-4000-8000-000000000001",
+      "profile_context": {
+        "profile_id": "20000000-0000-4000-8000-000000000002",
+        "privacy_epoch": 0
+      },
+      "recommendation_id": "20000000-0000-4000-8000-000000000001",
+      "expected_recommendation_version": 1,
+      "expected_evidence_revision": 2,
+      "expected_basis_signature": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "expected_preference_version": 0,
+      "expected_choice_id": null,
+      "action": "dismiss"
+    },
+    "valid": false,
+    "label": "LearningRecommendationActionRequest:2:missing:ai_learning_contract_version"
+  },
+  {
+    "document": "ai-learning.schema.json",
+    "pointer": "#/$defs/LearningRecommendationActionRequest",
+    "payload": {
+      "schema_version": "5",
+      "ai_learning_contract_version": "1",
+      "profile_context": {
+        "profile_id": "20000000-0000-4000-8000-000000000002",
+        "privacy_epoch": 0
+      },
+      "recommendation_id": "20000000-0000-4000-8000-000000000001",
+      "expected_recommendation_version": 1,
+      "expected_evidence_revision": 2,
+      "expected_basis_signature": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "expected_preference_version": 0,
+      "expected_choice_id": null,
+      "action": "dismiss"
+    },
+    "valid": false,
+    "label": "LearningRecommendationActionRequest:2:missing:operation_id"
+  },
+  {
+    "document": "ai-learning.schema.json",
+    "pointer": "#/$defs/LearningRecommendationActionRequest",
+    "payload": {
+      "schema_version": "5",
+      "ai_learning_contract_version": "1",
+      "operation_id": "20000000-0000-4000-8000-000000000001",
+      "recommendation_id": "20000000-0000-4000-8000-000000000001",
+      "expected_recommendation_version": 1,
+      "expected_evidence_revision": 2,
+      "expected_basis_signature": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "expected_preference_version": 0,
+      "expected_choice_id": null,
+      "action": "dismiss"
+    },
+    "valid": false,
+    "label": "LearningRecommendationActionRequest:2:missing:profile_context"
+  },
+  {
+    "document": "ai-learning.schema.json",
+    "pointer": "#/$defs/LearningRecommendationActionRequest",
+    "payload": {
+      "schema_version": "5",
+      "ai_learning_contract_version": "1",
+      "operation_id": "20000000-0000-4000-8000-000000000001",
+      "profile_context": {
+        "profile_id": "20000000-0000-4000-8000-000000000002",
+        "privacy_epoch": 0
+      },
+      "expected_recommendation_version": 1,
+      "expected_evidence_revision": 2,
+      "expected_basis_signature": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "expected_preference_version": 0,
+      "expected_choice_id": null,
+      "action": "dismiss"
+    },
+    "valid": false,
+    "label": "LearningRecommendationActionRequest:2:missing:recommendation_id"
+  },
+  {
+    "document": "ai-learning.schema.json",
+    "pointer": "#/$defs/LearningRecommendationActionRequest",
+    "payload": {
+      "schema_version": "5",
+      "ai_learning_contract_version": "1",
+      "operation_id": "20000000-0000-4000-8000-000000000001",
+      "profile_context": {
+        "profile_id": "20000000-0000-4000-8000-000000000002",
+        "privacy_epoch": 0
+      },
+      "recommendation_id": "20000000-0000-4000-8000-000000000001",
+      "expected_evidence_revision": 2,
+      "expected_basis_signature": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "expected_preference_version": 0,
+      "expected_choice_id": null,
+      "action": "dismiss"
+    },
+    "valid": false,
+    "label": "LearningRecommendationActionRequest:2:missing:expected_recommendation_version"
+  },
+  {
+    "document": "ai-learning.schema.json",
+    "pointer": "#/$defs/LearningRecommendationActionRequest",
+    "payload": {
+      "schema_version": "5",
+      "ai_learning_contract_version": "1",
+      "operation_id": "20000000-0000-4000-8000-000000000001",
+      "profile_context": {
+        "profile_id": "20000000-0000-4000-8000-000000000002",
+        "privacy_epoch": 0
+      },
+      "recommendation_id": "20000000-0000-4000-8000-000000000001",
+      "expected_recommendation_version": 1,
+      "expected_basis_signature": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "expected_preference_version": 0,
+      "expected_choice_id": null,
+      "action": "dismiss"
+    },
+    "valid": false,
+    "label": "LearningRecommendationActionRequest:2:missing:expected_evidence_revision"
+  },
+  {
+    "document": "ai-learning.schema.json",
+    "pointer": "#/$defs/LearningRecommendationActionRequest",
+    "payload": {
+      "schema_version": "5",
+      "ai_learning_contract_version": "1",
+      "operation_id": "20000000-0000-4000-8000-000000000001",
+      "profile_context": {
+        "profile_id": "20000000-0000-4000-8000-000000000002",
+        "privacy_epoch": 0
+      },
+      "recommendation_id": "20000000-0000-4000-8000-000000000001",
+      "expected_recommendation_version": 1,
+      "expected_evidence_revision": 2,
+      "expected_preference_version": 0,
+      "expected_choice_id": null,
+      "action": "dismiss"
+    },
+    "valid": false,
+    "label": "LearningRecommendationActionRequest:2:missing:expected_basis_signature"
+  },
+  {
+    "document": "ai-learning.schema.json",
+    "pointer": "#/$defs/LearningRecommendationActionRequest",
+    "payload": {
+      "schema_version": "5",
+      "ai_learning_contract_version": "1",
+      "operation_id": "20000000-0000-4000-8000-000000000001",
+      "profile_context": {
+        "profile_id": "20000000-0000-4000-8000-000000000002",
+        "privacy_epoch": 0
+      },
+      "recommendation_id": "20000000-0000-4000-8000-000000000001",
+      "expected_recommendation_version": 1,
+      "expected_evidence_revision": 2,
+      "expected_basis_signature": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "expected_choice_id": null,
+      "action": "dismiss"
+    },
+    "valid": false,
+    "label": "LearningRecommendationActionRequest:2:missing:expected_preference_version"
+  },
+  {
+    "document": "ai-learning.schema.json",
+    "pointer": "#/$defs/LearningRecommendationActionRequest",
+    "payload": {
+      "schema_version": "5",
+      "ai_learning_contract_version": "1",
+      "operation_id": "20000000-0000-4000-8000-000000000001",
+      "profile_context": {
+        "profile_id": "20000000-0000-4000-8000-000000000002",
+        "privacy_epoch": 0
+      },
+      "recommendation_id": "20000000-0000-4000-8000-000000000001",
+      "expected_recommendation_version": 1,
+      "expected_evidence_revision": 2,
+      "expected_basis_signature": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "expected_preference_version": 0,
+      "action": "dismiss"
+    },
+    "valid": false,
+    "label": "LearningRecommendationActionRequest:2:missing:expected_choice_id"
+  },
+  {
+    "document": "ai-learning.schema.json",
+    "pointer": "#/$defs/LearningRecommendationActionRequest",
+    "payload": {
+      "schema_version": "5",
+      "ai_learning_contract_version": "1",
+      "operation_id": "20000000-0000-4000-8000-000000000001",
+      "profile_context": {
+        "profile_id": "20000000-0000-4000-8000-000000000002",
+        "privacy_epoch": 0
+      },
+      "recommendation_id": "20000000-0000-4000-8000-000000000001",
+      "expected_recommendation_version": 1,
+      "expected_evidence_revision": 2,
+      "expected_basis_signature": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "expected_preference_version": 0,
+      "expected_choice_id": null
+    },
+    "valid": false,
+    "label": "LearningRecommendationActionRequest:2:missing:action"
+  }
+]

@@ -1,0 +1,2508 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://drive-english.invalid/contracts/review.schema.json",
+  "title": "review.schema.json",
+  "x-source-spec-hashes": {
+    "review.md": "ba03f0574fe5718897bd854da3e5f59898141e43991769249de434c0be2bbcfa",
+    "segment-playback.md": "3fa6b65d839017ce9ebd77604b9a6c527f1e64edd536a0eb478732edc1a8ba91"
+  },
+  "$defs": {
+    "LegacyContentRef5": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "article_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "bundle_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "source_snapshot_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "listening_mode": {
+          "type": "string",
+          "enum": [
+            "original_full",
+            "briefing"
+          ]
+        },
+        "listening_script_id": {
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "required": [
+        "article_id",
+        "bundle_id",
+        "source_snapshot_id",
+        "listening_mode",
+        "listening_script_id"
+      ]
+    },
+    "LegacyPracticeRef5": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "article_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "bundle_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "source_snapshot_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "listening_mode": {
+          "type": "string",
+          "enum": [
+            "original_full",
+            "briefing"
+          ]
+        },
+        "listening_script_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "task_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "basic_question_version_id": {
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "required": [
+        "article_id",
+        "bundle_id",
+        "source_snapshot_id",
+        "listening_mode",
+        "listening_script_id",
+        "task_id",
+        "basic_question_version_id"
+      ],
+      "description": "Mode/script-specific task plus the canonical basic-question version. Server verifies article/snapshot/bundle/script/task/question mappings; caller IDs grant no authority."
+    },
+    "LegacyContentRef6": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "source_kind": {
+          "type": "string",
+          "const": "legacy_bundle"
+        },
+        "legacy_ref": {
+          "$ref": "#/$defs/LegacyContentRef5"
+        }
+      },
+      "required": [
+        "source_kind",
+        "legacy_ref"
+      ]
+    },
+    "LegacyPracticeRef6": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "source_kind": {
+          "type": "string",
+          "const": "legacy_bundle"
+        },
+        "legacy_ref": {
+          "$ref": "#/$defs/LegacyPracticeRef5"
+        }
+      },
+      "required": [
+        "source_kind",
+        "legacy_ref"
+      ]
+    },
+    "PreparedContentRef6": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "source_kind": {
+          "type": "string",
+          "const": "prepared_components"
+        },
+        "article_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "source_snapshot_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "source_hash": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "material_generation_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "main_component_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "main_script_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "main_text_hash": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "listening_mode": {
+          "type": "string",
+          "enum": [
+            "original_full",
+            "briefing"
+          ]
+        }
+      },
+      "required": [
+        "source_kind",
+        "article_id",
+        "source_snapshot_id",
+        "source_hash",
+        "material_generation_id",
+        "main_component_id",
+        "main_script_id",
+        "main_text_hash",
+        "listening_mode"
+      ]
+    },
+    "PreparedPracticeRef6": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "source_kind": {
+          "type": "string",
+          "const": "prepared_components"
+        },
+        "article_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "source_snapshot_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "source_hash": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "material_generation_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "main_component_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "main_script_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "main_text_hash": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "listening_mode": {
+          "type": "string",
+          "enum": [
+            "original_full",
+            "briefing"
+          ]
+        },
+        "practice_component_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "basic_question_version_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "task_revision": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        }
+      },
+      "required": [
+        "source_kind",
+        "article_id",
+        "source_snapshot_id",
+        "source_hash",
+        "material_generation_id",
+        "main_component_id",
+        "main_script_id",
+        "main_text_hash",
+        "listening_mode",
+        "practice_component_id",
+        "basic_question_version_id",
+        "task_revision"
+      ]
+    },
+    "ContentRef6": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/LegacyContentRef6"
+        },
+        {
+          "$ref": "#/$defs/PreparedContentRef6"
+        }
+      ]
+    },
+    "PracticeContentRef6": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/LegacyPracticeRef6"
+        },
+        {
+          "$ref": "#/$defs/PreparedPracticeRef6"
+        }
+      ]
+    },
+    "ProfileContext": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "profile_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "privacy_epoch": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "profile_id",
+        "privacy_epoch"
+      ],
+      "description": "Server-derived owner and deletion generation. Incoming values are expected context only; JWT subject + active session binding authorize the request."
+    },
+    "ResumeRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": [
+            "listening",
+            "practice"
+          ]
+        },
+        "record_id": {
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "required": [
+        "kind",
+        "record_id"
+      ],
+      "description": "listening references an unfinished checkpoint; practice references an unfinished lesson OR a completed lesson with pending_feedback_attempt_id. Reading a result is not a presentation ACK. Completion/ACK clears only a pointer still targeting that lesson."
+    },
+    "Segment": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "segment_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "order": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "sentence_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "start_cp": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "end_cp": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "text_hash": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        }
+      },
+      "required": [
+        "segment_id",
+        "order",
+        "sentence_id",
+        "start_cp",
+        "end_cp",
+        "text_hash"
+      ]
+    },
+    "SegmentManifest": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "manifest_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "script_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "script_hash": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "segments_version": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "manifest_hash": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "language": {
+          "type": "string",
+          "enum": [
+            "en",
+            "ko"
+          ]
+        },
+        "segments": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Segment"
+          },
+          "minItems": 1
+        }
+      },
+      "required": [
+        "manifest_id",
+        "script_id",
+        "script_hash",
+        "segments_version",
+        "manifest_hash",
+        "language",
+        "segments"
+      ]
+    },
+    "SegmentCursor6": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "type": "string",
+          "const": "segment"
+        },
+        "script_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "script_hash": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "manifest_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "manifest_version": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "manifest_hash": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "phase": {
+          "type": "string",
+          "enum": [
+            "main",
+            "followup",
+            "article_offer"
+          ]
+        },
+        "segment_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "segment_index": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "resume_from": {
+          "type": "string",
+          "const": "start"
+        },
+        "play_intent": {
+          "type": "boolean"
+        },
+        "pause_reason": {
+          "type": "string",
+          "enum": [
+            "none",
+            "user",
+            "system",
+            "privacy",
+            "voice_failure"
+          ]
+        }
+      },
+      "required": [
+        "kind",
+        "script_id",
+        "script_hash",
+        "manifest_id",
+        "manifest_version",
+        "manifest_hash",
+        "phase",
+        "segment_id",
+        "segment_index",
+        "resume_from",
+        "play_intent",
+        "pause_reason"
+      ],
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "phase": {
+                "type": "string",
+                "const": "article_offer"
+              }
+            },
+            "required": [
+              "phase"
+            ]
+          },
+          "then": {
+            "properties": {
+              "segment_id": {
+                "type": "null"
+              },
+              "segment_index": {
+                "type": "null"
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "segment_id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "segment_index": {
+                "type": "integer",
+                "minimum": 0
+              }
+            }
+          }
+        }
+      ]
+    },
+    "LegacyTimeCursor6": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "type": "string",
+          "const": "legacy_time"
+        },
+        "original_checkpoint_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "original_position_ms": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "original_duration_ms": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "phase": {
+          "type": "string",
+          "enum": [
+            "main",
+            "followup",
+            "article_offer"
+          ]
+        }
+      },
+      "required": [
+        "kind",
+        "original_checkpoint_id",
+        "original_position_ms",
+        "original_duration_ms",
+        "phase"
+      ]
+    },
+    "PlaybackCursor6": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/SegmentCursor6"
+        },
+        {
+          "$ref": "#/$defs/LegacyTimeCursor6"
+        }
+      ]
+    },
+    "PracticeEntry": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "entry_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "lesson_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "presentation_mode": {
+          "type": "string",
+          "const": "parked_modal"
+        },
+        "visibility": {
+          "type": "string",
+          "enum": [
+            "visible",
+            "closed"
+          ]
+        }
+      },
+      "required": [
+        "entry_id",
+        "lesson_id",
+        "presentation_mode",
+        "visibility"
+      ]
+    },
+    "ReturnSnapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "context_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "checkpoint_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "checkpoint_version": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "lesson_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "phase": {
+          "type": "string",
+          "enum": [
+            "main",
+            "followup",
+            "article_offer"
+          ]
+        },
+        "cursor": {
+          "$ref": "#/$defs/PlaybackCursor6"
+        },
+        "play_intent": {
+          "type": "boolean"
+        },
+        "pause_reason": {
+          "type": "string",
+          "enum": [
+            "none",
+            "user",
+            "system",
+            "privacy",
+            "voice_failure"
+          ]
+        },
+        "resume_version": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "context_id",
+        "checkpoint_id",
+        "checkpoint_version",
+        "lesson_id",
+        "phase",
+        "cursor",
+        "play_intent",
+        "pause_reason",
+        "resume_version"
+      ]
+    },
+    "ListeningContext": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "selection_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "profile_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "learning_epoch": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "version": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "origin": {
+          "type": "string",
+          "enum": [
+            "regular",
+            "history_replay"
+          ]
+        },
+        "end_policy": {
+          "type": "string",
+          "enum": [
+            "regular_auto",
+            "manual_history",
+            "manual_cancelled"
+          ]
+        },
+        "offer_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "cancelled_offer_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "source_selection_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "previous_resume_ref": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ResumeRef"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "return_snapshot": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ReturnSnapshot"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "practice_entry": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PracticeEntry"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "selection_id",
+        "profile_id",
+        "learning_epoch",
+        "version",
+        "origin",
+        "end_policy",
+        "offer_id",
+        "cancelled_offer_id",
+        "source_selection_id",
+        "previous_resume_ref",
+        "return_snapshot",
+        "practice_entry"
+      ],
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "origin": {
+                "type": "string",
+                "const": "history_replay"
+              }
+            },
+            "required": [
+              "origin"
+            ]
+          },
+          "then": {
+            "properties": {
+              "end_policy": {
+                "type": "string",
+                "const": "manual_history"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "ErrorEnvelope": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "error": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "code": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 160
+            },
+            "retryable": {
+              "type": "boolean"
+            },
+            "current_version": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "code",
+            "retryable",
+            "current_version"
+          ]
+        }
+      },
+      "required": [
+        "error"
+      ]
+    },
+    "SentenceManifestQuery": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "source_kind": {
+          "type": "string",
+          "enum": [
+            "legacy_bundle",
+            "prepared_components"
+          ]
+        },
+        "bundle_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "material_generation_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "segments_version": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "script_text_hash": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        }
+      },
+      "required": [
+        "source_kind",
+        "bundle_id",
+        "material_generation_id",
+        "segments_version",
+        "script_text_hash"
+      ],
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "source_kind": {
+                "type": "string",
+                "const": "legacy_bundle"
+              }
+            },
+            "required": [
+              "source_kind"
+            ]
+          },
+          "then": {
+            "properties": {
+              "bundle_id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "material_generation_id": {
+                "type": "null"
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "bundle_id": {
+                "type": "null"
+              },
+              "material_generation_id": {
+                "type": "string",
+                "format": "uuid"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "SentenceEntry": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "sentence_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "text_start": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "text_end": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "segment_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "meaning_ref": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 160
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "meaning_hash": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "language": {
+          "type": "string",
+          "enum": [
+            "en",
+            "ko"
+          ]
+        },
+        "speech_availability": {
+          "type": "string",
+          "enum": [
+            "available",
+            "unavailable"
+          ]
+        },
+        "meaning_availability": {
+          "type": "string",
+          "enum": [
+            "available",
+            "unavailable"
+          ]
+        },
+        "reason": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 300
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "sentence_id",
+        "text_start",
+        "text_end",
+        "segment_ids",
+        "meaning_ref",
+        "meaning_hash",
+        "language",
+        "speech_availability",
+        "meaning_availability",
+        "reason"
+      ],
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "meaning_ref": {
+                "type": "null"
+              }
+            },
+            "required": [
+              "meaning_ref"
+            ]
+          },
+          "then": {
+            "properties": {
+              "meaning_hash": {
+                "type": "null"
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "meaning_hash": {
+                "type": "string",
+                "pattern": "^[a-f0-9]{64}$"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "SentenceManifest": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "manifest_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "version": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "hash": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "source_kind": {
+          "type": "string",
+          "enum": [
+            "legacy_bundle",
+            "prepared_components"
+          ]
+        },
+        "bundle_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "material_generation_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "script_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "text_hash": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "segments_manifest_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "segments_version": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "segments_hash": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "rights_revision": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "entries": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SentenceEntry"
+          },
+          "minItems": 1
+        }
+      },
+      "required": [
+        "manifest_id",
+        "version",
+        "hash",
+        "source_kind",
+        "bundle_id",
+        "material_generation_id",
+        "script_id",
+        "text_hash",
+        "segments_manifest_id",
+        "segments_version",
+        "segments_hash",
+        "rights_revision",
+        "entries"
+      ],
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "source_kind": {
+                "type": "string",
+                "const": "legacy_bundle"
+              }
+            },
+            "required": [
+              "source_kind"
+            ]
+          },
+          "then": {
+            "properties": {
+              "bundle_id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "material_generation_id": {
+                "type": "null"
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "bundle_id": {
+                "type": "null"
+              },
+              "material_generation_id": {
+                "type": "string",
+                "format": "uuid"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "SentenceManifestResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "review_contract_version": {
+          "type": "integer",
+          "const": 1
+        },
+        "availability": {
+          "type": "string",
+          "enum": [
+            "available",
+            "unavailable"
+          ]
+        },
+        "reason": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 300
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "manifest": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SentenceManifest"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "review_contract_version",
+        "availability",
+        "reason",
+        "manifest"
+      ],
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "availability": {
+                "type": "string",
+                "const": "unavailable"
+              }
+            },
+            "required": [
+              "availability"
+            ]
+          },
+          "then": {
+            "properties": {
+              "manifest": {
+                "type": "null"
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "manifest": {
+                "$ref": "#/$defs/SentenceManifest"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "HistoryReplayRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "review_contract_version": {
+          "type": "integer",
+          "const": 1
+        },
+        "profile_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "learning_epoch": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "operation_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "source_selection_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "source_checkpoint_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "expected_resume_version": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "alternate_main_mode": {
+          "anyOf": [
+            {
+              "type": "string",
+              "enum": [
+                "original_full",
+                "briefing"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "review_contract_version",
+        "profile_id",
+        "learning_epoch",
+        "operation_id",
+        "source_selection_id",
+        "source_checkpoint_id",
+        "expected_resume_version",
+        "alternate_main_mode"
+      ]
+    },
+    "HistoryReplayResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "review_contract_version": {
+          "type": "integer",
+          "const": 1
+        },
+        "profile_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "learning_epoch": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "operation_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "selection_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "checkpoint_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "context": {
+          "$ref": "#/$defs/ListeningContext"
+        },
+        "resume_version": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "review_contract_version",
+        "profile_id",
+        "learning_epoch",
+        "operation_id",
+        "selection_id",
+        "checkpoint_id",
+        "context",
+        "resume_version"
+      ]
+    },
+    "ListeningContextQuery": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "review_contract_version": {
+          "type": "integer",
+          "const": 1
+        }
+      },
+      "required": [
+        "review_contract_version"
+      ]
+    },
+    "ListeningContextResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "review_contract_version": {
+          "type": "integer",
+          "const": 1
+        },
+        "profile_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "learning_epoch": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "context": {
+          "$ref": "#/$defs/ListeningContext"
+        }
+      },
+      "required": [
+        "review_contract_version",
+        "profile_id",
+        "learning_epoch",
+        "context"
+      ]
+    },
+    "EnterSentenceArgs": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "manifest_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "sentence_id": {
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "required": [
+        "manifest_id",
+        "sentence_id"
+      ]
+    },
+    "EnterPreviewArgs": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "draft_revision": {
+          "type": "integer",
+          "minimum": 1
+        }
+      },
+      "required": [
+        "draft_revision"
+      ]
+    },
+    "EmptyArgs": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {},
+      "required": []
+    },
+    "SelectRegularArgs": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "trigger": {
+          "type": "string",
+          "enum": [
+            "explicit",
+            "auto_offer"
+          ]
+        }
+      },
+      "required": [
+        "trigger"
+      ]
+    },
+    "EnterPracticeArgs": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "entry_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "lesson_id": {
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "required": [
+        "entry_id",
+        "lesson_id"
+      ]
+    },
+    "ClosePracticeArgs": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "entry_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "reason": {
+          "type": "string",
+          "enum": [
+            "close",
+            "back",
+            "save_exit",
+            "finish",
+            "restricted",
+            "open_settings"
+          ]
+        }
+      },
+      "required": [
+        "entry_id",
+        "reason"
+      ]
+    },
+    "CommandArgs": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/EnterSentenceArgs"
+        },
+        {
+          "$ref": "#/$defs/EnterPreviewArgs"
+        },
+        {
+          "$ref": "#/$defs/EmptyArgs"
+        },
+        {
+          "$ref": "#/$defs/SelectRegularArgs"
+        },
+        {
+          "$ref": "#/$defs/EnterPracticeArgs"
+        },
+        {
+          "$ref": "#/$defs/ClosePracticeArgs"
+        }
+      ]
+    },
+    "ReviewCommandRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "review_contract_version": {
+          "type": "integer",
+          "const": 1
+        },
+        "profile_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "learning_epoch": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "operation_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "expected_context_version": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "expected_resume_version": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "offer_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "command": {
+          "type": "string",
+          "enum": [
+            "enter_sentence",
+            "enter_preview",
+            "close_auxiliary",
+            "resume_original",
+            "select_regular",
+            "enter_practice",
+            "close_practice"
+          ]
+        },
+        "command_args": {
+          "$ref": "#/$defs/CommandArgs"
+        }
+      },
+      "required": [
+        "review_contract_version",
+        "profile_id",
+        "learning_epoch",
+        "operation_id",
+        "expected_context_version",
+        "expected_resume_version",
+        "offer_id",
+        "command",
+        "command_args"
+      ],
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "command": {
+                "type": "string",
+                "const": "enter_sentence"
+              }
+            },
+            "required": [
+              "command"
+            ]
+          },
+          "then": {
+            "properties": {
+              "command_args": {
+                "$ref": "#/$defs/EnterSentenceArgs"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "command": {
+                "type": "string",
+                "const": "enter_preview"
+              }
+            },
+            "required": [
+              "command"
+            ]
+          },
+          "then": {
+            "properties": {
+              "command_args": {
+                "$ref": "#/$defs/EnterPreviewArgs"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "command": {
+                "type": "string",
+                "const": "close_auxiliary"
+              }
+            },
+            "required": [
+              "command"
+            ]
+          },
+          "then": {
+            "properties": {
+              "command_args": {
+                "$ref": "#/$defs/EmptyArgs"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "command": {
+                "type": "string",
+                "const": "resume_original"
+              }
+            },
+            "required": [
+              "command"
+            ]
+          },
+          "then": {
+            "properties": {
+              "command_args": {
+                "$ref": "#/$defs/EmptyArgs"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "command": {
+                "type": "string",
+                "const": "select_regular"
+              }
+            },
+            "required": [
+              "command"
+            ]
+          },
+          "then": {
+            "properties": {
+              "command_args": {
+                "$ref": "#/$defs/SelectRegularArgs"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "command": {
+                "type": "string",
+                "const": "enter_practice"
+              }
+            },
+            "required": [
+              "command"
+            ]
+          },
+          "then": {
+            "properties": {
+              "command_args": {
+                "$ref": "#/$defs/EnterPracticeArgs"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "command": {
+                "type": "string",
+                "const": "close_practice"
+              }
+            },
+            "required": [
+              "command"
+            ]
+          },
+          "then": {
+            "properties": {
+              "command_args": {
+                "$ref": "#/$defs/ClosePracticeArgs"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "ReviewCommandResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "review_contract_version": {
+          "type": "integer",
+          "const": 1
+        },
+        "profile_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "learning_epoch": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "operation_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "context": {
+          "$ref": "#/$defs/ListeningContext"
+        },
+        "checkpoint_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "resume_version": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "next_selection_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "applied",
+            "no_eligible_content"
+          ]
+        }
+      },
+      "required": [
+        "review_contract_version",
+        "profile_id",
+        "learning_epoch",
+        "operation_id",
+        "context",
+        "checkpoint_id",
+        "resume_version",
+        "next_selection_id",
+        "status"
+      ]
+    },
+    "ProvidedRange": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "segment_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "minItems": 0,
+          "uniqueItems": true
+        },
+        "completed_segment_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "minItems": 0,
+          "uniqueItems": true
+        },
+        "text_start": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "text_end": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "unit": {
+          "type": "string",
+          "enum": [
+            "segment",
+            "code_point"
+          ]
+        }
+      },
+      "required": [
+        "segment_ids",
+        "completed_segment_ids",
+        "text_start",
+        "text_end",
+        "unit"
+      ]
+    },
+    "Observation": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "observation_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "device_stream_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "sequence": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "context_selection_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "lesson_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "manifest_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "sentence_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "component_hash": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "role": {
+          "type": "string",
+          "enum": [
+            "sentence_audio",
+            "sentence_meaning"
+          ]
+        },
+        "language": {
+          "type": "string",
+          "enum": [
+            "en",
+            "ko"
+          ]
+        },
+        "provided_range": {
+          "$ref": "#/$defs/ProvidedRange"
+        },
+        "delivery": {
+          "type": "string",
+          "enum": [
+            "partial",
+            "complete",
+            "interrupted"
+          ]
+        },
+        "evidence_ref": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "observed_order": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "observation_id",
+        "device_stream_id",
+        "sequence",
+        "context_selection_id",
+        "lesson_id",
+        "manifest_id",
+        "sentence_id",
+        "component_hash",
+        "role",
+        "language",
+        "provided_range",
+        "delivery",
+        "evidence_ref",
+        "observed_order"
+      ],
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "role": {
+                "type": "string",
+                "const": "sentence_audio"
+              }
+            },
+            "required": [
+              "role"
+            ]
+          },
+          "then": {
+            "properties": {
+              "provided_range": {
+                "properties": {
+                  "unit": {
+                    "type": "string",
+                    "const": "segment"
+                  }
+                }
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "provided_range": {
+                "properties": {
+                  "unit": {
+                    "type": "string",
+                    "const": "code_point"
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "SentenceObservationRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "review_contract_version": {
+          "type": "integer",
+          "const": 1
+        },
+        "profile_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "learning_epoch": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "operation_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "observation": {
+          "$ref": "#/$defs/Observation"
+        }
+      },
+      "required": [
+        "review_contract_version",
+        "profile_id",
+        "learning_epoch",
+        "operation_id",
+        "observation"
+      ]
+    },
+    "SentenceObservationResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "review_contract_version": {
+          "type": "integer",
+          "const": 1
+        },
+        "profile_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "learning_epoch": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "operation_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "observation_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "accepted_sequence": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "assessment_state": {
+          "type": "string",
+          "enum": [
+            "confirmed",
+            "pending",
+            "rejected"
+          ]
+        }
+      },
+      "required": [
+        "review_contract_version",
+        "profile_id",
+        "learning_epoch",
+        "operation_id",
+        "observation_id",
+        "accepted_sequence",
+        "assessment_state"
+      ]
+    },
+    "AssistanceFenceRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "review_contract_version": {
+          "type": "integer",
+          "const": 1
+        },
+        "profile_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "learning_epoch": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "operation_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "attempt_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "device_stream_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "through_sequence": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "original_request_hash": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        }
+      },
+      "required": [
+        "review_contract_version",
+        "profile_id",
+        "learning_epoch",
+        "operation_id",
+        "attempt_id",
+        "device_stream_id",
+        "through_sequence",
+        "original_request_hash"
+      ]
+    },
+    "AssistanceFenceResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "review_contract_version": {
+          "type": "integer",
+          "const": 1
+        },
+        "profile_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "learning_epoch": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "operation_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "attempt_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "state": {
+          "type": "string",
+          "enum": [
+            "ready",
+            "pending"
+          ]
+        },
+        "evidence_revision": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "review_contract_version",
+        "profile_id",
+        "learning_epoch",
+        "operation_id",
+        "attempt_id",
+        "state",
+        "evidence_revision"
+      ]
+    },
+    "FreshPracticeIntent": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "profile_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "learning_epoch": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "operation_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "source_lesson_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "new_lesson_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "expected_resume_version": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "pinned_ref": {
+          "$ref": "#/$defs/PracticeContentRef6"
+        },
+        "state": {
+          "type": "string",
+          "enum": [
+            "prepared",
+            "synced",
+            "selected",
+            "conflict"
+          ]
+        }
+      },
+      "required": [
+        "profile_id",
+        "learning_epoch",
+        "operation_id",
+        "source_lesson_id",
+        "new_lesson_id",
+        "expected_resume_version",
+        "pinned_ref",
+        "state"
+      ]
+    },
+    "SentenceMeaning": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "ref": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "version": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "hash": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "source_manifest_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "source_sentence_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "text": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200000
+        },
+        "language": {
+          "type": "string",
+          "const": "ko"
+        }
+      },
+      "required": [
+        "ref",
+        "version",
+        "hash",
+        "source_manifest_id",
+        "source_sentence_id",
+        "text",
+        "language"
+      ]
+    },
+    "DemoExcerpt": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "text": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200000
+        },
+        "text_hash": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "language": {
+          "type": "string",
+          "enum": [
+            "en",
+            "ko"
+          ]
+        },
+        "segments": {
+          "$ref": "#/$defs/SegmentManifest"
+        }
+      },
+      "required": [
+        "text",
+        "text_hash",
+        "language",
+        "segments"
+      ]
+    },
+    "DemoQuestion": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "band": {
+          "type": "string",
+          "enum": [
+            "basic",
+            "intermediate",
+            "advanced"
+          ]
+        },
+        "question_text": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        }
+      },
+      "required": [
+        "band",
+        "question_text"
+      ]
+    },
+    "DemoFollowup": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "role": {
+          "type": "string",
+          "enum": [
+            "original_en_summary",
+            "original_ko_summary",
+            "original_ko_translation",
+            "briefing_ko_summary",
+            "briefing_ko_translation"
+          ]
+        },
+        "excerpt": {
+          "$ref": "#/$defs/DemoExcerpt"
+        }
+      },
+      "required": [
+        "role",
+        "excerpt"
+      ]
+    },
+    "DemoManifest": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "demo_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "version": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "hash": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "source": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "publisher": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 120
+            },
+            "original_url": {
+              "type": "string",
+              "format": "uri",
+              "maxLength": 2048
+            },
+            "published_at_raw": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 120
+            },
+            "published_at_utc": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "timezone_status": {
+              "type": "string",
+              "enum": [
+                "verified",
+                "unknown"
+              ]
+            }
+          },
+          "required": [
+            "publisher",
+            "original_url",
+            "published_at_raw",
+            "published_at_utc",
+            "timezone_status"
+          ]
+        },
+        "synthetic": {
+          "type": "boolean"
+        },
+        "rights_review_reference": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "original_full": {
+          "$ref": "#/$defs/DemoExcerpt"
+        },
+        "briefing": {
+          "$ref": "#/$defs/DemoExcerpt"
+        },
+        "followups": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/DemoFollowup"
+          },
+          "minItems": 5,
+          "maxItems": 5
+        },
+        "questions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/DemoQuestion"
+          },
+          "minItems": 3,
+          "maxItems": 3
+        }
+      },
+      "required": [
+        "demo_id",
+        "version",
+        "hash",
+        "source",
+        "synthetic",
+        "rights_review_reference",
+        "original_full",
+        "briefing",
+        "followups",
+        "questions"
+      ]
+    },
+    "PreviewRun": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "run_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "draft_revision": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "binding_token": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "demo_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "demo_hash": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "phase": {
+          "type": "string",
+          "enum": [
+            "main",
+            "followup",
+            "question"
+          ]
+        },
+        "exclusive_aux_lease": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "return_snapshot": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ReturnSnapshot"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "run_id",
+        "draft_revision",
+        "binding_token",
+        "demo_id",
+        "demo_hash",
+        "phase",
+        "exclusive_aux_lease",
+        "return_snapshot"
+      ]
+    }
+  }
+}

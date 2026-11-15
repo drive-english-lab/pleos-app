@@ -1,0 +1,5964 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Drive English Profile and Media Access Contract",
+    "version": "5.0.0",
+    "description": "Schema-version5 design contract. Actual registration, handler wiring and validation are tracked per operation in implementation records; this description does not assert deployment or service availability. User JWT + active subject/session binding authorizes both anonymous and permanent profiles. Owner/epoch from request never grants access. Mutation operation_id equals Idempotency-Key. Event batch <=50 and UTF-8 <=256 KiB; other personal mutation <=16 KiB. Current-vehicle explicit settings/current lesson win at merge; absent fields restore from account. Histories remain distinct; all-profile history deletion preserves auth/settings. Logout affects only current vehicle/session. No public Data API grants on personal tables. Profile preferences and session control are independent of the learning-history epoch; still enforce active owner/session and their own versions. Audio URL issuance is read-only and uses fresh operation IDs for renewal. S2 draft revision5, schema_version5; packaged schema3 consumers require an explicit coordinated upgrade. Reject missing/old schema versions (422); never default missing exposure to unexposed. Preserve existing histories and initialize unsupported legacy exposure coverage as unknown. Existing /v1 paths denote the initial service surface. This design is not runtime/DB validation. Draft4 was not deployed; new schema5 writes require spoken-language evidence and role/language metadata. Packaged snapshots and manifests must match the canonical contract before adoption; runtime support is tracked separately. No silent English eligibility or clean-exposure defaults."
+  },
+  "paths": {
+    "/v1/profile/bootstrap": {
+      "post": {
+        "operationId": "bootstrapProfile",
+        "description": "Create/resolve one persistent profile from verified anonymous or permanent Auth. Repeated first-use requests reuse owner; never reset data on transient failure.",
+        "security": [
+          {
+            "UserBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/InstallationId"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Validated result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProfileView"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Invalid upstream or backend result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "Request processing deadline exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "UTF-8 request body exceeds the transport limit",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BootstrapRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/profile": {
+      "get": {
+        "operationId": "readProfile",
+        "description": "Read authenticated current profile, settings and active resume. Public publishable key alone is not authorized.",
+        "security": [
+          {
+            "UserBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/InstallationId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Validated result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProfileView"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Invalid upstream or backend result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "Request processing deadline exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/profile/preferences": {
+      "patch": {
+        "operationId": "updatePreferences",
+        "description": "Owner-scoped versioned explicit preference changes. Required followup selection before initial playback onboarding completes. Settings/auth state is retained by history deletion, so only owner/session and settings version govern this mutation, not the historical learning epoch.",
+        "security": [
+          {
+            "UserBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/InstallationId"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Validated result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProfileView"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Invalid upstream or backend result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "Request processing deadline exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "UTF-8 request body exceeds the transport limit",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SettingsPatch"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/profile/sync": {
+      "post": {
+        "operationId": "applySyncBatch",
+        "description": "Atomic typed stream/checkpoint/observation/lesson/attempt batch; no client selection/completion/feedback/success writes. Stale history epoch rejects all events. Observe transport50/256KiB without capping articles or observations over time. Record arrival does not select resume.",
+        "security": [
+          {
+            "UserBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/InstallationId"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Validated result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SyncReceipt"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Invalid upstream or backend result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "Request processing deadline exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "UTF-8 request body exceeds the transport limit",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SyncRequest"
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "operationId": "readSyncPage",
+        "description": "",
+        "security": [
+          {
+            "UserBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/InstallationId"
+          },
+          {
+            "name": "client_privacy_epoch",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 512
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50,
+              "default": 50
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Validated result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SyncPage"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Invalid upstream or backend result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "Request processing deadline exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/profile/merges/prepare": {
+      "post": {
+        "operationId": "prepareMerge",
+        "description": "Anonymous source authentication is required. Return short-lived source proof; cannot prepare for arbitrary profile IDs.",
+        "security": [
+          {
+            "UserBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/InstallationId"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Validated result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MergeIntent"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Invalid upstream or backend result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "Request processing deadline exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "UTF-8 request body exceeds the transport limit",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MergePrepare"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/profile/merges/complete": {
+      "post": {
+        "operationId": "completeMerge",
+        "description": "Permanent target authentication plus prepared source proof; atomic move/dedup/preference resolution/access retirement. Both profile locks and unchanged epochs are required.",
+        "security": [
+          {
+            "UserBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/InstallationId"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Validated result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MergeReceipt"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Invalid upstream or backend result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "Request processing deadline exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "UTF-8 request body exceeds the transport limit",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MergeComplete"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/profile/history-deletions": {
+      "post": {
+        "operationId": "deleteLearningHistory",
+        "description": "Delete all current-profile learning history across devices. Login/settings retained. Idempotent epoch transaction and stale-upload rejection.",
+        "security": [
+          {
+            "UserBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/InstallationId"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Validated result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeletionReceipt"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Invalid upstream or backend result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "Request processing deadline exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "UTF-8 request body exceeds the transport limit",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeletionRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/profile/sessions/logout": {
+      "post": {
+        "operationId": "logoutCurrentSession",
+        "description": "Revoke this verified session binding only. An already-revoked binding may obtain only its own existing logout receipt; it cannot bootstrap or access other personal endpoints.",
+        "security": [
+          {
+            "UserBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/InstallationId"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Validated result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LogoutReceipt"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Invalid upstream or backend result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "Request processing deadline exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "UTF-8 request body exceeds the transport limit",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LogoutRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/content/audio-access": {
+      "post": {
+        "operationId": "issueAudioAccess",
+        "description": "Read-only credential issuance, not a personal-history mutation. Check active session, current published bundle/asset link and rights. Reissue using fresh operation_id; never reuse an expired URL from an idempotency receipt.",
+        "security": [
+          {
+            "UserBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/InstallationId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AudioAccessRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Validated result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AudioAccessResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sanitized error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sanitized error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Sanitized error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Sanitized error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Sanitized error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Sanitized error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Invalid upstream or backend result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "Request processing deadline exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "UTF-8 request body exceeds the transport limit",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/profile/resume": {
+      "patch": {
+        "operationId": "selectActiveResume",
+        "description": "Explicit resume selection after referenced-record ACK; independent resume version. Semantic completion does not clear pending feedback. Presentation ACK/explicit retry decline or actual article-work end conditionally clears only the pointer still targeting that record. Delete/merge update the pointer atomically; remote change does not move current audio.",
+        "security": [
+          {
+            "UserBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/InstallationId"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Validated result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProfileView"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Invalid upstream or backend result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "Request processing deadline exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "UTF-8 request body exceeds the transport limit",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResumeSelection"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/listening/next": {
+      "post": {
+        "operationId": "selectNextArticle",
+        "description": "Select exactly one next article; persistent receipt + stream head fence; no fixed item count.",
+        "security": [
+          {
+            "UserBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/InstallationId"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Validated result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NextArticleResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Invalid upstream or backend result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "Request processing deadline exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "UTF-8 request body exceeds the transport limit",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NextArticleRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/playback-runs": {
+      "post": {
+        "operationId": "startPlaybackRun",
+        "description": "Bind actual playback observation writer and immutable prefix snapshot to one run.",
+        "security": [
+          {
+            "UserBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/InstallationId"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Validated result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlaybackRunReceipt"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Invalid upstream or backend result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "Request processing deadline exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "UTF-8 request body exceeds the transport limit",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PlaybackRunStart"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/lessons/{lesson_id}/finish": {
+      "post": {
+        "operationId": "declineLessonRetry",
+        "description": "Server validated explicit retry decline; terminal reason distinct from success.",
+        "security": [
+          {
+            "UserBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/InstallationId"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "name": "lesson_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Validated result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LessonCommandReceipt"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Invalid upstream or backend result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "Request processing deadline exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "UTF-8 request body exceeds the transport limit",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LessonFinishRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/lessons/{lesson_id}/feedback-presentations": {
+      "post": {
+        "operationId": "acknowledgeFeedbackPresentation",
+        "description": "Actual feedback delivery acknowledgement; preserve undisplayed completed results for resume.",
+        "security": [
+          {
+            "UserBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/InstallationId"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "name": "lesson_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Validated result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LessonCommandReceipt"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Invalid upstream or backend result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "Request processing deadline exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "UTF-8 request body exceeds the transport limit",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LessonPresentationRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/listening/format-changes": {
+      "post": {
+        "operationId": "changeCurrentArticleFormat",
+        "description": "Explicit same-source one-time mode replay; new selection/checkpoint at0 without changing saved preferences.",
+        "security": [
+          {
+            "UserBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/InstallationId"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Validated result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FormatChangeResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Invalid upstream or backend result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "Request processing deadline exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "UTF-8 request body exceeds the transport limit",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Referenced owned record/approved counterpart not found; preserve original work.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FormatChangeRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/practice-presentations": {
+      "post": {
+        "operationId": "preparePracticePresentation",
+        "description": "Register exact support before potential output; preparation never proves actual exposure.",
+        "security": [
+          {
+            "UserBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/InstallationId"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Validated result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PracticePresentationTicket"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Invalid upstream or backend result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "Request processing deadline exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "UTF-8 request body exceeds the transport limit",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Referenced owned record/approved counterpart not found; preserve original work.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PracticePresentationPrepare"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/practice-presentations/{presentation_id}/observations": {
+      "post": {
+        "operationId": "observePracticePresentation",
+        "description": "Record actual exact-component delivery/uncertainty without clearing feedback or resume.",
+        "security": [
+          {
+            "UserBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/InstallationId"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          },
+          {
+            "name": "presentation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Validated result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PracticePresentationReceipt"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Invalid upstream or backend result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "Request processing deadline exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "UTF-8 request body exceeds the transport limit",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Referenced owned record/approved counterpart not found; preserve original work.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PracticePresentationObservation"
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "UserBearer": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "Supabase access JWT",
+        "description": "Verify signature, issuer, audience, expiry, subject and active server session binding. Publishable key is not sufficient; caller metadata cannot authorize owner."
+      }
+    },
+    "parameters": {
+      "InstallationId": {
+        "name": "X-Installation-ID",
+        "in": "header",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "description": "Random installation context bound to verified session_id. Not identity/authorization on its own."
+      },
+      "IdempotencyKey": {
+        "name": "Idempotency-Key",
+        "in": "header",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "description": "Equals operation_id. Owner + session/endpoint + key scopes receipts; same key with different immutable payload is a conflict."
+      }
+    },
+    "schemas": {
+      "ErrorEnvelope": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "operation_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "error": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "code": {
+                "type": "string",
+                "enum": [
+                  "UNAUTHORIZED",
+                  "SESSION_REVOKED",
+                  "FORBIDDEN",
+                  "INVALID_REQUEST",
+                  "VERSION_MISMATCH",
+                  "STALE_EPOCH",
+                  "RECORD_CONFLICT",
+                  "IDEMPOTENCY_CONFLICT",
+                  "MERGE_EXPIRED",
+                  "MERGE_PROOF_REQUIRED",
+                  "CONTENT_NOT_FOUND",
+                  "CONTENT_WITHDRAWN",
+                  "RATE_LIMITED",
+                  "UPSTREAM_UNAVAILABLE",
+                  "REQUEST_TOO_LARGE",
+                  "DEADLINE_EXCEEDED"
+                ]
+              },
+              "retryable": {
+                "type": "boolean"
+              },
+              "message_ko": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 300
+              }
+            },
+            "required": [
+              "code",
+              "retryable",
+              "message_ko"
+            ]
+          },
+          "schema_version": {
+            "type": "string",
+            "const": "5"
+          }
+        },
+        "required": [
+          "operation_id",
+          "error",
+          "schema_version"
+        ]
+      },
+      "ResumeRef": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "listening",
+              "practice"
+            ]
+          },
+          "record_id": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        "required": [
+          "kind",
+          "record_id"
+        ],
+        "description": "listening references an unfinished checkpoint; practice references an unfinished lesson OR a completed lesson with pending_feedback_attempt_id. Reading a result is not a presentation ACK. Completion/ACK clears only a pointer still targeting that lesson."
+      },
+      "ProfileView": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "schema_version": {
+            "type": "string",
+            "const": "5"
+          },
+          "profile_context": {
+            "$ref": "common.schema.json#/$defs/ProfileContext"
+          },
+          "settings": {
+            "$ref": "common.schema.json#/$defs/Settings"
+          },
+          "active_resume": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ResumeRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "resume_version": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Independent optimistic version for active_resume. History deletion, merge or completion clearing the pointer advances this version."
+          },
+          "profile_kind": {
+            "type": "string",
+            "enum": [
+              "anonymous",
+              "linked"
+            ],
+            "description": "Derived from verified identity/ownership, never speaker identity or user_metadata. One active app profile; no automatic OS profile link."
+          },
+          "history_coverage": {
+            "$ref": "common.schema.json#/$defs/HistoryCoverage"
+          }
+        },
+        "required": [
+          "schema_version",
+          "profile_context",
+          "settings",
+          "active_resume",
+          "version",
+          "resume_version",
+          "profile_kind",
+          "history_coverage"
+        ]
+      },
+      "BootstrapRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "operation_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "provisional_profile_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "schema_version": {
+            "type": "string",
+            "const": "5"
+          }
+        },
+        "required": [
+          "operation_id",
+          "provisional_profile_id",
+          "schema_version"
+        ],
+        "description": "Creates/resolves one server owner for the verified auth subject. An arbitrary pre-existing provisional UUID never grants access; return an authorized mapping for local first-use records only."
+      },
+      "SettingsPatch": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "operation_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "profile_context": {
+            "$ref": "common.schema.json#/$defs/ProfileContext"
+          },
+          "expected_version": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "set": {
+            "type": "object",
+            "additionalProperties": false,
+            "minProperties": 1,
+            "properties": {
+              "topics": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 80
+                },
+                "minItems": 0,
+                "maxItems": 20,
+                "uniqueItems": true
+              },
+              "listening_mode": {
+                "type": "string",
+                "enum": [
+                  "original_full",
+                  "briefing"
+                ]
+              },
+              "followup_policy": {
+                "type": "string",
+                "enum": [
+                  "en_summary",
+                  "ko_summary",
+                  "ko_translation",
+                  "none"
+                ]
+              }
+            }
+          },
+          "finish_onboarding": {
+            "type": "boolean"
+          },
+          "schema_version": {
+            "type": "string",
+            "const": "5"
+          }
+        },
+        "required": [
+          "operation_id",
+          "profile_context",
+          "expected_version",
+          "set",
+          "finish_onboarding",
+          "schema_version"
+        ],
+        "description": "Only keys under set are explicit choices; server updates explicit_fields. Untouched initial defaults do not override target settings at merge. Omitted keys remain unchanged. Learning-history epoch changes do not reject a same-owner preference patch; expected settings version still applies. The response reports the current history epoch."
+      },
+      "CheckpointInput": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "checkpoint_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "content_ref": {
+            "$ref": "common.schema.json#/$defs/ContentRef"
+          },
+          "phase": {
+            "type": "string",
+            "enum": [
+              "main",
+              "followup",
+              "article_offer"
+            ]
+          },
+          "current_asset_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "position_ms": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "duration_ms": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "play_intent": {
+            "type": "boolean"
+          },
+          "pause_reason": {
+            "type": "string",
+            "enum": [
+              "none",
+              "user",
+              "system",
+              "privacy",
+              "voice_failure"
+            ]
+          },
+          "stream_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "selection_id": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        "required": [
+          "checkpoint_id",
+          "content_ref",
+          "phase",
+          "current_asset_id",
+          "position_ms",
+          "duration_ms",
+          "play_intent",
+          "pause_reason",
+          "stream_id",
+          "selection_id"
+        ],
+        "description": "Pinned selection ownership/content refs must match. Main/followup asset/duration match server metadata and position<=duration; article_offer has null asset/duration and position0. Caller cannot declare completion.",
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "phase": {
+                  "const": "article_offer"
+                }
+              },
+              "required": [
+                "phase"
+              ]
+            },
+            "then": {
+              "properties": {
+                "current_asset_id": {
+                  "type": "null"
+                },
+                "duration_ms": {
+                  "type": "null"
+                },
+                "position_ms": {
+                  "const": 0
+                }
+              }
+            },
+            "else": {
+              "properties": {
+                "current_asset_id": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "duration_ms": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            }
+          }
+        ]
+      },
+      "LessonInput": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "lesson_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "content_ref": {
+            "$ref": "common.schema.json#/$defs/PracticeContentRef"
+          },
+          "phase": {
+            "type": "string",
+            "enum": [
+              "question_wait",
+              "feedback_pending",
+              "retry_offer",
+              "suspended"
+            ]
+          },
+          "help_received": {
+            "type": "array",
+            "items": {
+              "$ref": "common.schema.json#/$defs/HelpKind"
+            },
+            "minItems": 0,
+            "maxItems": 4,
+            "uniqueItems": true
+          },
+          "support_refs": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 160
+            },
+            "minItems": 0,
+            "maxItems": 16,
+            "uniqueItems": true
+          },
+          "return_checkpoint_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "dialogue_progress": {
+            "$ref": "common.schema.json#/$defs/DialogueProgress"
+          }
+        },
+        "required": [
+          "lesson_id",
+          "content_ref",
+          "phase",
+          "help_received",
+          "support_refs",
+          "return_checkpoint_id",
+          "dialogue_progress"
+        ],
+        "description": "Client may request only valid transitions. Completion, judgement and validated feedback are server-owned; phase feedback_pending/retry_offer must match stored attempts/results. Never accepts prior exposure/status/assessment. Help arrays describe observed current-lesson support, not generated candidates; server validates against delivery evidence. Persist/restore dialogue business progress separately from live timers. New lesson false; existing same lesson uses monotonic OR, validated at current owner/epoch. Explicit record version conflicts do not erase true."
+      },
+      "AttemptInput": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "attempt_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "lesson_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "content_ref": {
+            "$ref": "common.schema.json#/$defs/PracticeContentRef"
+          },
+          "turn": {
+            "type": "string",
+            "enum": [
+              "first",
+              "retry"
+            ]
+          },
+          "previous_attempt_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "answer_text": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1200
+          },
+          "capture": {
+            "$ref": "common.schema.json#/$defs/Capture"
+          },
+          "help_received": {
+            "type": "array",
+            "items": {
+              "$ref": "common.schema.json#/$defs/HelpKind"
+            },
+            "minItems": 0,
+            "maxItems": 4,
+            "uniqueItems": true
+          },
+          "support_refs": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 160
+            },
+            "minItems": 0,
+            "maxItems": 16,
+            "uniqueItems": true
+          }
+        },
+        "required": [
+          "attempt_id",
+          "lesson_id",
+          "content_ref",
+          "turn",
+          "previous_attempt_id",
+          "answer_text",
+          "capture",
+          "help_received",
+          "support_refs"
+        ],
+        "description": "First has null previous ID; retry references same-owner same-task feedback. New recording uses new UUID. An unassessable recording does not spend a valid turn. Flush witnessed support receipts before acceptance; the server derives exposure at this boundary and unions confirmed support separately. Missing help arrays never prove unexposed. Offline/legacy uncertain exposure remains unknown. Original-language evidence is checked independently from form. Server derives English eligibility; a normalized English string cannot consume a valid turn. Prefer resolving one language confirmation before immutable AttemptAccepted; unresolved API input follows the unassessable branch.",
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "turn": {
+                  "const": "first"
+                }
+              },
+              "required": [
+                "turn"
+              ]
+            },
+            "then": {
+              "properties": {
+                "previous_attempt_id": {
+                  "type": "null"
+                }
+              }
+            },
+            "else": {
+              "properties": {
+                "previous_attempt_id": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              }
+            }
+          }
+        ]
+      },
+      "SyncEvent": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/StreamEvent"
+          },
+          {
+            "$ref": "#/components/schemas/CheckpointEvent"
+          },
+          {
+            "$ref": "#/components/schemas/LessonEvent"
+          },
+          {
+            "$ref": "#/components/schemas/AttemptEvent"
+          },
+          {
+            "$ref": "#/components/schemas/PlaybackObservationEvent"
+          },
+          {
+            "$ref": "#/components/schemas/DialogueProgressEvent"
+          }
+        ],
+        "discriminator": {
+          "propertyName": "kind"
+        }
+      },
+      "CheckpointEvent": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "event_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "kind": {
+            "type": "string",
+            "const": "checkpoint"
+          },
+          "expected_record_version": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "payload": {
+            "$ref": "#/components/schemas/CheckpointInput"
+          }
+        },
+        "required": [
+          "event_id",
+          "kind",
+          "expected_record_version",
+          "payload"
+        ],
+        "description": "Null expected version is conditional create only; non-null is optimistic update. Immutable attempt content cannot be changed by update."
+      },
+      "LessonEvent": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "event_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "kind": {
+            "type": "string",
+            "const": "lesson"
+          },
+          "expected_record_version": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "payload": {
+            "$ref": "#/components/schemas/LessonInput"
+          }
+        },
+        "required": [
+          "event_id",
+          "kind",
+          "expected_record_version",
+          "payload"
+        ],
+        "description": "Null expected version is conditional create only; non-null is optimistic update. Immutable attempt content cannot be changed by update."
+      },
+      "AttemptEvent": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "event_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "kind": {
+            "type": "string",
+            "const": "attempt"
+          },
+          "expected_record_version": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "payload": {
+            "$ref": "#/components/schemas/AttemptInput"
+          }
+        },
+        "required": [
+          "event_id",
+          "kind",
+          "expected_record_version",
+          "payload"
+        ],
+        "description": "Null expected version is conditional create only; non-null is optimistic update. Immutable attempt content cannot be changed by update."
+      },
+      "SyncRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "operation_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "profile_context": {
+            "$ref": "common.schema.json#/$defs/ProfileContext"
+          },
+          "events": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SyncEvent"
+            },
+            "minItems": 1,
+            "maxItems": 50
+          },
+          "schema_version": {
+            "type": "string",
+            "const": "5"
+          }
+        },
+        "required": [
+          "operation_id",
+          "profile_context",
+          "events",
+          "schema_version"
+        ],
+        "description": "UTF-8 request <=256 KiB; split by both count and bytes. Validate all events before atomic batch commit. Stale epoch rejects the entire batch; no implicit adoption of the current epoch."
+      },
+      "EventReceipt": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "event_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "record_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "outcome": {
+            "type": "string",
+            "enum": [
+              "created",
+              "updated",
+              "duplicate"
+            ]
+          }
+        },
+        "required": [
+          "event_id",
+          "record_id",
+          "version",
+          "outcome"
+        ]
+      },
+      "SyncReceipt": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "profile_context": {
+            "$ref": "common.schema.json#/$defs/ProfileContext"
+          },
+          "receipts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EventReceipt"
+            },
+            "minItems": 1,
+            "maxItems": 50
+          },
+          "cursor": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 512
+          },
+          "schema_version": {
+            "type": "string",
+            "const": "5"
+          }
+        },
+        "required": [
+          "profile_context",
+          "receipts",
+          "cursor",
+          "schema_version"
+        ]
+      },
+      "FeedbackRecord": {
+        "$ref": "inference.openapi.json#/components/schemas/StoredFeedback"
+      },
+      "ReadRecord": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/ReadStream"
+          },
+          {
+            "$ref": "#/components/schemas/ReadCheckpoint"
+          },
+          {
+            "$ref": "#/components/schemas/ReadLesson"
+          },
+          {
+            "$ref": "#/components/schemas/ReadAttempt"
+          },
+          {
+            "$ref": "#/components/schemas/ReadFeedback"
+          },
+          {
+            "$ref": "#/components/schemas/ReadSelection"
+          },
+          {
+            "$ref": "#/components/schemas/ReadPlaybackRun"
+          },
+          {
+            "$ref": "#/components/schemas/ReadPlaybackObservation"
+          },
+          {
+            "$ref": "#/components/schemas/ReadListeningCompletion"
+          },
+          {
+            "$ref": "#/components/schemas/ReadPracticePresentation"
+          },
+          {
+            "$ref": "#/components/schemas/ReadQuestionExampleExposure"
+          }
+        ],
+        "discriminator": {
+          "propertyName": "kind"
+        }
+      },
+      "ReadCheckpoint": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "record_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "kind": {
+            "type": "string",
+            "const": "checkpoint"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "payload": {
+            "$ref": "#/components/schemas/CheckpointRecord"
+          }
+        },
+        "required": [
+          "record_id",
+          "kind",
+          "version",
+          "payload"
+        ]
+      },
+      "LessonRecord": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "lesson_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "content_ref": {
+            "$ref": "common.schema.json#/$defs/PracticeContentRef"
+          },
+          "help_received": {
+            "type": "array",
+            "items": {
+              "$ref": "common.schema.json#/$defs/HelpKind"
+            },
+            "minItems": 0,
+            "maxItems": 4,
+            "uniqueItems": true
+          },
+          "support_refs": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 160
+            },
+            "minItems": 0,
+            "maxItems": 16,
+            "uniqueItems": true
+          },
+          "return_checkpoint_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "state": {
+            "$ref": "common.schema.json#/$defs/LessonState"
+          },
+          "prior_example_exposure": {
+            "allOf": [
+              {
+                "$ref": "common.schema.json#/$defs/ExampleExposureAssessment"
+              },
+              {
+                "properties": {
+                  "boundary_kind": {
+                    "const": "lesson_start"
+                  }
+                }
+              }
+            ]
+          },
+          "dialogue_progress": {
+            "$ref": "common.schema.json#/$defs/DialogueProgress"
+          }
+        },
+        "required": [
+          "lesson_id",
+          "content_ref",
+          "help_received",
+          "support_refs",
+          "return_checkpoint_id",
+          "state",
+          "prior_example_exposure",
+          "dialogue_progress"
+        ],
+        "description": "Read-only authoritative lesson state, anchors, end reason and undelivered feedback. New explicit practice has a new lesson UUID. prior_example_exposure is the server lesson_start assessment; new lessons reset valid turns, never the canonical exposure history. help_received/support_refs are validated current-lesson reports; pending/generated support is separate. Persist/restore dialogue business progress separately from live timers. New lesson false; existing same lesson uses monotonic OR, validated at current owner/epoch. Explicit record version conflicts do not erase true."
+      },
+      "ReadLesson": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "record_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "kind": {
+            "type": "string",
+            "const": "lesson"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "payload": {
+            "$ref": "#/components/schemas/LessonRecord"
+          }
+        },
+        "required": [
+          "record_id",
+          "kind",
+          "version",
+          "payload"
+        ]
+      },
+      "ReadAttempt": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "record_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "kind": {
+            "type": "string",
+            "const": "attempt"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "payload": {
+            "$ref": "#/components/schemas/AttemptRecord"
+          }
+        },
+        "required": [
+          "record_id",
+          "kind",
+          "version",
+          "payload"
+        ]
+      },
+      "ReadFeedback": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "record_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "kind": {
+            "type": "string",
+            "const": "feedback"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "payload": {
+            "$ref": "#/components/schemas/FeedbackRecord"
+          }
+        },
+        "required": [
+          "record_id",
+          "kind",
+          "version",
+          "payload"
+        ]
+      },
+      "SyncPage": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "profile_context": {
+            "$ref": "common.schema.json#/$defs/ProfileContext"
+          },
+          "reset_required": {
+            "type": "boolean"
+          },
+          "records": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReadRecord"
+            },
+            "minItems": 0,
+            "maxItems": 50
+          },
+          "cursor": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 512
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "profile": {
+            "$ref": "#/components/schemas/ProfileView"
+          },
+          "schema_version": {
+            "type": "string",
+            "const": "5"
+          }
+        },
+        "required": [
+          "profile_context",
+          "reset_required",
+          "records",
+          "cursor",
+          "profile",
+          "schema_version"
+        ],
+        "description": "If client epoch is stale: reset_required true, records empty, cursor null. Client discards old local history/outbox before requesting the new generation. Never expose data from a different owner."
+      },
+      "MergePrepare": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "operation_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "profile_context": {
+            "$ref": "common.schema.json#/$defs/ProfileContext"
+          },
+          "source_sync_cursor": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 512
+          },
+          "schema_version": {
+            "type": "string",
+            "const": "5"
+          }
+        },
+        "required": [
+          "operation_id",
+          "profile_context",
+          "source_sync_cursor",
+          "schema_version"
+        ],
+        "description": "Anonymous source only. Flush source learning/deletion outbox and confirm ACK before prepare; source cursor must cover local immutable submissions. Server derives source, never accepts arbitrary source owner IDs."
+      },
+      "MergeIntent": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "intent_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "source_profile_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "source_privacy_epoch": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "proof_token": {
+            "type": "string",
+            "minLength": 32,
+            "maxLength": 512
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "schema_version": {
+            "type": "string",
+            "const": "5"
+          }
+        },
+        "required": [
+          "intent_id",
+          "source_profile_id",
+          "source_privacy_epoch",
+          "proof_token",
+          "expires_at",
+          "schema_version"
+        ],
+        "description": "One-use source proof, default lifetime 300 seconds. Keep proof and source session reference in protected flow journal until success/rollback; never log them. Expiry preserves both profiles and requires a fresh prepared proof."
+      },
+      "MergeComplete": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "operation_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "profile_context": {
+            "$ref": "common.schema.json#/$defs/ProfileContext"
+          },
+          "intent_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "proof_token": {
+            "type": "string",
+            "minLength": 32,
+            "maxLength": 512
+          },
+          "schema_version": {
+            "type": "string",
+            "const": "5"
+          }
+        },
+        "required": [
+          "operation_id",
+          "profile_context",
+          "intent_id",
+          "proof_token",
+          "schema_version"
+        ],
+        "description": "Verified permanent target plus source proof. Recheck source/target epochs and source sync watermark in one transaction. Existing signed-in A-to-B switches are not merges."
+      },
+      "MergeReceipt": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "operation_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "source_profile_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "canonical_profile": {
+            "$ref": "#/components/schemas/ProfileView"
+          },
+          "source_sync_watermark": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 512
+          },
+          "moved_count": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "duplicate_count": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "source_access_retired": {
+            "type": "boolean",
+            "const": true
+          },
+          "schema_version": {
+            "type": "string",
+            "const": "5"
+          }
+        },
+        "required": [
+          "operation_id",
+          "source_profile_id",
+          "canonical_profile",
+          "source_sync_watermark",
+          "moved_count",
+          "duplicate_count",
+          "source_access_retired",
+          "schema_version"
+        ],
+        "description": "Same target can retry the same completion. Keep target privacy_epoch stable; merge is not deletion. Source owner retirement blocks its old JWTs. Source explicit settings/ongoing resume win; absent values fall back; distinct history remains. Cancel old-owner inflight processing and resume migrated attempts under target authorization. Transfer the source explicit unfinished or undelivered-result active_resume pointer, not the record with the newest timestamp; otherwise preserve the target pointer. Advance target resume_version in the merge transaction. Move stream/selection/run/observation/completion/lesson state and pending presentation, preserving real repeats; do not union independent runs. Source current pending-result resume may win."
+      },
+      "DeletionRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "operation_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "profile_context": {
+            "$ref": "common.schema.json#/$defs/ProfileContext"
+          },
+          "schema_version": {
+            "type": "string",
+            "const": "5"
+          }
+        },
+        "required": [
+          "operation_id",
+          "profile_context",
+          "schema_version"
+        ],
+        "description": "Resolve an already committed operation receipt before stale-epoch rejection. For a new operation require the current history epoch. Replaying a receipt never decreases the client current epoch; fetch current profile context before any history upload."
+      },
+      "DeletionReceipt": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "operation_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "profile_context": {
+            "$ref": "common.schema.json#/$defs/ProfileContext"
+          },
+          "previous_privacy_epoch": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "server_confirmed_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "scope": {
+            "type": "string",
+            "const": "all_profile_learning_history"
+          },
+          "settings_preserved": {
+            "type": "boolean",
+            "const": true
+          },
+          "schema_version": {
+            "type": "string",
+            "const": "5"
+          }
+        },
+        "required": [
+          "operation_id",
+          "profile_context",
+          "previous_privacy_epoch",
+          "server_confirmed_at",
+          "scope",
+          "settings_preserved",
+          "schema_version"
+        ],
+        "description": "Epoch increments once per operation; delete history/attempts/feedback/progress/queues and invalidate operations. Keep auth/settings and minimal receipt metadata. Offline devices apply on next authorized profile sync; already-offline devices are not claimed erased immediately. Clear active_resume and advance resume_version in the deletion transaction. Delete all new coverage/completion/selection/terminal/presentation learning records; old generation cannot recreate them."
+      },
+      "LogoutRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "operation_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "profile_context": {
+            "$ref": "common.schema.json#/$defs/ProfileContext"
+          },
+          "target_session_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "schema_version": {
+            "type": "string",
+            "const": "5"
+          }
+        },
+        "required": [
+          "operation_id",
+          "profile_context",
+          "target_session_id",
+          "schema_version"
+        ],
+        "description": "Must equal verified JWT session_id for this installation. Use isolated captured old session context; never send the new anonymous bearer to revoke the previous session. Repeated receipt lookup is allowed only for the same verified subject/session/key even after own binding retirement. History epoch staleness does not prevent closing the same verified session; this endpoint accepts no history write. Same subject/session can retry only the existing logout receipt."
+      },
+      "LogoutReceipt": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "operation_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "revoked_session_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "installation_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "server_confirmed_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "scope": {
+            "type": "string",
+            "const": "current_session"
+          },
+          "other_sessions_preserved": {
+            "type": "boolean",
+            "const": true
+          },
+          "history_preserved": {
+            "type": "boolean",
+            "const": true
+          },
+          "schema_version": {
+            "type": "string",
+            "const": "5"
+          }
+        },
+        "required": [
+          "operation_id",
+          "revoked_session_id",
+          "installation_id",
+          "server_confirmed_at",
+          "scope",
+          "other_sessions_preserved",
+          "history_preserved",
+          "schema_version"
+        ],
+        "description": "Retires only the app binding of this session. SDK provider signOut(LOCAL) and local clearing are separate effects; do not claim global provider revocation. Offline client journal blocks old-owner UI/sync immediately and retries on the isolated prior context."
+      },
+      "AudioAccessRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "schema_version": {
+            "type": "string",
+            "const": "5"
+          },
+          "operation_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "bundle_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "audio_asset_id": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        "required": [
+          "schema_version",
+          "operation_id",
+          "bundle_id",
+          "audio_asset_id"
+        ]
+      },
+      "AudioAccessResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "schema_version": {
+            "type": "string",
+            "const": "5"
+          },
+          "operation_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "bundle_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "audio_asset_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "asset_hash": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "content_type": {
+            "type": "string",
+            "enum": [
+              "audio/mpeg",
+              "audio/mp4",
+              "audio/wav",
+              "audio/ogg"
+            ]
+          },
+          "duration_ms": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "signed_url": {
+            "type": "string",
+            "format": "uri",
+            "minLength": 1,
+            "maxLength": 8192
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "schema_version",
+          "operation_id",
+          "bundle_id",
+          "audio_asset_id",
+          "asset_hash",
+          "content_type",
+          "duration_ms",
+          "signed_url",
+          "expires_at"
+        ],
+        "description": "HTTPS outside explicit loopback development. URL expiry is not a content version; new range/seek renewal uses a fresh operation_id and revalidates rights. No immediate revocation of already issued bytes is claimed."
+      },
+      "ResumeSelection": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "schema_version": {
+            "type": "string",
+            "const": "5"
+          },
+          "operation_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "profile_context": {
+            "$ref": "common.schema.json#/$defs/ProfileContext"
+          },
+          "expected_resume_version": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "active_resume": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ResumeRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "schema_version",
+          "operation_id",
+          "profile_context",
+          "expected_resume_version",
+          "active_resume"
+        ],
+        "description": "Explicit resume selection after the referenced record has been acknowledged by sync. Verify owner, current history epoch and expected_resume_version atomically; null clears the pointer. Same operation/payload returns the original receipt before version checking; different payload conflicts. A stale receipt cannot lower locally observed epoch/version. A version conflict preserves all history and the current local task, and does not blindly overwrite a newer selection. Background outbox replay must not infer or select a target from timestamps. Mark explicit start/resume/practice or the active queue next transition locally, flush its referenced records, then send this operation. Deletion/merge/logout boundaries invalidate unsent previous-context selection intents."
+      },
+      "StreamInput": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "stream_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "started_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "stream_id",
+          "started_at"
+        ],
+        "description": "Create stream metadata only. No future item array, total count, duration or product item limit. Mutations of the current head are server-owned."
+      },
+      "StreamEvent": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "event_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "kind": {
+            "type": "string",
+            "const": "stream"
+          },
+          "expected_record_version": {
+            "type": "null"
+          },
+          "payload": {
+            "$ref": "#/components/schemas/StreamInput"
+          }
+        },
+        "required": [
+          "event_id",
+          "kind",
+          "expected_record_version",
+          "payload"
+        ],
+        "description": "Conditional metadata create only; existing same ID/hash is duplicate, conflicting payload is conflict."
+      },
+      "ReadStream": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "record_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "kind": {
+            "type": "string",
+            "const": "stream"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "payload": {
+            "$ref": "#/components/schemas/StreamRecord"
+          }
+        },
+        "required": [
+          "record_id",
+          "kind",
+          "version",
+          "payload"
+        ]
+      },
+      "StreamRecord": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "stream_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "started_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "current_selection_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "stream_id",
+          "started_at",
+          "current_selection_id"
+        ],
+        "description": "Actual selected history only. Read wrapper version is the optimistic head version."
+      },
+      "CheckpointRecord": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "checkpoint_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "content_ref": {
+            "$ref": "common.schema.json#/$defs/ContentRef"
+          },
+          "phase": {
+            "type": "string",
+            "enum": [
+              "main",
+              "followup",
+              "article_offer"
+            ]
+          },
+          "current_asset_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "position_ms": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "duration_ms": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "play_intent": {
+            "type": "boolean"
+          },
+          "pause_reason": {
+            "type": "string",
+            "enum": [
+              "none",
+              "user",
+              "system",
+              "privacy",
+              "voice_failure"
+            ]
+          },
+          "stream_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "selection_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "active_run_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "main_coverage_status": {
+            "type": "string",
+            "enum": [
+              "sequential",
+              "partial",
+              "unknown"
+            ]
+          }
+        },
+        "required": [
+          "checkpoint_id",
+          "content_ref",
+          "phase",
+          "current_asset_id",
+          "position_ms",
+          "duration_ms",
+          "play_intent",
+          "pause_reason",
+          "stream_id",
+          "selection_id",
+          "active_run_id",
+          "main_coverage_status"
+        ],
+        "description": "Pinned selection ownership/content refs must match. Main/followup asset/duration match server metadata and position<=duration; article_offer has null asset/duration and position0. Caller cannot declare completion.",
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "phase": {
+                  "const": "article_offer"
+                }
+              },
+              "required": [
+                "phase"
+              ]
+            },
+            "then": {
+              "properties": {
+                "current_asset_id": {
+                  "type": "null"
+                },
+                "duration_ms": {
+                  "type": "null"
+                },
+                "position_ms": {
+                  "const": 0
+                }
+              }
+            },
+            "else": {
+              "properties": {
+                "current_asset_id": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "duration_ms": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            }
+          }
+        ]
+      },
+      "SelectionRecord": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "selection_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "stream_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "ordinal": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "previous_selection_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "content_ref": {
+            "$ref": "common.schema.json#/$defs/ContentRef"
+          },
+          "settings_snapshot": {
+            "$ref": "common.schema.json#/$defs/Settings"
+          },
+          "selected_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "selection_reason": {
+            "type": "string",
+            "enum": [
+              "automatic_unheard",
+              "explicit_article",
+              "explicit_replay",
+              "explicit_format_change"
+            ]
+          },
+          "format_change_source": {
+            "anyOf": [
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "selection_id": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "checkpoint_id": {
+                    "type": "string",
+                    "format": "uuid"
+                  }
+                },
+                "required": [
+                  "selection_id",
+                  "checkpoint_id"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "selection_id",
+          "stream_id",
+          "ordinal",
+          "previous_selection_id",
+          "content_ref",
+          "settings_snapshot",
+          "selected_at",
+          "selection_reason",
+          "format_change_source"
+        ],
+        "description": "Immutable one-article selection. Current article refs/settings stay pinned; next selection re-queries live eligible catalog. Ordinal is not an index into a preallocated item array. settings_snapshot is the saved preference snapshot pinned at the original selection, not an overwritten effective mode. On explicit_format_change, content_ref carries the one-time mode and format_change_source anchors saved work; copy the source followup policy. previous_selection_id is the actual stream head, not necessarily the source selection. Never update ProfileSettings.",
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "selection_reason": {
+                  "const": "explicit_format_change"
+                }
+              },
+              "required": [
+                "selection_reason"
+              ]
+            },
+            "then": {
+              "properties": {
+                "format_change_source": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "selection_id": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "checkpoint_id": {
+                      "type": "string",
+                      "format": "uuid"
+                    }
+                  },
+                  "required": [
+                    "selection_id",
+                    "checkpoint_id"
+                  ]
+                }
+              }
+            },
+            "else": {
+              "properties": {
+                "format_change_source": {
+                  "type": "null"
+                }
+              }
+            }
+          }
+        ]
+      },
+      "PlaybackRunRecord": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "run_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "checkpoint_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "main_audio_asset_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "initial_frontier_ms": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "confirmed_frontier_ms": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "applied_sequence_no": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "run_id",
+          "checkpoint_id",
+          "main_audio_asset_id",
+          "initial_frontier_ms",
+          "confirmed_frontier_ms",
+          "applied_sequence_no"
+        ],
+        "description": "One verified session/installation writer, one immutable main asset. Server derives confirmed frontier. A new-device resume copies only the server-confirmed prefix at run start; later old tail never changes that initial snapshot. Other runs remain independent history. An inherited frontier already at duration never generates another completion merely by run creation; only a new actual qualifying extension creates a completion."
+      },
+      "PlaybackObservationInput": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "observation_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "run_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "sequence_no": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "observed",
+              "unknown"
+            ]
+          },
+          "range": {
+            "anyOf": [
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "start_ms": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "end_ms": {
+                    "type": "integer",
+                    "minimum": 1
+                  }
+                },
+                "required": [
+                  "start_ms",
+                  "end_ms"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "observation_id",
+          "run_id",
+          "sequence_no",
+          "status",
+          "range"
+        ],
+        "description": "Append-only continuous actual playback interval [start,end). Validate 0<=start<end<=server asset duration and writer/session/owner/epoch. Close intervals at seek/stall/interruption; never bridge unplayed time. Apply only contiguous observation sequence. An observed range extends frontier only when start<=current frontier; never union a previously skipped tail retroactively. Unknown does not advance.",
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "status": {
+                  "const": "observed"
+                }
+              },
+              "required": [
+                "status"
+              ]
+            },
+            "then": {
+              "properties": {
+                "range": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "start_ms": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "end_ms": {
+                      "type": "integer",
+                      "minimum": 1
+                    }
+                  },
+                  "required": [
+                    "start_ms",
+                    "end_ms"
+                  ]
+                }
+              }
+            },
+            "else": {
+              "properties": {
+                "range": {
+                  "type": "null"
+                }
+              }
+            }
+          }
+        ]
+      },
+      "ListeningCompletionRecord": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "completion_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "checkpoint_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "run_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "content_ref": {
+            "$ref": "common.schema.json#/$defs/ContentRef"
+          },
+          "main_audio_asset_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "main_duration_ms": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "completed_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "completion_id",
+          "checkpoint_id",
+          "run_id",
+          "content_ref",
+          "main_audio_asset_id",
+          "main_duration_ms",
+          "completed_at"
+        ],
+        "description": "Server derived once per qualifying run; frontier==duration on one pinned main. Preserve real repeated runs; automatic exclusion is article_id exists across current-profile/epoch completions. Neither endpoint/EOS nor followup nor comprehension is proof."
+      },
+      "PlaybackObservationEvent": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "event_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "kind": {
+            "type": "string",
+            "const": "playback_observation"
+          },
+          "expected_record_version": {
+            "type": "null"
+          },
+          "payload": {
+            "$ref": "#/components/schemas/PlaybackObservationInput"
+          }
+        },
+        "required": [
+          "event_id",
+          "kind",
+          "expected_record_version",
+          "payload"
+        ],
+        "description": "Immutable conditional create; duplicate UUID/hash returns original receipt, different payload conflicts."
+      },
+      "ReadSelection": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "record_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "kind": {
+            "type": "string",
+            "const": "selection"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "payload": {
+            "$ref": "#/components/schemas/SelectionRecord"
+          }
+        },
+        "required": [
+          "record_id",
+          "kind",
+          "version",
+          "payload"
+        ]
+      },
+      "ReadPlaybackRun": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "record_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "kind": {
+            "type": "string",
+            "const": "playback_run"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "payload": {
+            "$ref": "#/components/schemas/PlaybackRunRecord"
+          }
+        },
+        "required": [
+          "record_id",
+          "kind",
+          "version",
+          "payload"
+        ]
+      },
+      "ReadPlaybackObservation": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "record_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "kind": {
+            "type": "string",
+            "const": "playback_observation"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "payload": {
+            "$ref": "#/components/schemas/PlaybackObservationInput"
+          }
+        },
+        "required": [
+          "record_id",
+          "kind",
+          "version",
+          "payload"
+        ]
+      },
+      "ReadListeningCompletion": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "record_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "kind": {
+            "type": "string",
+            "const": "listening_completion"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "payload": {
+            "$ref": "#/components/schemas/ListeningCompletionRecord"
+          }
+        },
+        "required": [
+          "record_id",
+          "kind",
+          "version",
+          "payload"
+        ]
+      },
+      "NextArticleRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "schema_version": {
+            "type": "string",
+            "const": "5"
+          },
+          "operation_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "profile_context": {
+            "$ref": "common.schema.json#/$defs/ProfileContext"
+          },
+          "stream_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "expected_stream_version": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "previous_selection_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "expected_settings_version": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "checkpoint_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "selection_kind": {
+            "type": "string",
+            "enum": [
+              "automatic_unheard",
+              "explicit_article",
+              "explicit_replay"
+            ]
+          },
+          "requested_article_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "schema_version",
+          "operation_id",
+          "profile_context",
+          "stream_id",
+          "expected_stream_version",
+          "previous_selection_id",
+          "expected_settings_version",
+          "checkpoint_id",
+          "selection_kind",
+          "requested_article_id"
+        ],
+        "description": "Create StreamInput through sync first. Select only at a real article boundary/explicit request, not speculative prefetch. Atomically lock profile epoch + stream head; one next per expected head. Return same persisted receipt for the same operation; different simultaneous head requests conflict. Current topics OR, catalog published_at DESC/article_id tie; automatic excludes completed and already visited articles in this stream. Explicit replay requires explicit user intent. Check latest access again at playback.",
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "selection_kind": {
+                  "const": "automatic_unheard"
+                }
+              },
+              "required": [
+                "selection_kind"
+              ]
+            },
+            "then": {
+              "properties": {
+                "requested_article_id": {
+                  "type": "null"
+                }
+              }
+            },
+            "else": {
+              "properties": {
+                "requested_article_id": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              }
+            }
+          }
+        ]
+      },
+      "NextArticleResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "schema_version": {
+            "type": "string",
+            "const": "5"
+          },
+          "operation_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "profile_context": {
+            "$ref": "common.schema.json#/$defs/ProfileContext"
+          },
+          "stream_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "stream_version": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "selected",
+              "no_candidate"
+            ]
+          },
+          "selection": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SelectionRecord"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "checkpoint": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReadCheckpoint"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "no_candidate_reason": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "all_listened",
+                  "no_eligible_content",
+                  "visited_in_stream"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "schema_version",
+          "operation_id",
+          "profile_context",
+          "stream_id",
+          "stream_version",
+          "status",
+          "selection",
+          "checkpoint",
+          "no_candidate_reason"
+        ],
+        "description": "Selected creates one selection + initial checkpoint atomically. Client stores receipt then selects resume via the versioned resume API. A stale result never instructs current playback or lowers local epoch/version. No-candidate is not a network error or blanket claim all articles were heard.",
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "status": {
+                  "const": "selected"
+                }
+              },
+              "required": [
+                "status"
+              ]
+            },
+            "then": {
+              "properties": {
+                "selection": {
+                  "$ref": "#/components/schemas/SelectionRecord"
+                },
+                "checkpoint": {
+                  "$ref": "#/components/schemas/ReadCheckpoint"
+                },
+                "no_candidate_reason": {
+                  "type": "null"
+                }
+              }
+            },
+            "else": {
+              "properties": {
+                "selection": {
+                  "type": "null"
+                },
+                "checkpoint": {
+                  "type": "null"
+                },
+                "no_candidate_reason": {
+                  "type": "string",
+                  "enum": [
+                    "all_listened",
+                    "no_eligible_content",
+                    "visited_in_stream"
+                  ]
+                }
+              }
+            }
+          }
+        ]
+      },
+      "PlaybackRunStart": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "schema_version": {
+            "type": "string",
+            "const": "5"
+          },
+          "operation_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "profile_context": {
+            "$ref": "common.schema.json#/$defs/ProfileContext"
+          },
+          "checkpoint_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "expected_checkpoint_version": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "expected_active_run_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "schema_version",
+          "operation_id",
+          "profile_context",
+          "checkpoint_id",
+          "expected_checkpoint_version",
+          "expected_active_run_id"
+        ],
+        "description": "Explicit playback start/resume establishes one run writer and immutable main. New run inherits only currently confirmed prefix of that same checkpoint/main. A new replay checkpoint starts at0. Do not merge distinct checkpoint/run portions. Later observations from another run cannot alter current UI/checkpoint or inherited prefix. Bind actual main playback only; followup/offer does not create main observation. No new completion is produced by copying an already-complete prefix."
+      },
+      "PlaybackRunReceipt": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "schema_version": {
+            "type": "string",
+            "const": "5"
+          },
+          "operation_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "profile_context": {
+            "$ref": "common.schema.json#/$defs/ProfileContext"
+          },
+          "run": {
+            "$ref": "#/components/schemas/PlaybackRunRecord"
+          },
+          "checkpoint": {
+            "$ref": "#/components/schemas/ReadCheckpoint"
+          }
+        },
+        "required": [
+          "schema_version",
+          "operation_id",
+          "profile_context",
+          "run",
+          "checkpoint"
+        ]
+      },
+      "LessonFinishRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "schema_version": {
+            "type": "string",
+            "const": "5"
+          },
+          "operation_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "profile_context": {
+            "$ref": "common.schema.json#/$defs/ProfileContext"
+          },
+          "expected_lesson_version": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "feedback_attempt_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "reason": {
+            "type": "string",
+            "const": "retry_declined"
+          }
+        },
+        "required": [
+          "schema_version",
+          "operation_id",
+          "profile_context",
+          "expected_lesson_version",
+          "feedback_attempt_id",
+          "reason"
+        ],
+        "description": "Only explicit retry refusal for the current validated retry_offer and feedback/first anchor. Silence, STOP, failure or privacy interruption is not terminal. Do not create a retry or success. Validate active session/current epoch before any cached learning receipt; duplicate in current epoch is checked before version. Clear resume only if still this lesson, atomically. Explicit refusal also acknowledges the matching current feedback as an explicit user action; clear only that pending feedback atomically with terminal reason and conditional resume cleanup. Preserve the first validated content_success: sufficient content with language_form remains true; insufficient/incorrect remains false. retry_outcome stays null (not assessed), with no extra content success. A refusal can acknowledge its matching feedback but never an optional hidden/unplayed example."
+      },
+      "LessonPresentationRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "schema_version": {
+            "type": "string",
+            "const": "5"
+          },
+          "operation_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "profile_context": {
+            "$ref": "common.schema.json#/$defs/ProfileContext"
+          },
+          "expected_lesson_version": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "feedback_attempt_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "parked_visible",
+              "voice_output_completed",
+              "explicit_user_action"
+            ]
+          },
+          "presented_support_presentation_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "minItems": 0,
+            "maxItems": 4,
+            "uniqueItems": true
+          }
+        },
+        "required": [
+          "schema_version",
+          "operation_id",
+          "profile_context",
+          "expected_lesson_version",
+          "feedback_attempt_id",
+          "mode",
+          "presented_support_presentation_ids"
+        ],
+        "description": "Acknowledge the matching pending feedback only after actual parked presentation, verified voice completion or explicit user response. Callback sent/GET result is not delivery. Unknown Gleo lifecycle cannot be synthesized. Version/matching pending guard prevents old ACK clearing newer feedback/resume. This acknowledges feedback only. The explicit array references independently recorded matching observed tickets; empty is allowed. Never infer complete-example exposure from all support_issued fields, hidden components, whole-page visibility or generic refusal."
+      },
+      "LessonCommandReceipt": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "schema_version": {
+            "type": "string",
+            "const": "5"
+          },
+          "operation_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "profile_context": {
+            "$ref": "common.schema.json#/$defs/ProfileContext"
+          },
+          "lesson": {
+            "$ref": "#/components/schemas/LessonRecord"
+          },
+          "active_resume": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ResumeRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "resume_version": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        "required": [
+          "schema_version",
+          "operation_id",
+          "profile_context",
+          "lesson",
+          "active_resume",
+          "resume_version"
+        ]
+      },
+      "AttemptRecord": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "attempt_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "lesson_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "content_ref": {
+            "$ref": "common.schema.json#/$defs/PracticeContentRef"
+          },
+          "turn": {
+            "type": "string",
+            "enum": [
+              "first",
+              "retry"
+            ]
+          },
+          "previous_attempt_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "answer_text": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1200
+          },
+          "capture": {
+            "$ref": "common.schema.json#/$defs/Capture"
+          },
+          "help_received": {
+            "type": "array",
+            "items": {
+              "$ref": "common.schema.json#/$defs/HelpKind"
+            },
+            "minItems": 0,
+            "maxItems": 4,
+            "uniqueItems": true
+          },
+          "support_refs": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 160
+            },
+            "minItems": 0,
+            "maxItems": 16,
+            "uniqueItems": true
+          },
+          "example_exposure": {
+            "allOf": [
+              {
+                "$ref": "common.schema.json#/$defs/ExampleExposureAssessment"
+              },
+              {
+                "properties": {
+                  "boundary_kind": {
+                    "const": "attempt_acceptance"
+                  }
+                }
+              }
+            ]
+          },
+          "english_attempt_status": {
+            "$ref": "common.schema.json#/$defs/EnglishAttemptStatus"
+          }
+        },
+        "required": [
+          "attempt_id",
+          "lesson_id",
+          "content_ref",
+          "turn",
+          "previous_attempt_id",
+          "answer_text",
+          "capture",
+          "help_received",
+          "support_refs",
+          "example_exposure",
+          "english_attempt_status"
+        ],
+        "description": "Read-only accepted submission plus server-derived attempt_acceptance exposure assessment. Client answer payload stays immutable; exposure assessments have independent revisions. It is not accepted as AttemptInput. Authoritative status is derived by the server; AttemptInput cannot write it. Non-English/unverified stored diagnostic attempts never consume valid first/retry.",
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "turn": {
+                  "const": "first"
+                }
+              },
+              "required": [
+                "turn"
+              ]
+            },
+            "then": {
+              "properties": {
+                "previous_attempt_id": {
+                  "type": "null"
+                }
+              }
+            },
+            "else": {
+              "properties": {
+                "previous_attempt_id": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              }
+            }
+          }
+        ]
+      },
+      "FormatChangeRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "schema_version": {
+            "type": "string",
+            "const": "5"
+          },
+          "operation_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "profile_context": {
+            "$ref": "common.schema.json#/$defs/ProfileContext"
+          },
+          "stream_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "expected_stream_version": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "expected_head_selection_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "source_selection_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "source_checkpoint_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "expected_checkpoint_version": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "checkpoint_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "target_listening_mode": {
+            "type": "string",
+            "enum": [
+              "original_full",
+              "briefing"
+            ]
+          }
+        },
+        "required": [
+          "schema_version",
+          "operation_id",
+          "profile_context",
+          "stream_id",
+          "expected_stream_version",
+          "expected_head_selection_id",
+          "source_selection_id",
+          "source_checkpoint_id",
+          "expected_checkpoint_version",
+          "checkpoint_id",
+          "target_listening_mode"
+        ],
+        "description": "Explicit current-article one-time replay only. Flush source checkpoint first. Verify source belongs to this stream/profile/epoch and its checkpoint version, separately from stream head CAS. Resolve approved sibling only in the same pinned bundle/source snapshot; arbitrary target refs are not accepted. A request to the already selected mode conflicts. Atomically save new selection + main checkpoint at position0 + stream head + receipt. Do not inherit another mode/run prefix, mutate preferences, erase old work/completion, or change resume implicitly. Unavailable/withdrawn target leaves original work intact."
+      },
+      "FormatChangeResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "schema_version": {
+            "type": "string",
+            "const": "5"
+          },
+          "operation_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "profile_context": {
+            "$ref": "common.schema.json#/$defs/ProfileContext"
+          },
+          "stream_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "stream_version": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "selection": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/SelectionRecord"
+              },
+              {
+                "properties": {
+                  "selection_reason": {
+                    "const": "explicit_format_change"
+                  }
+                }
+              }
+            ]
+          },
+          "checkpoint": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ReadCheckpoint"
+              },
+              {
+                "properties": {
+                  "payload": {
+                    "properties": {
+                      "phase": {
+                        "const": "main"
+                      },
+                      "position_ms": {
+                        "const": 0
+                      },
+                      "active_run_id": {
+                        "type": "null"
+                      },
+                      "main_coverage_status": {
+                        "const": "unknown"
+                      }
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "required": [
+          "schema_version",
+          "operation_id",
+          "profile_context",
+          "stream_id",
+          "stream_version",
+          "selection",
+          "checkpoint"
+        ],
+        "description": "One persisted explicit_format_change selection and initial main checkpoint; source snapshot/article must be identical, target mode differs, main position0 and active_run_id null. Start the new run with frontier0 through the existing run API only after current output gates and explicit versioned resume selection. Stale response is storage, never a playback instruction."
+      },
+      "PracticePresentationPrepare": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "schema_version": {
+            "type": "string",
+            "const": "5"
+          },
+          "operation_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "profile_context": {
+            "$ref": "common.schema.json#/$defs/ProfileContext"
+          },
+          "presentation_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "client_context": {
+            "$ref": "common.schema.json#/$defs/ClientContext"
+          },
+          "interaction_channel": {
+            "type": "string",
+            "enum": [
+              "parked",
+              "gleo"
+            ]
+          },
+          "content_ref": {
+            "$ref": "common.schema.json#/$defs/PracticeContentRef"
+          },
+          "lesson_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "support_refs": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 160
+            },
+            "minItems": 1,
+            "maxItems": 4,
+            "uniqueItems": true
+          }
+        },
+        "required": [
+          "schema_version",
+          "operation_id",
+          "profile_context",
+          "presentation_id",
+          "client_context",
+          "interaction_channel",
+          "content_ref",
+          "lesson_id",
+          "support_refs"
+        ],
+        "description": "Register exact approved/server-generated support components BEFORE potential display/voice. Server stores a prepared presentation, verifies owner/epoch/installation/task/question/artifacts and original context, and opens the same canonical exposure row if complete_example is included. Preparation is not exposure or received help. Without a durable registered grant, complete-example presentation waits for connection; previously registered grants remain uncertain until observed. New generic reads never authorize output. Select exact role/language refs from PracticeSupportManifest; no guessed ref names. question_meaning has kind=null but its observed ref/role is still stored; it is not a fact hint or complete-example exposure."
+      },
+      "PracticePresentationRecord": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "presentation_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "content_ref": {
+            "$ref": "common.schema.json#/$defs/PracticeContentRef"
+          },
+          "lesson_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "interaction_channel": {
+            "type": "string",
+            "enum": [
+              "parked",
+              "gleo"
+            ]
+          },
+          "artifacts": {
+            "type": "array",
+            "items": {
+              "$ref": "common.schema.json#/$defs/SupportArtifact"
+            },
+            "minItems": 1,
+            "maxItems": 4,
+            "uniqueItems": true
+          },
+          "issued_sequence": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "prepared_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "prepared",
+              "completed",
+              "partial_or_unknown",
+              "not_presented_verified"
+            ]
+          },
+          "last_observation_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "presentation_id",
+          "content_ref",
+          "lesson_id",
+          "interaction_channel",
+          "artifacts",
+          "issued_sequence",
+          "prepared_at",
+          "status",
+          "last_observation_id"
+        ],
+        "description": "Read-only durable ticket and observed status. Server retains original installation/context hash and causal lineage privately. Contains no live output grant on sync. Any unresolved full-example ticket makes negative exposure proof unknown; expiry is not no-delivery evidence.",
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "status": {
+                  "const": "prepared"
+                }
+              },
+              "required": [
+                "status"
+              ]
+            },
+            "then": {
+              "properties": {
+                "last_observation_id": {
+                  "type": "null"
+                }
+              }
+            },
+            "else": {
+              "properties": {
+                "last_observation_id": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              }
+            }
+          }
+        ]
+      },
+      "PracticePresentationTicket": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "schema_version": {
+            "type": "string",
+            "const": "5"
+          },
+          "operation_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "profile_context": {
+            "$ref": "common.schema.json#/$defs/ProfileContext"
+          },
+          "client_context": {
+            "$ref": "common.schema.json#/$defs/ClientContext"
+          },
+          "presentation": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/PracticePresentationRecord"
+              },
+              {
+                "properties": {
+                  "status": {
+                    "const": "prepared"
+                  }
+                }
+              }
+            ]
+          },
+          "exposure": {
+            "$ref": "common.schema.json#/$defs/QuestionExampleExposure"
+          }
+        },
+        "required": [
+          "schema_version",
+          "operation_id",
+          "profile_context",
+          "client_context",
+          "presentation",
+          "exposure"
+        ],
+        "description": "Persist ticket before rendering; current owner/window/safety/output grant must still be checked locally. Original context echo binds subsequent witnessed observations; it is never a current-output permission after navigation/restart."
+      },
+      "PracticePresentationObservation": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "schema_version": {
+            "type": "string",
+            "const": "5"
+          },
+          "operation_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "profile_context": {
+            "$ref": "common.schema.json#/$defs/ProfileContext"
+          },
+          "observation_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "client_context": {
+            "$ref": "common.schema.json#/$defs/ClientContext"
+          },
+          "output_instance_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "outcome": {
+            "type": "string",
+            "enum": [
+              "completed",
+              "partial_or_unknown",
+              "not_presented_verified"
+            ]
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "parked_visible",
+              "voice_output_completed",
+              "explicit_example_confirmation",
+              "indeterminate",
+              "cancelled_before_output"
+            ]
+          },
+          "adapter_evidence_ref": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 160
+          }
+        },
+        "required": [
+          "schema_version",
+          "operation_id",
+          "profile_context",
+          "observation_id",
+          "client_context",
+          "output_instance_id",
+          "outcome",
+          "mode",
+          "adapter_evidence_ref"
+        ],
+        "description": "Immutable witnessed observation of this ticket, not a client exposure flag. Completed proves every listed artifact was actually provided through an environment-verified route, including exact example text; split tickets when only some components will appear. A generic feedback response/decline, CallbackSent, queue acceptance or guessed output end is not proof. not_presented_verified needs positively verified cancellation before ANY component output; a client flag/timeout/expiry alone cannot clean uncertainty. Validate current storage owner/epoch and original installation/context/artifact; a genuinely journaled same-epoch observation may arrive after navigation without changing lesson pending state/resume. Old-epoch callbacks never recreate deleted records.",
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "outcome": {
+                  "const": "completed"
+                }
+              },
+              "required": [
+                "outcome"
+              ]
+            },
+            "then": {
+              "properties": {
+                "mode": {
+                  "enum": [
+                    "parked_visible",
+                    "voice_output_completed",
+                    "explicit_example_confirmation"
+                  ]
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "outcome": {
+                  "const": "not_presented_verified"
+                }
+              },
+              "required": [
+                "outcome"
+              ]
+            },
+            "then": {
+              "properties": {
+                "mode": {
+                  "const": "cancelled_before_output"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "outcome": {
+                  "const": "partial_or_unknown"
+                }
+              },
+              "required": [
+                "outcome"
+              ]
+            },
+            "then": {
+              "properties": {
+                "mode": {
+                  "const": "indeterminate"
+                }
+              }
+            }
+          }
+        ]
+      },
+      "PracticePresentationReceipt": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "schema_version": {
+            "type": "string",
+            "const": "5"
+          },
+          "operation_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "profile_context": {
+            "$ref": "common.schema.json#/$defs/ProfileContext"
+          },
+          "presentation": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/PracticePresentationRecord"
+              },
+              {
+                "properties": {
+                  "status": {
+                    "enum": [
+                      "completed",
+                      "partial_or_unknown",
+                      "not_presented_verified"
+                    ]
+                  }
+                }
+              }
+            ]
+          },
+          "exposure": {
+            "$ref": "common.schema.json#/$defs/QuestionExampleExposure"
+          }
+        },
+        "required": [
+          "schema_version",
+          "operation_id",
+          "profile_context",
+          "presentation",
+          "exposure"
+        ],
+        "description": "Updates only delivery/exposure facts. Never consumes a valid answer, alters semantic content_success/terminal reason, clears another pending feedback or selects active_resume. Same payload retry returns its receipt only at the current authorized epoch; no state/version downgrade from an old receipt."
+      },
+      "ReadPracticePresentation": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "record_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "kind": {
+            "type": "string",
+            "const": "practice_presentation"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "payload": {
+            "$ref": "#/components/schemas/PracticePresentationRecord"
+          }
+        },
+        "required": [
+          "record_id",
+          "kind",
+          "version",
+          "payload"
+        ]
+      },
+      "ReadQuestionExampleExposure": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "record_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "kind": {
+            "type": "string",
+            "const": "question_example_exposure"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "payload": {
+            "$ref": "common.schema.json#/$defs/QuestionExampleExposure"
+          }
+        },
+        "required": [
+          "record_id",
+          "kind",
+          "version",
+          "payload"
+        ]
+      },
+      "DialogueProgressObservation": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "lesson_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "hint_method_announced": {
+            "type": "boolean",
+            "const": true
+          },
+          "output_instance_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "adapter_evidence_ref": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 160
+          }
+        },
+        "required": [
+          "lesson_id",
+          "hint_method_announced",
+          "output_instance_id",
+          "adapter_evidence_ref"
+        ],
+        "description": "Immutable actual HINT_METHOD completion fact. Existing same-owner/current-epoch lesson required; no upsert. OR only its dialogue business flag, independent of lesson phase/version; never change valid anchors/terminal/pending feedback/resume. Validate original output evidence and dedupe output instance. Old epoch/absent lesson rejected."
+      },
+      "DialogueProgressEvent": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "event_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "kind": {
+            "type": "string",
+            "const": "dialogue_progress"
+          },
+          "expected_record_version": {
+            "type": "null"
+          },
+          "payload": {
+            "$ref": "#/components/schemas/DialogueProgressObservation"
+          }
+        },
+        "required": [
+          "event_id",
+          "kind",
+          "expected_record_version",
+          "payload"
+        ],
+        "description": "Append-only witnessed business event through existing sync, not a stale LessonInput phase update. Same UUID/payload idempotent. Receipt references current lesson ID/version; delayed event can persist true after a phase advance without reverting that phase. New first offline sync can already restore true after the create/observation order is applied."
+      }
+    }
+  },
+  "x-contract-state": "phase-1-design; runtime gates pending"
+}

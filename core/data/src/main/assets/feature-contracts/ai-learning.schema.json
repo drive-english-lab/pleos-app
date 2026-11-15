@@ -1,0 +1,1135 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Drive English S4 ai-learning contract1",
+  "description": "Design only: existing v5/S3 JSON5 bytes preserved. Relational rules: ai-learning.md and C42-C55. Not a provider Structured Output schema.",
+  "$defs": {
+    "LearningPreferenceChoice": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "choice_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "band": {
+          "type": "string",
+          "enum": [
+            "basic",
+            "intermediate",
+            "advanced"
+          ]
+        },
+        "explicit": {
+          "const": true,
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "choice_id",
+        "band",
+        "explicit"
+      ]
+    },
+    "LearningPreferenceView": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": "5",
+          "type": "string"
+        },
+        "ai_learning_contract_version": {
+          "const": "1",
+          "type": "string"
+        },
+        "profile_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "preference_version": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "choice": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LearningPreferenceChoice"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "effective_band": {
+          "type": "string",
+          "enum": [
+            "basic",
+            "intermediate",
+            "advanced"
+          ]
+        },
+        "applies_from": {
+          "const": "next_selection",
+          "type": "string"
+        }
+      },
+      "required": [
+        "schema_version",
+        "ai_learning_contract_version",
+        "profile_id",
+        "preference_version",
+        "choice",
+        "effective_band",
+        "applies_from"
+      ],
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "preference_version": {
+                "const": 0
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "choice": {
+                "type": "null"
+              },
+              "effective_band": {
+                "const": "basic"
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "choice": {
+                "$ref": "#/$defs/LearningPreferenceChoice"
+              }
+            }
+          }
+        }
+      ],
+      "description": "Nonzero choice.band must equal effective_band; relational server validation.",
+      "examples": [
+        {
+          "schema_version": "5",
+          "ai_learning_contract_version": "1",
+          "profile_id": "20000000-0000-4000-8000-000000000001",
+          "preference_version": 0,
+          "choice": null,
+          "effective_band": "basic",
+          "applies_from": "next_selection"
+        }
+      ]
+    },
+    "LearningPreferenceRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": "5",
+          "type": "string"
+        },
+        "ai_learning_contract_version": {
+          "const": "1",
+          "type": "string"
+        },
+        "operation_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "profile_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "expected_preference_version": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "expected_choice_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "choice": {
+          "$ref": "#/$defs/LearningPreferenceChoice"
+        }
+      },
+      "required": [
+        "schema_version",
+        "ai_learning_contract_version",
+        "operation_id",
+        "profile_id",
+        "expected_preference_version",
+        "expected_choice_id",
+        "choice"
+      ],
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "expected_preference_version": {
+                "const": 0
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "expected_choice_id": {
+                "type": "null"
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "expected_choice_id": {
+                "type": "string",
+                "format": "uuid"
+              }
+            }
+          }
+        }
+      ],
+      "examples": [
+        {
+          "schema_version": "5",
+          "ai_learning_contract_version": "1",
+          "operation_id": "20000000-0000-4000-8000-000000000001",
+          "profile_id": "20000000-0000-4000-8000-000000000002",
+          "expected_preference_version": 0,
+          "expected_choice_id": null,
+          "choice": {
+            "choice_id": "20000000-0000-4000-8000-000000000001",
+            "band": "intermediate",
+            "explicit": true
+          }
+        }
+      ]
+    },
+    "LearningPreferenceReceipt": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": "5",
+          "type": "string"
+        },
+        "ai_learning_contract_version": {
+          "const": "1",
+          "type": "string"
+        },
+        "operation_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "preference": {
+          "$ref": "#/$defs/LearningPreferenceView"
+        }
+      },
+      "required": [
+        "schema_version",
+        "ai_learning_contract_version",
+        "operation_id",
+        "preference"
+      ]
+    },
+    "MaterialLevelAssessment": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": [
+            "verified",
+            "unknown",
+            "review_required"
+          ]
+        },
+        "band": {
+          "anyOf": [
+            {
+              "type": "string",
+              "enum": [
+                "basic",
+                "intermediate",
+                "advanced"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "rubric_version": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "assessment_ref": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 160
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "status",
+        "band",
+        "rubric_version",
+        "assessment_ref"
+      ],
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "unknown"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "band": {
+                "type": "null"
+              },
+              "assessment_ref": {
+                "type": "null"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "verified"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "band": {
+                "type": "string",
+                "enum": [
+                  "basic",
+                  "intermediate",
+                  "advanced"
+                ]
+              },
+              "assessment_ref": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 160
+              }
+            }
+          }
+        }
+      ],
+      "examples": [
+        {
+          "status": "unknown",
+          "band": null,
+          "rubric_version": "unassessed-v1",
+          "assessment_ref": null
+        },
+        {
+          "status": "verified",
+          "band": "basic",
+          "rubric_version": "fixture-rubric-v1",
+          "assessment_ref": "fixture-review"
+        }
+      ]
+    },
+    "LearningMaterialCandidate": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "material_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "band": {
+          "type": "string",
+          "enum": [
+            "basic",
+            "intermediate",
+            "advanced"
+          ]
+        },
+        "content_ref": {
+          "$ref": "common.schema.json#/$defs/ContentRef"
+        },
+        "practice_content_ref": {
+          "anyOf": [
+            {
+              "$ref": "common.schema.json#/$defs/PracticeContentRef"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "material_status": {
+          "type": "string",
+          "enum": [
+            "ready",
+            "practice_unavailable",
+            "withdrawn"
+          ]
+        },
+        "source_level": {
+          "$ref": "#/$defs/MaterialLevelAssessment"
+        },
+        "briefing_level": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/MaterialLevelAssessment"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "question_level": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/MaterialLevelAssessment"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "material_id",
+        "band",
+        "content_ref",
+        "practice_content_ref",
+        "material_status",
+        "source_level",
+        "briefing_level",
+        "question_level"
+      ],
+      "description": "Current rights and frozen refs require server checks. Practice unavailable never substitutes another question/band."
+    },
+    "LearningMaterialCandidatePage": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": "5",
+          "type": "string"
+        },
+        "ai_learning_contract_version": {
+          "const": "1",
+          "type": "string"
+        },
+        "article_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "source_snapshot_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "listening_mode": {
+          "type": "string",
+          "enum": [
+            "original_full",
+            "briefing"
+          ]
+        },
+        "target_band": {
+          "type": "string",
+          "enum": [
+            "basic",
+            "intermediate",
+            "advanced"
+          ]
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "ready",
+            "unavailable",
+            "review_required"
+          ]
+        },
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/LearningMaterialCandidate"
+          },
+          "maxItems": 3
+        },
+        "reason_ko": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 300
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "schema_version",
+        "ai_learning_contract_version",
+        "article_id",
+        "source_snapshot_id",
+        "listening_mode",
+        "target_band",
+        "status",
+        "items",
+        "reason_ko"
+      ],
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "ready"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "items": {
+                "minItems": 1
+              }
+            }
+          }
+        }
+      ]
+    },
+    "SelectionLearningMaterialView": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": "5",
+          "type": "string"
+        },
+        "ai_learning_contract_version": {
+          "const": "1",
+          "type": "string"
+        },
+        "profile_context": {
+          "$ref": "common.schema.json#/$defs/ProfileContext"
+        },
+        "selection_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "preference_version_at_selection": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "selected_band": {
+          "type": "string",
+          "enum": [
+            "basic",
+            "intermediate",
+            "advanced"
+          ]
+        },
+        "material": {
+          "$ref": "#/$defs/LearningMaterialCandidate"
+        },
+        "selection_material_revision": {
+          "type": "integer",
+          "minimum": 1
+        }
+      },
+      "required": [
+        "schema_version",
+        "ai_learning_contract_version",
+        "profile_context",
+        "selection_id",
+        "preference_version_at_selection",
+        "selected_band",
+        "material",
+        "selection_material_revision"
+      ],
+      "description": "Pinned to actual v5 selection; same owner/epoch/refs and selected_band/material.band equality must be checked."
+    },
+    "RecommendationEvidenceItem": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "lesson_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "article_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "first_attempt_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "lesson_order": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "eligibility": {
+          "type": "string",
+          "enum": [
+            "eligible",
+            "ineligible",
+            "unknown"
+          ]
+        },
+        "exclusion_reasons": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 160
+          },
+          "maxItems": 8
+        },
+        "evidence_ref": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 160
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "task_band": {
+          "anyOf": [
+            {
+              "type": "string",
+              "enum": [
+                "basic",
+                "intermediate",
+                "advanced"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "lesson_id",
+        "article_id",
+        "first_attempt_id",
+        "lesson_order",
+        "eligibility",
+        "exclusion_reasons",
+        "evidence_ref",
+        "task_band"
+      ],
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "eligibility": {
+                "const": "eligible"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "first_attempt_id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "lesson_order": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "evidence_ref": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 160
+              },
+              "task_band": {
+                "type": "string",
+                "enum": [
+                  "basic",
+                  "intermediate",
+                  "advanced"
+                ]
+              },
+              "exclusion_reasons": {
+                "maxItems": 0
+              }
+            }
+          }
+        }
+      ]
+    },
+    "LearningRecommendation": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "recommendation_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "version": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "evidence_revision": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "basis_signature": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "recommended_band": {
+          "anyOf": [
+            {
+              "type": "string",
+              "enum": [
+                "basic",
+                "intermediate",
+                "advanced"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "reason_ko": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 300
+        },
+        "evaluated_at": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "date-time"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "rubric_version": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "policy_version": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        }
+      },
+      "required": [
+        "recommendation_id",
+        "version",
+        "evidence_revision",
+        "basis_signature",
+        "recommended_band",
+        "reason_ko",
+        "evaluated_at",
+        "rubric_version",
+        "policy_version"
+      ]
+    },
+    "LearningRecommendationView": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": "5",
+          "type": "string"
+        },
+        "ai_learning_contract_version": {
+          "const": "1",
+          "type": "string"
+        },
+        "profile_context": {
+          "$ref": "common.schema.json#/$defs/ProfileContext"
+        },
+        "recommendation_revision": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "window_coverage": {
+          "type": "string",
+          "enum": [
+            "complete",
+            "unknown"
+          ]
+        },
+        "window_lesson_count": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 10
+        },
+        "eligible_first_answer_count": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 10
+        },
+        "distinct_article_count": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 10
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "insufficient_evidence",
+            "pending",
+            "ready",
+            "deferred",
+            "kept",
+            "dismissed",
+            "applied",
+            "stale",
+            "unavailable"
+          ]
+        },
+        "recommendation": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LearningRecommendation"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "evidence": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/RecommendationEvidenceItem"
+          },
+          "maxItems": 10
+        }
+      },
+      "required": [
+        "schema_version",
+        "ai_learning_contract_version",
+        "profile_context",
+        "recommendation_revision",
+        "window_coverage",
+        "window_lesson_count",
+        "eligible_first_answer_count",
+        "distinct_article_count",
+        "status",
+        "recommendation",
+        "evidence"
+      ],
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "enum": [
+                  "ready",
+                  "kept",
+                  "dismissed",
+                  "applied"
+                ]
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "window_coverage": {
+                "const": "complete"
+              },
+              "eligible_first_answer_count": {
+                "type": "integer",
+                "minimum": 5,
+                "maximum": 10
+              },
+              "distinct_article_count": {
+                "type": "integer",
+                "minimum": 3,
+                "maximum": 10
+              },
+              "recommendation": {
+                "allOf": [
+                  {
+                    "$ref": "#/$defs/LearningRecommendation"
+                  },
+                  {
+                    "properties": {
+                      "recommended_band": {
+                        "type": "string",
+                        "enum": [
+                          "basic",
+                          "intermediate",
+                          "advanced"
+                        ]
+                      },
+                      "evaluated_at": {
+                        "type": "string",
+                        "format": "date-time"
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "insufficient_evidence"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "recommendation": {
+                "type": "null"
+              }
+            }
+          }
+        }
+      ],
+      "description": "Counts/evidence identity, causal eligibility, freshness and exact current window are relational checks; GET does not start evaluation or presentation.",
+      "examples": [
+        {
+          "schema_version": "5",
+          "ai_learning_contract_version": "1",
+          "profile_context": {
+            "profile_id": "20000000-0000-4000-8000-000000000001",
+            "privacy_epoch": 0
+          },
+          "recommendation_revision": 0,
+          "window_coverage": "complete",
+          "window_lesson_count": 0,
+          "eligible_first_answer_count": 0,
+          "distinct_article_count": 0,
+          "status": "insufficient_evidence",
+          "recommendation": null,
+          "evidence": []
+        }
+      ]
+    },
+    "LearningRecommendationActionRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": "5",
+          "type": "string"
+        },
+        "ai_learning_contract_version": {
+          "const": "1",
+          "type": "string"
+        },
+        "operation_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "profile_context": {
+          "$ref": "common.schema.json#/$defs/ProfileContext"
+        },
+        "recommendation_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "expected_recommendation_version": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "expected_evidence_revision": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "expected_basis_signature": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "expected_preference_version": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "expected_choice_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "action": {
+          "type": "string",
+          "enum": [
+            "apply",
+            "keep",
+            "dismiss"
+          ]
+        }
+      },
+      "required": [
+        "schema_version",
+        "ai_learning_contract_version",
+        "operation_id",
+        "profile_context",
+        "recommendation_id",
+        "expected_recommendation_version",
+        "expected_evidence_revision",
+        "expected_basis_signature",
+        "expected_preference_version",
+        "expected_choice_id",
+        "action"
+      ],
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "expected_preference_version": {
+                "const": 0
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "expected_choice_id": {
+                "type": "null"
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "expected_choice_id": {
+                "type": "string",
+                "format": "uuid"
+              }
+            }
+          }
+        }
+      ],
+      "examples": [
+        {
+          "schema_version": "5",
+          "ai_learning_contract_version": "1",
+          "operation_id": "20000000-0000-4000-8000-000000000001",
+          "profile_context": {
+            "profile_id": "20000000-0000-4000-8000-000000000002",
+            "privacy_epoch": 0
+          },
+          "recommendation_id": "20000000-0000-4000-8000-000000000001",
+          "expected_recommendation_version": 1,
+          "expected_evidence_revision": 2,
+          "expected_basis_signature": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "expected_preference_version": 0,
+          "expected_choice_id": null,
+          "action": "apply"
+        },
+        {
+          "schema_version": "5",
+          "ai_learning_contract_version": "1",
+          "operation_id": "20000000-0000-4000-8000-000000000001",
+          "profile_context": {
+            "profile_id": "20000000-0000-4000-8000-000000000002",
+            "privacy_epoch": 0
+          },
+          "recommendation_id": "20000000-0000-4000-8000-000000000001",
+          "expected_recommendation_version": 1,
+          "expected_evidence_revision": 2,
+          "expected_basis_signature": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "expected_preference_version": 0,
+          "expected_choice_id": null,
+          "action": "keep"
+        },
+        {
+          "schema_version": "5",
+          "ai_learning_contract_version": "1",
+          "operation_id": "20000000-0000-4000-8000-000000000001",
+          "profile_context": {
+            "profile_id": "20000000-0000-4000-8000-000000000002",
+            "privacy_epoch": 0
+          },
+          "recommendation_id": "20000000-0000-4000-8000-000000000001",
+          "expected_recommendation_version": 1,
+          "expected_evidence_revision": 2,
+          "expected_basis_signature": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "expected_preference_version": 0,
+          "expected_choice_id": null,
+          "action": "dismiss"
+        }
+      ]
+    },
+    "LearningRecommendationActionReceipt": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": "5",
+          "type": "string"
+        },
+        "ai_learning_contract_version": {
+          "const": "1",
+          "type": "string"
+        },
+        "operation_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "recommendation": {
+          "$ref": "#/$defs/LearningRecommendationView"
+        },
+        "preference": {
+          "$ref": "#/$defs/LearningPreferenceView"
+        }
+      },
+      "required": [
+        "schema_version",
+        "ai_learning_contract_version",
+        "operation_id",
+        "recommendation",
+        "preference"
+      ]
+    }
+  }
+}

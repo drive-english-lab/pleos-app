@@ -1,0 +1,1755 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Drive English learning-progress feature contract 1",
+  "description": "S3 design only. Base schema5 JSON3 bytes remain unchanged. Separate loader/generator/adapters, Room3 and server migrations are not implemented by this plan. Semantic rules: learning-progress.md and data-model C30-C41.",
+  "$defs": {
+    "ProfileSessionContext": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "profile_id": {
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "required": [
+        "profile_id"
+      ],
+      "description": "Expected profile only. Verified JWT plus active session/installation binding authorizes access. No learning-history epoch for daily preferences."
+    },
+    "ConfirmedDailyBoundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "status": {
+          "type": "string",
+          "const": "confirmed"
+        },
+        "selected_local_date": {
+          "type": "string",
+          "format": "date"
+        },
+        "selected_zone_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80,
+          "pattern": "^[A-Za-z0-9._+-]+(?:/[A-Za-z0-9._+-]+)*$"
+        },
+        "selected_at_utc": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "expires_at_utc": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "clock_evidence_ref": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        }
+      },
+      "required": [
+        "status",
+        "selected_local_date",
+        "selected_zone_id",
+        "selected_at_utc",
+        "expires_at_utc",
+        "clock_evidence_ref"
+      ],
+      "description": "Original next local calendar date start, resolved once to UTC using validated clock/zone evidence. Never plus24h or recomputed on restore."
+    },
+    "UnresolvedDailyBoundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "status": {
+          "type": "string",
+          "const": "unresolved"
+        },
+        "selected_local_date": {
+          "type": "null"
+        },
+        "selected_zone_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 80,
+              "pattern": "^[A-Za-z0-9._+-]+(?:/[A-Za-z0-9._+-]+)*$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "selected_at_utc": {
+          "type": "null"
+        },
+        "expires_at_utc": {
+          "type": "null"
+        },
+        "clock_evidence_ref": {
+          "type": "null"
+        }
+      },
+      "required": [
+        "status",
+        "selected_local_date",
+        "selected_zone_id",
+        "selected_at_utc",
+        "expires_at_utc",
+        "clock_evidence_ref"
+      ],
+      "description": "No confirmed original calendar boundary. Suppress automatic expiry-based invitations, preserve any previously confirmed boundary and allow explicit release immediately. Do not use the later synchronization date as the original day."
+    },
+    "DailyBoundary": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/ConfirmedDailyBoundary"
+        },
+        {
+          "$ref": "#/$defs/UnresolvedDailyBoundary"
+        }
+      ]
+    },
+    "DailyChoice": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "choice_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "decision": {
+          "type": "string",
+          "enum": [
+            "listen_only",
+            "explicit_default"
+          ]
+        },
+        "boundary": {
+          "$ref": "#/$defs/DailyBoundary"
+        }
+      },
+      "required": [
+        "choice_id",
+        "decision",
+        "boundary"
+      ],
+      "description": "Explicit default is a release, not absence/expiry. It inherits the known original boundary. Replay is not a new explicit choice."
+    },
+    "ServerClockSample": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "observed_at_utc": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "clock_evidence_ref": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        }
+      },
+      "required": [
+        "observed_at_utc",
+        "clock_evidence_ref"
+      ],
+      "description": "Calendar clock anchor only: not proof of vehicle zone, user authorization, audio completion or original practice time."
+    },
+    "DailyPreferenceView": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "type": "string",
+          "const": "5"
+        },
+        "feature_contract_version": {
+          "type": "string",
+          "const": "1"
+        },
+        "profile_context": {
+          "$ref": "#/$defs/ProfileSessionContext"
+        },
+        "preference_version": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "choice": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DailyChoice"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "server_clock": {
+          "$ref": "#/$defs/ServerClockSample"
+        }
+      },
+      "required": [
+        "schema_version",
+        "feature_contract_version",
+        "profile_context",
+        "preference_version",
+        "choice",
+        "server_clock"
+      ],
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "preference_version": {
+                "const": 0
+              }
+            },
+            "required": [
+              "preference_version"
+            ]
+          },
+          "then": {
+            "properties": {
+              "choice": {
+                "type": "null"
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "choice": {
+                "$ref": "#/$defs/DailyChoice"
+              }
+            }
+          }
+        }
+      ],
+      "description": "Version0/null means never selected. Expired choices remain stored; expiry does not erase explicit decisions."
+    },
+    "DailyPreferenceRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "type": "string",
+          "const": "5"
+        },
+        "feature_contract_version": {
+          "type": "string",
+          "const": "1"
+        },
+        "operation_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "profile_context": {
+          "$ref": "#/$defs/ProfileSessionContext"
+        },
+        "expected_preference_version": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "expected_choice_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "local_sequence": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "choice": {
+          "$ref": "#/$defs/DailyChoice"
+        }
+      },
+      "required": [
+        "schema_version",
+        "feature_contract_version",
+        "operation_id",
+        "profile_context",
+        "expected_preference_version",
+        "expected_choice_id",
+        "local_sequence",
+        "choice"
+      ],
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "expected_preference_version": {
+                "const": 0
+              }
+            },
+            "required": [
+              "expected_preference_version"
+            ]
+          },
+          "then": {
+            "properties": {
+              "expected_choice_id": {
+                "type": "null"
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "expected_choice_id": {
+                "type": "string",
+                "format": "uuid"
+              }
+            }
+          }
+        }
+      ],
+      "description": "Independent CAS compares version and previous choice ID. Same immutable operation/key returns original receipt. No automatic rebase after conflict; no ordinary settings draft fields. Same current choice_id and decision means only unresolved-to-confirmed original-evidence resolution, with a new operation/key and current CAS; no confirmed-boundary rewrite. A different choice_id is a fresh explicit choice. Original local observation must be linked by the clock verifier; later current time is not original evidence.",
+      "examples": [
+        {
+          "schema_version": "5",
+          "feature_contract_version": "1",
+          "operation_id": "10000000-0000-4000-8000-000000000001",
+          "profile_context": {
+            "profile_id": "10000000-0000-4000-8000-000000000002"
+          },
+          "expected_preference_version": 0,
+          "expected_choice_id": null,
+          "local_sequence": 1,
+          "choice": {
+            "choice_id": "10000000-0000-4000-8000-000000000003",
+            "decision": "listen_only",
+            "boundary": {
+              "status": "confirmed",
+              "selected_local_date": "2026-11-12",
+              "selected_zone_id": "Asia/Seoul",
+              "selected_at_utc": "2026-11-12T00:00:00Z",
+              "expires_at_utc": "2026-11-12T15:00:00Z",
+              "clock_evidence_ref": "fixture-original-clock-1"
+            }
+          }
+        },
+        {
+          "schema_version": "5",
+          "feature_contract_version": "1",
+          "operation_id": "10000000-0000-4000-8000-000000000001",
+          "profile_context": {
+            "profile_id": "10000000-0000-4000-8000-000000000002"
+          },
+          "expected_preference_version": 0,
+          "expected_choice_id": null,
+          "local_sequence": 1,
+          "choice": {
+            "choice_id": "10000000-0000-4000-8000-000000000003",
+            "decision": "listen_only",
+            "boundary": {
+              "status": "unresolved",
+              "selected_local_date": null,
+              "selected_zone_id": null,
+              "selected_at_utc": null,
+              "expires_at_utc": null,
+              "clock_evidence_ref": null
+            }
+          }
+        },
+        {
+          "schema_version": "5",
+          "feature_contract_version": "1",
+          "operation_id": "10000000-0000-4000-8000-000000000001",
+          "profile_context": {
+            "profile_id": "10000000-0000-4000-8000-000000000002"
+          },
+          "expected_preference_version": 1,
+          "expected_choice_id": "10000000-0000-4000-8000-000000000003",
+          "local_sequence": 1,
+          "choice": {
+            "choice_id": "10000000-0000-4000-8000-000000000002",
+            "decision": "explicit_default",
+            "boundary": {
+              "status": "confirmed",
+              "selected_local_date": "2026-11-12",
+              "selected_zone_id": "Asia/Seoul",
+              "selected_at_utc": "2026-11-12T00:00:00Z",
+              "expires_at_utc": "2026-11-12T15:00:00Z",
+              "clock_evidence_ref": "fixture-original-clock-1"
+            }
+          }
+        },
+        {
+          "schema_version": "5",
+          "feature_contract_version": "1",
+          "operation_id": "10000000-0000-4000-8000-000000000001",
+          "profile_context": {
+            "profile_id": "10000000-0000-4000-8000-000000000002"
+          },
+          "expected_preference_version": 1,
+          "expected_choice_id": "10000000-0000-4000-8000-000000000003",
+          "local_sequence": 1,
+          "choice": {
+            "choice_id": "10000000-0000-4000-8000-000000000003",
+            "decision": "listen_only",
+            "boundary": {
+              "status": "confirmed",
+              "selected_local_date": "2026-11-12",
+              "selected_zone_id": "Asia/Seoul",
+              "selected_at_utc": "2026-11-12T00:00:00Z",
+              "expires_at_utc": "2026-11-12T15:00:00Z",
+              "clock_evidence_ref": "fixture-original-clock-1"
+            }
+          }
+        }
+      ]
+    },
+    "DailyPreferenceReceipt": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "type": "string",
+          "const": "5"
+        },
+        "feature_contract_version": {
+          "type": "string",
+          "const": "1"
+        },
+        "operation_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "profile_context": {
+          "$ref": "#/$defs/ProfileSessionContext"
+        },
+        "preference_version": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "accepted_choice": {
+          "$ref": "#/$defs/DailyChoice"
+        },
+        "server_clock": {
+          "$ref": "#/$defs/ServerClockSample"
+        }
+      },
+      "required": [
+        "schema_version",
+        "feature_contract_version",
+        "operation_id",
+        "profile_context",
+        "preference_version",
+        "accepted_choice",
+        "server_clock"
+      ],
+      "description": "Receipt for this commit, not necessarily the latest global choice. Older receipt cannot replace newer local intent."
+    },
+    "ConfirmedPracticeTime": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "status": {
+          "type": "string",
+          "const": "confirmed"
+        },
+        "original_practiced_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "zone_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80,
+          "pattern": "^[A-Za-z0-9._+-]+(?:/[A-Za-z0-9._+-]+)*$"
+        },
+        "source": {
+          "type": "string",
+          "enum": [
+            "accepted_answer_clock",
+            "retained_original_record"
+          ]
+        },
+        "evidence_ref": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        }
+      },
+      "required": [
+        "status",
+        "original_practiced_at",
+        "zone_id",
+        "source",
+        "evidence_ref"
+      ],
+      "description": "Validated original accepted-answer time; never receive/feedback/card/restore/lesson-end time."
+    },
+    "UnknownPracticeTime": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "status": {
+          "type": "string",
+          "const": "unknown"
+        },
+        "original_practiced_at": {
+          "type": "null"
+        },
+        "zone_id": {
+          "type": "null"
+        },
+        "source": {
+          "type": "string",
+          "const": "unknown"
+        },
+        "evidence_ref": {
+          "type": "null"
+        }
+      },
+      "required": [
+        "status",
+        "original_practiced_at",
+        "zone_id",
+        "source",
+        "evidence_ref"
+      ]
+    },
+    "OriginalPracticeTime": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/ConfirmedPracticeTime"
+        },
+        {
+          "$ref": "#/$defs/UnknownPracticeTime"
+        }
+      ]
+    },
+    "PracticeTimeEvidence": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "recorded_at_utc": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "zone_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 80,
+              "pattern": "^[A-Za-z0-9._+-]+(?:/[A-Za-z0-9._+-]+)*$"
+            },
+            "clock_evidence_ref": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 160
+            }
+          },
+          "required": [
+            "recorded_at_utc",
+            "zone_id",
+            "clock_evidence_ref"
+          ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "recorded_at_utc": {
+              "type": "null"
+            },
+            "zone_id": {
+              "type": "null"
+            },
+            "clock_evidence_ref": {
+              "type": "null"
+            }
+          },
+          "required": [
+            "recorded_at_utc",
+            "zone_id",
+            "clock_evidence_ref"
+          ]
+        }
+      ],
+      "description": "Input claim. Validate original attempt-bound clock evidence; newly observed clock cannot justify arbitrary historical dates."
+    },
+    "PracticeTimeRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "type": "string",
+          "const": "5"
+        },
+        "feature_contract_version": {
+          "type": "string",
+          "const": "1"
+        },
+        "operation_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "profile_context": {
+          "$ref": "common.schema.json#/$defs/ProfileContext"
+        },
+        "expected_time_version": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "evidence": {
+          "$ref": "#/$defs/PracticeTimeEvidence"
+        }
+      },
+      "required": [
+        "schema_version",
+        "feature_contract_version",
+        "operation_id",
+        "profile_context",
+        "expected_time_version",
+        "evidence"
+      ],
+      "description": "URL attempt must already exist in this owner/epoch. Metadata is not another attempt/evaluation. Unknown can become confirmed only with validated original evidence; confirmed time is immutable.",
+      "examples": [
+        {
+          "schema_version": "5",
+          "feature_contract_version": "1",
+          "operation_id": "10000000-0000-4000-8000-000000000001",
+          "profile_context": {
+            "profile_id": "10000000-0000-4000-8000-000000000002",
+            "privacy_epoch": 0
+          },
+          "expected_time_version": 0,
+          "evidence": {
+            "recorded_at_utc": "2026-11-12T00:01:00Z",
+            "zone_id": "Asia/Seoul",
+            "clock_evidence_ref": "fixture-original-attempt-clock"
+          }
+        },
+        {
+          "schema_version": "5",
+          "feature_contract_version": "1",
+          "operation_id": "10000000-0000-4000-8000-000000000001",
+          "profile_context": {
+            "profile_id": "10000000-0000-4000-8000-000000000002",
+            "privacy_epoch": 0
+          },
+          "expected_time_version": 0,
+          "evidence": {
+            "recorded_at_utc": null,
+            "zone_id": null,
+            "clock_evidence_ref": null
+          }
+        }
+      ]
+    },
+    "PracticeTimeReceipt": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "type": "string",
+          "const": "5"
+        },
+        "feature_contract_version": {
+          "type": "string",
+          "const": "1"
+        },
+        "operation_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "profile_context": {
+          "$ref": "common.schema.json#/$defs/ProfileContext"
+        },
+        "attempt_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "time_version": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "practice_time": {
+          "$ref": "#/$defs/OriginalPracticeTime"
+        },
+        "snapshot_revision": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "schema_version",
+        "feature_contract_version",
+        "operation_id",
+        "profile_context",
+        "attempt_id",
+        "time_version",
+        "practice_time",
+        "snapshot_revision"
+      ]
+    },
+    "RecordVisibility": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "hidden": {
+          "type": "boolean"
+        },
+        "version": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "hidden",
+        "version"
+      ],
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "hidden": {
+                "const": true
+              }
+            },
+            "required": [
+              "hidden"
+            ]
+          },
+          "then": {
+            "properties": {
+              "version": {
+                "type": "integer",
+                "minimum": 1
+              }
+            }
+          }
+        }
+      ],
+      "description": "Absent row means false/version0. Only explicit hide/unhide changes visibility; card derivation never writes it."
+    },
+    "VisibilityRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "type": "string",
+          "const": "5"
+        },
+        "feature_contract_version": {
+          "type": "string",
+          "const": "1"
+        },
+        "operation_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "profile_context": {
+          "$ref": "common.schema.json#/$defs/ProfileContext"
+        },
+        "expected_visibility_version": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "hidden": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "schema_version",
+        "feature_contract_version",
+        "operation_id",
+        "profile_context",
+        "expected_visibility_version",
+        "hidden"
+      ],
+      "description": "Current owner/epoch and original lesson CAS. Hide filters locally immediately; unhide waits for server confirmation. No silent conflict overwrite.",
+      "examples": [
+        {
+          "schema_version": "5",
+          "feature_contract_version": "1",
+          "operation_id": "10000000-0000-4000-8000-000000000001",
+          "profile_context": {
+            "profile_id": "10000000-0000-4000-8000-000000000002",
+            "privacy_epoch": 0
+          },
+          "expected_visibility_version": 0,
+          "hidden": true
+        },
+        {
+          "schema_version": "5",
+          "feature_contract_version": "1",
+          "operation_id": "10000000-0000-4000-8000-000000000001",
+          "profile_context": {
+            "profile_id": "10000000-0000-4000-8000-000000000002",
+            "privacy_epoch": 0
+          },
+          "expected_visibility_version": 1,
+          "hidden": false
+        }
+      ]
+    },
+    "VisibilityReceipt": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "type": "string",
+          "const": "5"
+        },
+        "feature_contract_version": {
+          "type": "string",
+          "const": "1"
+        },
+        "operation_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "profile_context": {
+          "$ref": "common.schema.json#/$defs/ProfileContext"
+        },
+        "lesson_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "visibility": {
+          "$ref": "#/$defs/RecordVisibility"
+        },
+        "snapshot_revision": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "schema_version",
+        "feature_contract_version",
+        "operation_id",
+        "profile_context",
+        "lesson_id",
+        "visibility",
+        "snapshot_revision"
+      ]
+    },
+    "ObservedSupportSummary": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "support_ref": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "role": {
+          "type": "string",
+          "enum": [
+            "question_meaning",
+            "core_explanation",
+            "simple_explanation",
+            "sentence_starter",
+            "partial_correction",
+            "complete_example"
+          ]
+        },
+        "language": {
+          "type": "string",
+          "enum": [
+            "ko",
+            "en",
+            "mixed"
+          ]
+        },
+        "kind": {
+          "anyOf": [
+            {
+              "$ref": "common.schema.json#/$defs/HelpKind"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "support_ref",
+        "role",
+        "language",
+        "kind"
+      ],
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "role": {
+                "const": "question_meaning"
+              }
+            },
+            "required": [
+              "role"
+            ]
+          },
+          "then": {
+            "properties": {
+              "kind": {
+                "type": "null"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "role": {
+                "const": "core_explanation"
+              }
+            },
+            "required": [
+              "role"
+            ]
+          },
+          "then": {
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "fact_explanation"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "role": {
+                "const": "simple_explanation"
+              }
+            },
+            "required": [
+              "role"
+            ]
+          },
+          "then": {
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "fact_explanation"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "role": {
+                "const": "sentence_starter"
+              }
+            },
+            "required": [
+              "role"
+            ]
+          },
+          "then": {
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "sentence_starter"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "role": {
+                "const": "partial_correction"
+              }
+            },
+            "required": [
+              "role"
+            ]
+          },
+          "then": {
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "partial_correction"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "role": {
+                "const": "complete_example"
+              }
+            },
+            "required": [
+              "role"
+            ]
+          },
+          "then": {
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "complete_example"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "ExampleExposureSummary": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": [
+            "exposed",
+            "unexposed_verified",
+            "unknown"
+          ]
+        },
+        "assessment_ref": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "status",
+        "assessment_ref"
+      ],
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "enum": [
+                  "exposed",
+                  "unexposed_verified"
+                ]
+              }
+            },
+            "required": [
+              "status"
+            ]
+          },
+          "then": {
+            "properties": {
+              "assessment_ref": {
+                "type": "string",
+                "format": "uuid"
+              }
+            }
+          }
+        }
+      ],
+      "description": "Read-only causal assessment. Missing legacy evidence is unknown. GET/empty help arrays/own quote are not exposure evidence."
+    },
+    "RecordAssistance": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "support_status": {
+          "type": "string",
+          "enum": [
+            "verified",
+            "unknown"
+          ]
+        },
+        "representative_supports": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ObservedSupportSummary"
+          },
+          "maxItems": 16
+        },
+        "prior_example_exposure": {
+          "$ref": "#/$defs/ExampleExposureSummary"
+        },
+        "at_attempt_example_exposure": {
+          "$ref": "#/$defs/ExampleExposureSummary"
+        }
+      },
+      "required": [
+        "support_status",
+        "representative_supports",
+        "prior_example_exposure",
+        "at_attempt_example_exposure"
+      ],
+      "description": "Actually received supports before representative answer. Lesson-start exposure and representative-acceptance exposure remain separate; later examples do not rewrite causal eligibility."
+    },
+    "RepresentativeAnswer": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "attempt_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "turn": {
+          "type": "string",
+          "enum": [
+            "first",
+            "retry"
+          ]
+        },
+        "english_attempt_status": {
+          "type": "string",
+          "const": "verified_english"
+        },
+        "judgement": {
+          "type": "string",
+          "const": "sufficient"
+        },
+        "form_status": {
+          "type": "string",
+          "enum": [
+            "confirmed",
+            "unknown"
+          ]
+        },
+        "practice_time": {
+          "$ref": "#/$defs/OriginalPracticeTime"
+        }
+      },
+      "required": [
+        "attempt_id",
+        "turn",
+        "english_attempt_status",
+        "judgement",
+        "form_status",
+        "practice_time"
+      ],
+      "description": "Sufficient valid retry first; otherwise sufficient valid first. Validate actual anchors, English and form independently. Arrival time does not select representative."
+    },
+    "LatestRecordResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "attempt_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "judgement": {
+          "anyOf": [
+            {
+              "type": "string",
+              "enum": [
+                "sufficient",
+                "needs_more",
+                "factually_incorrect",
+                "unassessable"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "english_attempt_status": {
+          "anyOf": [
+            {
+              "$ref": "common.schema.json#/$defs/EnglishAttemptStatus"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "expression_status": {
+          "type": "string",
+          "enum": [
+            "no_open_correction",
+            "needs_work",
+            "improved",
+            "not_evaluated",
+            "unknown"
+          ]
+        },
+        "lesson_end_reason": {
+          "anyOf": [
+            {
+              "type": "string",
+              "enum": [
+                "sufficient_first_answer",
+                "retry_evaluated",
+                "retry_declined"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "attempt_id",
+        "judgement",
+        "english_attempt_status",
+        "expression_status",
+        "lesson_end_reason"
+      ],
+      "description": "Latest actual result/remaining correction, separate from historical sufficient representative. Held/unsuccessful later replies never erase earlier sufficient evidence. Select the latest accepted attempt by internal per-lesson server acceptance sequence, including held attempts. Pending or legacy-unknown order remains unknown; response arrival and client practice time do not choose latest."
+    },
+    "RecordSourceAccess": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "new_practice": {
+          "type": "string",
+          "enum": [
+            "available",
+            "unavailable",
+            "unknown"
+          ]
+        },
+        "original_feedback": {
+          "type": "string",
+          "enum": [
+            "available",
+            "unavailable",
+            "unknown"
+          ]
+        },
+        "reason_ko": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 300
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "new_practice",
+        "original_feedback",
+        "reason_ko"
+      ],
+      "description": "Current source/rights availability. Retained own utterance does not license unavailable article/support text or replacement of a pinned question."
+    },
+    "SpeakingRecordSummary": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "lesson_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "content_ref": {
+          "$ref": "common.schema.json#/$defs/PracticeContentRef"
+        },
+        "article_title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "question_text": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "meaning_summary": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 300
+        },
+        "meaning_basis": {
+          "type": "string",
+          "enum": [
+            "approved_fact_labels",
+            "generic_question_summary"
+          ]
+        },
+        "representative": {
+          "$ref": "#/$defs/RepresentativeAnswer"
+        },
+        "latest_result": {
+          "$ref": "#/$defs/LatestRecordResult"
+        },
+        "assistance": {
+          "$ref": "#/$defs/RecordAssistance"
+        },
+        "visibility": {
+          "$ref": "#/$defs/RecordVisibility"
+        },
+        "source_access": {
+          "$ref": "#/$defs/RecordSourceAccess"
+        }
+      },
+      "required": [
+        "lesson_id",
+        "content_ref",
+        "article_title",
+        "question_text",
+        "meaning_summary",
+        "meaning_basis",
+        "representative",
+        "latest_result",
+        "assistance",
+        "visibility",
+        "source_access"
+      ],
+      "description": "Read-only one-card-per-lesson projection. No raw answer/full feedback/support text/new mastery score in list item. No model call or presentation ACK."
+    },
+    "QuoteExcerpt": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "start_code_point": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "end_code_point": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "text": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 240
+        },
+        "omitted_before": {
+          "type": "boolean"
+        },
+        "omitted_after": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "start_code_point",
+        "end_code_point",
+        "text",
+        "omitted_before",
+        "omitted_after"
+      ],
+      "description": "Validate start < end <= code-point length and exact contiguous representative substring. No rewritten/discontinuous quote."
+    },
+    "RepresentativeQuote": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "attempt_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "text": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1200
+        },
+        "excerpts": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/QuoteExcerpt"
+          },
+          "maxItems": 5
+        }
+      },
+      "required": [
+        "attempt_id",
+        "text",
+        "excerpts"
+      ],
+      "description": "Exact representative answer only with verified form and no uncertain spans. Never a correction/example."
+    },
+    "AttemptEvidenceLink": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "attempt_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "turn": {
+          "type": "string",
+          "enum": [
+            "first",
+            "retry"
+          ]
+        },
+        "english_attempt_status": {
+          "$ref": "common.schema.json#/$defs/EnglishAttemptStatus"
+        },
+        "judgement": {
+          "anyOf": [
+            {
+              "type": "string",
+              "enum": [
+                "sufficient",
+                "needs_more",
+                "factually_incorrect",
+                "unassessable"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "practice_time": {
+          "$ref": "#/$defs/OriginalPracticeTime"
+        },
+        "feedback_attempt_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "attempt_id",
+        "turn",
+        "english_attempt_status",
+        "judgement",
+        "practice_time",
+        "feedback_attempt_id"
+      ]
+    },
+    "SpeakingRecordDetail": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "lesson_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "content_ref": {
+          "$ref": "common.schema.json#/$defs/PracticeContentRef"
+        },
+        "article_title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "question_text": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "meaning_summary": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 300
+        },
+        "meaning_basis": {
+          "type": "string",
+          "enum": [
+            "approved_fact_labels",
+            "generic_question_summary"
+          ]
+        },
+        "representative": {
+          "$ref": "#/$defs/RepresentativeAnswer"
+        },
+        "latest_result": {
+          "$ref": "#/$defs/LatestRecordResult"
+        },
+        "assistance": {
+          "$ref": "#/$defs/RecordAssistance"
+        },
+        "visibility": {
+          "$ref": "#/$defs/RecordVisibility"
+        },
+        "source_access": {
+          "$ref": "#/$defs/RecordSourceAccess"
+        },
+        "representative_quote": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RepresentativeQuote"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "first_attempt": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AttemptEvidenceLink"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "retry_attempt": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AttemptEvidenceLink"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "lesson_support_status": {
+          "type": "string",
+          "enum": [
+            "verified",
+            "unknown"
+          ]
+        },
+        "lesson_supports": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ObservedSupportSummary"
+          },
+          "maxItems": 16
+        }
+      },
+      "required": [
+        "lesson_id",
+        "content_ref",
+        "article_title",
+        "question_text",
+        "meaning_summary",
+        "meaning_basis",
+        "representative",
+        "latest_result",
+        "assistance",
+        "visibility",
+        "source_access",
+        "representative_quote",
+        "first_attempt",
+        "retry_attempt",
+        "lesson_support_status",
+        "lesson_supports"
+      ],
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "representative": {
+                "properties": {
+                  "form_status": {
+                    "const": "unknown"
+                  }
+                }
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "representative_quote": {
+                "type": "null"
+              }
+            }
+          }
+        },
+        {
+          "properties": {
+            "first_attempt": {
+              "anyOf": [
+                {
+                  "allOf": [
+                    {
+                      "$ref": "#/$defs/AttemptEvidenceLink"
+                    },
+                    {
+                      "properties": {
+                        "turn": {
+                          "const": "first"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "retry_attempt": {
+              "anyOf": [
+                {
+                  "allOf": [
+                    {
+                      "$ref": "#/$defs/AttemptEvidenceLink"
+                    },
+                    {
+                      "properties": {
+                        "turn": {
+                          "const": "retry"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          }
+        }
+      ],
+      "description": "Parked review only. Quote/summary are not feedback/support presentation. Original feedback fetch and matching actual presentation are separate explicit actions."
+    },
+    "SpeakingRecordPage": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "type": "string",
+          "const": "5"
+        },
+        "feature_contract_version": {
+          "type": "string",
+          "const": "1"
+        },
+        "profile_context": {
+          "$ref": "common.schema.json#/$defs/ProfileContext"
+        },
+        "snapshot_revision": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "visibility_filter": {
+          "type": "string",
+          "enum": [
+            "visible",
+            "hidden"
+          ]
+        },
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SpeakingRecordSummary"
+          },
+          "maxItems": 50
+        },
+        "next_cursor": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 512
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "schema_version",
+        "feature_contract_version",
+        "profile_context",
+        "snapshot_revision",
+        "visibility_filter",
+        "items",
+        "next_cursor"
+      ],
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "visibility_filter": {
+                "const": "visible"
+              }
+            },
+            "required": [
+              "visibility_filter"
+            ]
+          },
+          "then": {
+            "properties": {
+              "items": {
+                "items": {
+                  "properties": {
+                    "visibility": {
+                      "properties": {
+                        "hidden": {
+                          "const": false
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "items": {
+                "items": {
+                  "properties": {
+                    "visibility": {
+                      "properties": {
+                        "hidden": {
+                          "const": true
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      ],
+      "description": "Cursor binds owner/epoch/revision/filter. Default20/max50 is transport pagination, not history limit. Changed snapshot or stale epoch conflicts, not false empty page."
+    },
+    "SpeakingRecordView": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "type": "string",
+          "const": "5"
+        },
+        "feature_contract_version": {
+          "type": "string",
+          "const": "1"
+        },
+        "profile_context": {
+          "$ref": "common.schema.json#/$defs/ProfileContext"
+        },
+        "snapshot_revision": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "record": {
+          "$ref": "#/$defs/SpeakingRecordDetail"
+        }
+      },
+      "required": [
+        "schema_version",
+        "feature_contract_version",
+        "profile_context",
+        "snapshot_revision",
+        "record"
+      ]
+    }
+  }
+}

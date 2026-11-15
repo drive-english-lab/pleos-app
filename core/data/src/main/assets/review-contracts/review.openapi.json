@@ -1,0 +1,653 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Drive English review contract1",
+    "version": "1.0.0",
+    "description": "Additive 008 contract. Runtime activation and external verification are separate."
+  },
+  "paths": {
+    "/v1/content/sentence-manifests/{script_id}": {
+      "get": {
+        "operationId": "readSentenceManifest",
+        "security": [],
+        "parameters": [
+          {
+            "name": "script_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "source_kind",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "legacy_bundle",
+                "prepared_components"
+              ]
+            }
+          },
+          {
+            "name": "bundle_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          {
+            "name": "material_generation_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          {
+            "name": "segments_version",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "script_text_hash",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Stored data only; no output/completion grant.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "review.schema.json#/$defs/SentenceManifestResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Typed failure; original operation is preserved.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "review.schema.json#/$defs/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Typed failure; original operation is preserved.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "review.schema.json#/$defs/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Typed failure; original operation is preserved.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "review.schema.json#/$defs/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Typed failure; original operation is preserved.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "review.schema.json#/$defs/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Typed failure; original operation is preserved.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "review.schema.json#/$defs/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Typed failure; original operation is preserved.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "review.schema.json#/$defs/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/review/history-replays": {
+      "post": {
+        "operationId": "replayListeningHistory",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Stored data only; no output/completion grant.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "review.schema.json#/$defs/HistoryReplayResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Typed failure; original operation is preserved.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "review.schema.json#/$defs/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Typed failure; original operation is preserved.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "review.schema.json#/$defs/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Typed failure; original operation is preserved.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "review.schema.json#/$defs/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Typed failure; original operation is preserved.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "review.schema.json#/$defs/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Typed failure; original operation is preserved.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "review.schema.json#/$defs/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Typed failure; original operation is preserved.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "review.schema.json#/$defs/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "review.schema.json#/$defs/HistoryReplayRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/review/listening-contexts/{selection_id}": {
+      "get": {
+        "operationId": "readListeningContext",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "selection_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "review_contract_version",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "const": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Stored data only; no output/completion grant.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "review.schema.json#/$defs/ListeningContextResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Typed failure; original operation is preserved.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "review.schema.json#/$defs/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Typed failure; original operation is preserved.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "review.schema.json#/$defs/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Typed failure; original operation is preserved.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "review.schema.json#/$defs/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Typed failure; original operation is preserved.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "review.schema.json#/$defs/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Typed failure; original operation is preserved.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "review.schema.json#/$defs/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Typed failure; original operation is preserved.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "review.schema.json#/$defs/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/review/listening-contexts/{selection_id}/commands": {
+      "post": {
+        "operationId": "commandListeningContext",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "selection_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Stored data only; no output/completion grant.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "review.schema.json#/$defs/ReviewCommandResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Typed failure; original operation is preserved.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "review.schema.json#/$defs/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Typed failure; original operation is preserved.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "review.schema.json#/$defs/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Typed failure; original operation is preserved.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "review.schema.json#/$defs/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Typed failure; original operation is preserved.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "review.schema.json#/$defs/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Typed failure; original operation is preserved.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "review.schema.json#/$defs/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Typed failure; original operation is preserved.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "review.schema.json#/$defs/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "review.schema.json#/$defs/ReviewCommandRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/review/sentence-observations": {
+      "post": {
+        "operationId": "observeSentenceHelp",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Stored data only; no output/completion grant.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "review.schema.json#/$defs/SentenceObservationResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Typed failure; original operation is preserved.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "review.schema.json#/$defs/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Typed failure; original operation is preserved.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "review.schema.json#/$defs/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Typed failure; original operation is preserved.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "review.schema.json#/$defs/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Typed failure; original operation is preserved.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "review.schema.json#/$defs/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Typed failure; original operation is preserved.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "review.schema.json#/$defs/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Typed failure; original operation is preserved.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "review.schema.json#/$defs/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "review.schema.json#/$defs/SentenceObservationRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/review/attempt-assistance-fences": {
+      "post": {
+        "operationId": "fenceAttemptAssistance",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Stored data only; no output/completion grant.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "review.schema.json#/$defs/AssistanceFenceResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Typed failure; original operation is preserved.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "review.schema.json#/$defs/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Typed failure; original operation is preserved.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "review.schema.json#/$defs/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Typed failure; original operation is preserved.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "review.schema.json#/$defs/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Typed failure; original operation is preserved.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "review.schema.json#/$defs/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Typed failure; original operation is preserved.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "review.schema.json#/$defs/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Typed failure; original operation is preserved.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "review.schema.json#/$defs/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "review.schema.json#/$defs/AssistanceFenceRequest"
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "BearerAuth": {
+        "type": "http",
+        "scheme": "bearer"
+      }
+    }
+  }
+}

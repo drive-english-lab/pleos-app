@@ -1,0 +1,735 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Drive English Same-Capture Language Confirmation",
+    "version": "1.0.0",
+    "description": "Canonical design contract only. One independent protected operation; existing Capture/AttemptInput5/6 unchanged. No current route implementation, provider activation or voice validation implied. Normative binding, transaction, deletion and late-result semantics: capture-confirmation.md."
+  },
+  "paths": {
+    "/v1/capture-language-confirmations": {
+      "post": {
+        "operationId": "issueCaptureLanguageConfirmation1",
+        "summary": "Record one authenticated same-capture original-language declaration",
+        "security": [
+          {
+            "UserBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "X-Installation-ID",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConfirmationRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Exact immutable scoped confirmation receipt; no attempt/progress/English success created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConfirmationReceipt"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Existing ErrorEnvelope/public upper-case error mapping; no positive evidence on failure",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Existing ErrorEnvelope/public upper-case error mapping; no positive evidence on failure",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Existing ErrorEnvelope/public upper-case error mapping; no positive evidence on failure",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Existing ErrorEnvelope/public upper-case error mapping; no positive evidence on failure",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Existing ErrorEnvelope/public upper-case error mapping; no positive evidence on failure",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "UserBearer": {
+        "type": "http",
+        "scheme": "bearer"
+      }
+    },
+    "schemas": {
+      "ProfileContext": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "profile_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "privacy_epoch": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "profile_id",
+          "privacy_epoch"
+        ],
+        "description": "Server-derived owner and deletion generation. Incoming values are expected context only; JWT subject + active session binding authorize the request."
+      },
+      "Capture": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "type": "string",
+            "enum": [
+              "gleo",
+              "parked_stt"
+            ]
+          },
+          "form_fidelity": {
+            "type": "string",
+            "enum": [
+              "unknown",
+              "confirmed_form",
+              "literal_contract_verified"
+            ]
+          },
+          "uncertain_spans": {
+            "type": "array",
+            "maxItems": 8,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 240
+            }
+          },
+          "spoken_language": {
+            "type": "string",
+            "enum": [
+              "en",
+              "ko",
+              "mixed",
+              "unknown"
+            ]
+          },
+          "english_evidence": {
+            "type": "string",
+            "enum": [
+              "verified_path",
+              "specific_confirmation",
+              "verified_non_english",
+              "unverified"
+            ]
+          },
+          "language_evidence_ref": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 160
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "path",
+          "form_fidelity",
+          "uncertain_spans",
+          "spoken_language",
+          "english_evidence",
+          "language_evidence_ref"
+        ],
+        "description": "Capture claims are data, not authorization. Server-configured verified path/version or explicit confirmation must support any form correction; unknown forbids form correction. spoken_language describes original speech, not answer_text. Validate configured route/version or one original-capture/lesson/owner-bound specific confirmation before acceptance. Generic yes/new text cannot overwrite known Korean evidence. Mixed names/quotes are allowed only when the core English answer is verified. If uncertainty remains after one confirmation, suspend/no valid English turn. Unknown form alone does not block verified-English content judgement. Claims never authorize storage/output.",
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "english_evidence": {
+                  "enum": [
+                    "verified_path",
+                    "specific_confirmation"
+                  ]
+                }
+              },
+              "required": [
+                "english_evidence"
+              ]
+            },
+            "then": {
+              "properties": {
+                "spoken_language": {
+                  "enum": [
+                    "en",
+                    "mixed"
+                  ]
+                },
+                "language_evidence_ref": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 160
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "english_evidence": {
+                  "const": "verified_non_english"
+                }
+              },
+              "required": [
+                "english_evidence"
+              ]
+            },
+            "then": {
+              "properties": {
+                "spoken_language": {
+                  "enum": [
+                    "ko",
+                    "mixed"
+                  ]
+                },
+                "language_evidence_ref": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 160
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "english_evidence": {
+                  "const": "unverified"
+                }
+              },
+              "required": [
+                "english_evidence"
+              ]
+            },
+            "then": {
+              "properties": {
+                "language_evidence_ref": {
+                  "type": "null"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "spoken_language": {
+                  "const": "unknown"
+                }
+              },
+              "required": [
+                "spoken_language"
+              ]
+            },
+            "then": {
+              "properties": {
+                "english_evidence": {
+                  "const": "unverified"
+                },
+                "language_evidence_ref": {
+                  "type": "null"
+                }
+              }
+            }
+          }
+        ]
+      },
+      "LegacyPracticeContentRef": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "article_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "bundle_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "source_snapshot_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "listening_mode": {
+            "type": "string",
+            "enum": [
+              "original_full",
+              "briefing"
+            ]
+          },
+          "listening_script_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "task_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "basic_question_version_id": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        "required": [
+          "article_id",
+          "bundle_id",
+          "source_snapshot_id",
+          "listening_mode",
+          "listening_script_id",
+          "task_id",
+          "basic_question_version_id"
+        ],
+        "description": "Mode/script-specific task plus the canonical basic-question version. Server verifies article/snapshot/bundle/script/task/question mappings; caller IDs grant no authority."
+      },
+      "Source6PracticeContentRef": {
+        "oneOf": [
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "source_kind": {
+                "type": "string",
+                "const": "legacy_bundle"
+              },
+              "legacy_ref": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "article_id": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "bundle_id": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "source_snapshot_id": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "listening_mode": {
+                    "type": "string",
+                    "enum": [
+                      "original_full",
+                      "briefing"
+                    ]
+                  },
+                  "listening_script_id": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "task_id": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "basic_question_version_id": {
+                    "type": "string",
+                    "format": "uuid"
+                  }
+                },
+                "required": [
+                  "article_id",
+                  "bundle_id",
+                  "source_snapshot_id",
+                  "listening_mode",
+                  "listening_script_id",
+                  "task_id",
+                  "basic_question_version_id"
+                ],
+                "description": "Mode/script-specific task plus the canonical basic-question version. Server verifies article/snapshot/bundle/script/task/question mappings; caller IDs grant no authority."
+              }
+            },
+            "required": [
+              "source_kind",
+              "legacy_ref"
+            ]
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "source_kind": {
+                "type": "string",
+                "const": "prepared_components"
+              },
+              "article_id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "source_snapshot_id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "source_hash": {
+                "type": "string",
+                "pattern": "^[a-f0-9]{64}$"
+              },
+              "material_generation_id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "main_component_id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "main_script_id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "main_text_hash": {
+                "type": "string",
+                "pattern": "^[a-f0-9]{64}$"
+              },
+              "listening_mode": {
+                "type": "string",
+                "enum": [
+                  "original_full",
+                  "briefing"
+                ]
+              },
+              "practice_component_id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "basic_question_version_id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "task_revision": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 160
+              }
+            },
+            "required": [
+              "source_kind",
+              "article_id",
+              "source_snapshot_id",
+              "source_hash",
+              "material_generation_id",
+              "main_component_id",
+              "main_script_id",
+              "main_text_hash",
+              "listening_mode",
+              "practice_component_id",
+              "basic_question_version_id",
+              "task_revision"
+            ]
+          }
+        ]
+      },
+      "ErrorEnvelope": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "operation_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "error": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "code": {
+                "type": "string",
+                "enum": [
+                  "UNAUTHORIZED",
+                  "SESSION_REVOKED",
+                  "FORBIDDEN",
+                  "INVALID_REQUEST",
+                  "VERSION_MISMATCH",
+                  "STALE_EPOCH",
+                  "RECORD_CONFLICT",
+                  "IDEMPOTENCY_CONFLICT",
+                  "MERGE_EXPIRED",
+                  "MERGE_PROOF_REQUIRED",
+                  "CONTENT_NOT_FOUND",
+                  "CONTENT_WITHDRAWN",
+                  "RATE_LIMITED",
+                  "UPSTREAM_UNAVAILABLE",
+                  "REQUEST_TOO_LARGE",
+                  "DEADLINE_EXCEEDED"
+                ]
+              },
+              "retryable": {
+                "type": "boolean"
+              },
+              "message_ko": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 300
+              }
+            },
+            "required": [
+              "code",
+              "retryable",
+              "message_ko"
+            ]
+          },
+          "schema_version": {
+            "type": "string",
+            "const": "5"
+          }
+        },
+        "required": [
+          "operation_id",
+          "error",
+          "schema_version"
+        ]
+      },
+      "ConfirmationRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "confirmation_contract_version": {
+            "type": "integer",
+            "const": 1
+          },
+          "profile_context": {
+            "$ref": "#/components/schemas/ProfileContext"
+          },
+          "operation_id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+          },
+          "capture_id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+          },
+          "attempt_id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+          },
+          "lesson_id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+          },
+          "source_protocol": {
+            "type": "string",
+            "enum": [
+              "legacy5",
+              "source6"
+            ]
+          },
+          "content_ref": {
+            "type": "object"
+          },
+          "original_capture": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/Capture"
+              },
+              {
+                "properties": {
+                  "path": {
+                    "const": "parked_stt"
+                  },
+                  "spoken_language": {
+                    "const": "unknown"
+                  },
+                  "english_evidence": {
+                    "const": "unverified"
+                  },
+                  "language_evidence_ref": {
+                    "type": "null"
+                  },
+                  "form_fidelity": {
+                    "const": "unknown"
+                  }
+                }
+              }
+            ]
+          },
+          "answer_sha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "confirmed_language": {
+            "type": "string",
+            "enum": [
+              "en",
+              "mixed"
+            ]
+          }
+        },
+        "required": [
+          "confirmation_contract_version",
+          "profile_context",
+          "operation_id",
+          "capture_id",
+          "attempt_id",
+          "lesson_id",
+          "source_protocol",
+          "content_ref",
+          "original_capture",
+          "answer_sha256",
+          "confirmed_language"
+        ],
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "source_protocol": {
+                  "const": "legacy5"
+                }
+              },
+              "required": [
+                "source_protocol"
+              ]
+            },
+            "then": {
+              "properties": {
+                "content_ref": {
+                  "$ref": "#/components/schemas/LegacyPracticeContentRef"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "source_protocol": {
+                  "const": "source6"
+                }
+              },
+              "required": [
+                "source_protocol"
+              ]
+            },
+            "then": {
+              "properties": {
+                "content_ref": {
+                  "$ref": "#/components/schemas/Source6PracticeContentRef"
+                }
+              }
+            }
+          }
+        ],
+        "description": "Exactly 11 fields. operation_id=capture_id and header Idempotency-Key. Current owner/epoch/lesson/source and unaccepted original attempt must match. Positive user declaration only; not acoustic/form/provider evidence. Hash and server-owned receipt semantics: capture-confirmation.md. Never send answer_text/audio."
+      },
+      "ConfirmationReceipt": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "confirmation_contract_version": {
+            "type": "integer",
+            "const": 1
+          },
+          "profile_context": {
+            "$ref": "#/components/schemas/ProfileContext"
+          },
+          "operation_id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+          },
+          "confirmation_ref": {
+            "type": "string",
+            "minLength": 41,
+            "maxLength": 41,
+            "pattern": "^clc1:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+          },
+          "binding_hash": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          }
+        },
+        "required": [
+          "confirmation_contract_version",
+          "profile_context",
+          "operation_id",
+          "confirmation_ref",
+          "binding_hash"
+        ],
+        "description": "Recorded scoped user declaration, not attempt/English-content/form/provider approval. Ref suffix=original capture_id; binding_hash=domain-separated canonical request hash; client and server must validate the same stored binding."
+      }
+    }
+  }
+}
+

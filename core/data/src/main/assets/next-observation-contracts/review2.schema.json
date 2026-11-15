@@ -1,0 +1,2527 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://drive-english.invalid/contracts/review2.schema.json",
+  "title": "review2",
+  "x-source-spec-hashes": {
+    "review.md": "c831b8df3e4fe487948bf634ecf25ba12e250aa7bffe7cfd2c11bb82cc896be6",
+    "preparation.md": "efbb2b0ef83a6be73b84454d733746ce6ba096eaf39efc100e18a1e557b265ac",
+    "catalog-views.md": "87b6aa16cca3f86055c2524a9d3a534f72f565ce1456013ac40ff2397fa7134c"
+  },
+  "x-imported-contract-sha256": {
+    "source6.schema.json": "4e77cd7717e33b899915c26ee053ce688ed9fe1d8c97f176c5641287de351f2e",
+    "preparation.schema.json": "790071425d847220d29fb3100ea82ad5bedb0df2900d59ce9e5ce27cb0a280ca",
+    "review.schema.json": "ef4eea0e247062e35bea1ad04928d07f5ae06021277c868ce5ff79bb673badeb"
+  },
+  "$defs": {
+    "Source6CommonProfileContext": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "profile_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "privacy_epoch": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "profile_id",
+        "privacy_epoch"
+      ],
+      "description": "Server-derived owner and deletion generation. Incoming values are expected context only; JWT subject + active session binding authorize the request."
+    },
+    "Source6PersonalSelectionRecord": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "selection_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "stream_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "ordinal": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "previous_selection_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "content_ref": {
+          "$ref": "#/$defs/Source6ContentRef6"
+        },
+        "settings_snapshot": {
+          "$ref": "#/$defs/Source6CommonSettings"
+        },
+        "selected_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "selection_reason": {
+          "type": "string",
+          "enum": [
+            "automatic_unheard",
+            "explicit_article",
+            "explicit_replay",
+            "explicit_format_change"
+          ]
+        },
+        "format_change_source": {
+          "anyOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "selection_id": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "checkpoint_id": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              },
+              "required": [
+                "selection_id",
+                "checkpoint_id"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "selection_id",
+        "stream_id",
+        "ordinal",
+        "previous_selection_id",
+        "content_ref",
+        "settings_snapshot",
+        "selected_at",
+        "selection_reason",
+        "format_change_source"
+      ],
+      "description": "Immutable one-article selection. Current article refs/settings stay pinned; next selection re-queries live eligible catalog. Ordinal is not an index into a preallocated item array. settings_snapshot is the saved preference snapshot pinned at the original selection, not an overwritten effective mode. On explicit_format_change, content_ref carries the one-time mode and format_change_source anchors saved work; copy the source followup policy. previous_selection_id is the actual stream head, not necessarily the source selection. Never update ProfileSettings.",
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "selection_reason": {
+                "const": "explicit_format_change"
+              }
+            },
+            "required": [
+              "selection_reason"
+            ]
+          },
+          "then": {
+            "properties": {
+              "format_change_source": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "selection_id": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "checkpoint_id": {
+                    "type": "string",
+                    "format": "uuid"
+                  }
+                },
+                "required": [
+                  "selection_id",
+                  "checkpoint_id"
+                ]
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "format_change_source": {
+                "type": "null"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "Source6ContentRef6": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/Source6LegacyContentRef6"
+        },
+        {
+          "$ref": "#/$defs/Source6PreparedContentRef6"
+        }
+      ]
+    },
+    "Source6LegacyContentRef6": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "source_kind": {
+          "type": "string",
+          "const": "legacy_bundle"
+        },
+        "legacy_ref": {
+          "$ref": "#/$defs/Source6LegacyContentRef5"
+        }
+      },
+      "required": [
+        "source_kind",
+        "legacy_ref"
+      ]
+    },
+    "Source6LegacyContentRef5": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "article_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "bundle_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "source_snapshot_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "listening_mode": {
+          "type": "string",
+          "enum": [
+            "original_full",
+            "briefing"
+          ]
+        },
+        "listening_script_id": {
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "required": [
+        "article_id",
+        "bundle_id",
+        "source_snapshot_id",
+        "listening_mode",
+        "listening_script_id"
+      ]
+    },
+    "Source6PreparedContentRef6": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "source_kind": {
+          "type": "string",
+          "const": "prepared_components"
+        },
+        "article_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "source_snapshot_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "source_hash": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "material_generation_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "main_component_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "main_script_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "main_text_hash": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "listening_mode": {
+          "type": "string",
+          "enum": [
+            "original_full",
+            "briefing"
+          ]
+        }
+      },
+      "required": [
+        "source_kind",
+        "article_id",
+        "source_snapshot_id",
+        "source_hash",
+        "material_generation_id",
+        "main_component_id",
+        "main_script_id",
+        "main_text_hash",
+        "listening_mode"
+      ]
+    },
+    "Source6CommonSettings": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "topics": {
+          "type": "array",
+          "maxItems": 20,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+          }
+        },
+        "listening_mode": {
+          "type": "string",
+          "enum": [
+            "original_full",
+            "briefing"
+          ]
+        },
+        "followup_policy": {
+          "anyOf": [
+            {
+              "type": "string",
+              "enum": [
+                "en_summary",
+                "ko_summary",
+                "ko_translation",
+                "none"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "explicit_fields": {
+          "type": "array",
+          "maxItems": 3,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "enum": [
+              "topics",
+              "listening_mode",
+              "followup_policy"
+            ]
+          }
+        },
+        "onboarding_complete": {
+          "type": "boolean"
+        },
+        "version": {
+          "type": "integer",
+          "minimum": 1
+        }
+      },
+      "required": [
+        "topics",
+        "listening_mode",
+        "followup_policy",
+        "explicit_fields",
+        "onboarding_complete",
+        "version"
+      ],
+      "description": "Default original_full is not an explicit choice. Followup is null until selected; none is an explicit no-followup choice. Completed onboarding requires non-null followup. Merge chooses each explicitly chosen current-vehicle field, otherwise the target account field.",
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "onboarding_complete": {
+                "const": true
+              }
+            },
+            "required": [
+              "onboarding_complete"
+            ]
+          },
+          "then": {
+            "properties": {
+              "followup_policy": {
+                "type": "string",
+                "enum": [
+                  "en_summary",
+                  "ko_summary",
+                  "ko_translation",
+                  "none"
+                ]
+              }
+            }
+          }
+        }
+      ]
+    },
+    "Source6PersonalReadCheckpoint": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "record_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "kind": {
+          "type": "string",
+          "const": "checkpoint"
+        },
+        "version": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "payload": {
+          "$ref": "#/$defs/Source6PersonalCheckpointRecord"
+        }
+      },
+      "required": [
+        "record_id",
+        "kind",
+        "version",
+        "payload"
+      ]
+    },
+    "Source6PersonalCheckpointRecord": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "checkpoint_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "content_ref": {
+          "$ref": "#/$defs/Source6ContentRef6"
+        },
+        "stream_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "selection_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "active_run_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "main_coverage_status": {
+          "type": "string",
+          "enum": [
+            "sequential",
+            "partial",
+            "unknown"
+          ]
+        },
+        "cursor": {
+          "$ref": "#/$defs/Source6PlaybackCursor6"
+        }
+      },
+      "required": [
+        "checkpoint_id",
+        "content_ref",
+        "stream_id",
+        "selection_id",
+        "active_run_id",
+        "main_coverage_status",
+        "cursor"
+      ],
+      "description": "Pinned selection ownership/content refs must match. Main/followup asset/duration match server metadata and position<=duration; article_offer has null asset/duration and position0. Caller cannot declare completion."
+    },
+    "Source6PlaybackCursor6": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/Source6SegmentCursor6"
+        },
+        {
+          "$ref": "#/$defs/Source6LegacyTimeCursor6"
+        }
+      ]
+    },
+    "Source6SegmentCursor6": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "type": "string",
+          "const": "segment"
+        },
+        "script_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "script_hash": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "manifest_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "manifest_version": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "manifest_hash": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "phase": {
+          "type": "string",
+          "enum": [
+            "main",
+            "followup",
+            "article_offer"
+          ]
+        },
+        "segment_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "segment_index": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "resume_from": {
+          "type": "string",
+          "const": "start"
+        },
+        "play_intent": {
+          "type": "boolean"
+        },
+        "pause_reason": {
+          "type": "string",
+          "enum": [
+            "none",
+            "user",
+            "system",
+            "privacy",
+            "voice_failure"
+          ]
+        }
+      },
+      "required": [
+        "kind",
+        "script_id",
+        "script_hash",
+        "manifest_id",
+        "manifest_version",
+        "manifest_hash",
+        "phase",
+        "segment_id",
+        "segment_index",
+        "resume_from",
+        "play_intent",
+        "pause_reason"
+      ],
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "phase": {
+                "type": "string",
+                "const": "article_offer"
+              }
+            },
+            "required": [
+              "phase"
+            ]
+          },
+          "then": {
+            "properties": {
+              "segment_id": {
+                "type": "null"
+              },
+              "segment_index": {
+                "type": "null"
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "segment_id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "segment_index": {
+                "type": "integer",
+                "minimum": 0
+              }
+            }
+          }
+        }
+      ]
+    },
+    "Source6LegacyTimeCursor6": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "type": "string",
+          "const": "legacy_time"
+        },
+        "original_checkpoint_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "original_position_ms": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "original_duration_ms": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "phase": {
+          "type": "string",
+          "enum": [
+            "main",
+            "followup",
+            "article_offer"
+          ]
+        }
+      },
+      "required": [
+        "kind",
+        "original_checkpoint_id",
+        "original_position_ms",
+        "original_duration_ms",
+        "phase"
+      ]
+    },
+    "PreparationComponentState": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "key": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "outline",
+            "facts",
+            "summary",
+            "practice",
+            "language_basics",
+            "main_original",
+            "main_briefing",
+            "followup",
+            "sentence_detail"
+          ]
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "unprepared",
+            "preparing",
+            "ready",
+            "failed",
+            "unavailable"
+          ]
+        },
+        "component_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "payload_hash": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "reason": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 300
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "retryable": {
+          "type": "boolean"
+        },
+        "retry_after": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "date-time"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "validation_revision": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 160
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "key",
+        "kind",
+        "status",
+        "component_id",
+        "payload_hash",
+        "reason",
+        "retryable",
+        "retry_after",
+        "validation_revision"
+      ],
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "type": "string",
+                "const": "ready"
+              }
+            },
+            "required": [
+              "status"
+            ]
+          },
+          "then": {
+            "properties": {
+              "component_id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "payload_hash": {
+                "type": "string",
+                "pattern": "^[a-f0-9]{64}$"
+              },
+              "validation_revision": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 160
+              }
+            }
+          }
+        }
+      ]
+    },
+    "AutoProgressRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "auto_progress_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "version": {
+          "type": "integer",
+          "minimum": 1
+        }
+      },
+      "required": [
+        "auto_progress_id",
+        "version"
+      ]
+    },
+    "Review1ResumeRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": [
+            "listening",
+            "practice"
+          ]
+        },
+        "record_id": {
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "required": [
+        "kind",
+        "record_id"
+      ],
+      "description": "listening references an unfinished checkpoint; practice references an unfinished lesson OR a completed lesson with pending_feedback_attempt_id. Reading a result is not a presentation ACK. Completion/ACK clears only a pointer still targeting that lesson."
+    },
+    "Review1ReturnSnapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "context_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "checkpoint_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "checkpoint_version": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "lesson_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "phase": {
+          "type": "string",
+          "enum": [
+            "main",
+            "followup",
+            "article_offer"
+          ]
+        },
+        "cursor": {
+          "$ref": "#/$defs/Review1PlaybackCursor6"
+        },
+        "play_intent": {
+          "type": "boolean"
+        },
+        "pause_reason": {
+          "type": "string",
+          "enum": [
+            "none",
+            "user",
+            "system",
+            "privacy",
+            "voice_failure"
+          ]
+        },
+        "resume_version": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "context_id",
+        "checkpoint_id",
+        "checkpoint_version",
+        "lesson_id",
+        "phase",
+        "cursor",
+        "play_intent",
+        "pause_reason",
+        "resume_version"
+      ]
+    },
+    "Review1PlaybackCursor6": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/Review1SegmentCursor6"
+        },
+        {
+          "$ref": "#/$defs/Review1LegacyTimeCursor6"
+        }
+      ]
+    },
+    "Review1SegmentCursor6": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "type": "string",
+          "const": "segment"
+        },
+        "script_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "script_hash": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "manifest_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "manifest_version": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "manifest_hash": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "phase": {
+          "type": "string",
+          "enum": [
+            "main",
+            "followup",
+            "article_offer"
+          ]
+        },
+        "segment_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "segment_index": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "resume_from": {
+          "type": "string",
+          "const": "start"
+        },
+        "play_intent": {
+          "type": "boolean"
+        },
+        "pause_reason": {
+          "type": "string",
+          "enum": [
+            "none",
+            "user",
+            "system",
+            "privacy",
+            "voice_failure"
+          ]
+        }
+      },
+      "required": [
+        "kind",
+        "script_id",
+        "script_hash",
+        "manifest_id",
+        "manifest_version",
+        "manifest_hash",
+        "phase",
+        "segment_id",
+        "segment_index",
+        "resume_from",
+        "play_intent",
+        "pause_reason"
+      ],
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "phase": {
+                "type": "string",
+                "const": "article_offer"
+              }
+            },
+            "required": [
+              "phase"
+            ]
+          },
+          "then": {
+            "properties": {
+              "segment_id": {
+                "type": "null"
+              },
+              "segment_index": {
+                "type": "null"
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "segment_id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "segment_index": {
+                "type": "integer",
+                "minimum": 0
+              }
+            }
+          }
+        }
+      ]
+    },
+    "Review1LegacyTimeCursor6": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "type": "string",
+          "const": "legacy_time"
+        },
+        "original_checkpoint_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "original_position_ms": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "original_duration_ms": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "phase": {
+          "type": "string",
+          "enum": [
+            "main",
+            "followup",
+            "article_offer"
+          ]
+        }
+      },
+      "required": [
+        "kind",
+        "original_checkpoint_id",
+        "original_position_ms",
+        "original_duration_ms",
+        "phase"
+      ]
+    },
+    "Review1PracticeEntry": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "entry_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "lesson_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "presentation_mode": {
+          "type": "string",
+          "const": "parked_modal"
+        },
+        "visibility": {
+          "type": "string",
+          "enum": [
+            "visible",
+            "closed"
+          ]
+        }
+      },
+      "required": [
+        "entry_id",
+        "lesson_id",
+        "presentation_mode",
+        "visibility"
+      ]
+    },
+    "ListeningContext2": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "selection_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "profile_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "learning_epoch": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "version": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "origin": {
+          "type": "string",
+          "enum": [
+            "regular",
+            "history_replay"
+          ]
+        },
+        "end_policy": {
+          "type": "string",
+          "enum": [
+            "regular_auto",
+            "manual_history",
+            "manual_cancelled"
+          ]
+        },
+        "offer_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "cancelled_offer_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "source_selection_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "previous_resume_ref": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Review1ResumeRef"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "return_snapshot": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Review1ReturnSnapshot"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "practice_entry": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Review1PracticeEntry"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "auto_progress_ref": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AutoProgressRef"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "selection_id",
+        "profile_id",
+        "learning_epoch",
+        "version",
+        "origin",
+        "end_policy",
+        "offer_id",
+        "cancelled_offer_id",
+        "source_selection_id",
+        "previous_resume_ref",
+        "return_snapshot",
+        "practice_entry",
+        "auto_progress_ref"
+      ],
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "origin": {
+                "type": "string",
+                "const": "history_replay"
+              }
+            },
+            "required": [
+              "origin"
+            ]
+          },
+          "then": {
+            "properties": {
+              "end_policy": {
+                "type": "string",
+                "const": "manual_history"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "ReviewNextRequest2": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "type": "string",
+          "const": "6"
+        },
+        "operation_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "profile_context": {
+          "$ref": "#/$defs/Source6CommonProfileContext"
+        },
+        "stream_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "expected_stream_version": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "previous_selection_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "expected_settings_version": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "checkpoint_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "selection_kind": {
+          "type": "string",
+          "enum": [
+            "automatic_unheard",
+            "explicit_article",
+            "explicit_replay"
+          ]
+        },
+        "requested_article_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "trigger": {
+          "type": "string",
+          "enum": [
+            "explicit",
+            "auto_offer"
+          ]
+        },
+        "expected_resume_version": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "review_contract_version": {
+          "type": "integer",
+          "const": 2
+        },
+        "intent_kind": {
+          "type": "string",
+          "enum": [
+            "explicit_start",
+            "explicit_next",
+            "auto_next",
+            "explicit_article",
+            "ready_alternative"
+          ]
+        },
+        "origin_view": {
+          "anyOf": [
+            {
+              "type": "string",
+              "enum": [
+                "interests",
+                "issues"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "requested_source_snapshot_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "request_channel": {
+          "type": "string",
+          "enum": [
+            "gleo",
+            "app"
+          ]
+        }
+      },
+      "required": [
+        "schema_version",
+        "operation_id",
+        "profile_context",
+        "stream_id",
+        "expected_stream_version",
+        "previous_selection_id",
+        "expected_settings_version",
+        "checkpoint_id",
+        "selection_kind",
+        "requested_article_id",
+        "trigger",
+        "expected_resume_version",
+        "review_contract_version",
+        "intent_kind",
+        "origin_view",
+        "requested_source_snapshot_id",
+        "request_channel"
+      ],
+      "description": "Review2 reuses the existing stream/CAS and exact source6 references. Explicit intent is required; automatic candidates sort by original UTC DESC/article UUID ASC. Admission receipt never extends on observation.",
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "selection_kind": {
+                "const": "automatic_unheard"
+              }
+            },
+            "required": [
+              "selection_kind"
+            ]
+          },
+          "then": {
+            "properties": {
+              "requested_article_id": {
+                "type": "null"
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "requested_article_id": {
+                "type": "string",
+                "format": "uuid"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "intent_kind": {
+                "type": "string",
+                "const": "auto_next"
+              }
+            },
+            "required": [
+              "intent_kind"
+            ]
+          },
+          "then": {
+            "properties": {
+              "trigger": {
+                "type": "string",
+                "const": "auto_offer"
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "trigger": {
+                "type": "string",
+                "const": "explicit"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "requested_article_id": {
+                "type": "null"
+              }
+            },
+            "required": [
+              "requested_article_id"
+            ]
+          },
+          "then": {
+            "properties": {
+              "requested_source_snapshot_id": {
+                "type": "null"
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "requested_source_snapshot_id": {
+                "type": "string",
+                "format": "uuid"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "NextAdmissionReceipt2": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "operation_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "request_hash": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "accepted_at": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "(?:Z|\\+00:00)$"
+        },
+        "intent_kind": {
+          "type": "string",
+          "enum": [
+            "explicit_start",
+            "explicit_next",
+            "auto_next",
+            "explicit_article",
+            "ready_alternative"
+          ]
+        },
+        "selection_intent_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "activation_deadline_at": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "(?:Z|\\+00:00)$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "operation_id",
+        "request_hash",
+        "accepted_at",
+        "intent_kind",
+        "selection_intent_id",
+        "activation_deadline_at"
+      ]
+    },
+    "NextOutcome2": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "version": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "observed_at": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "(?:Z|\\+00:00)$"
+        },
+        "state": {
+          "type": "string",
+          "enum": [
+            "selected",
+            "resumed",
+            "pending",
+            "expired_waiting_explicit",
+            "requires_explicit_replay",
+            "no_candidate"
+          ]
+        },
+        "stream_version": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "selection": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Source6PersonalSelectionRecord"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "checkpoint": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Source6PersonalReadCheckpoint"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "context": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ListeningContext2"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "source_status": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/PreparationComponentState"
+          },
+          "minItems": 0,
+          "maxItems": 9
+        },
+        "no_candidate_reason": {
+          "anyOf": [
+            {
+              "type": "string",
+              "enum": [
+                "all_listened",
+                "no_eligible_content",
+                "visited_in_stream",
+                "ready_alternative_unavailable"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "version",
+        "observed_at",
+        "state",
+        "stream_version",
+        "selection",
+        "checkpoint",
+        "context",
+        "source_status",
+        "no_candidate_reason"
+      ],
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "state": {
+                "type": "string",
+                "const": "selected"
+              }
+            },
+            "required": [
+              "state"
+            ]
+          },
+          "then": {
+            "properties": {
+              "selection": {
+                "$ref": "#/$defs/Source6PersonalSelectionRecord"
+              },
+              "checkpoint": {
+                "$ref": "#/$defs/Source6PersonalReadCheckpoint"
+              },
+              "context": {
+                "$ref": "#/$defs/ListeningContext2"
+              },
+              "no_candidate_reason": {
+                "type": "null"
+              },
+              "source_status": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/PreparationComponentState"
+                },
+                "minItems": 1,
+                "maxItems": 9
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "state": {
+                "type": "string",
+                "const": "resumed"
+              }
+            },
+            "required": [
+              "state"
+            ]
+          },
+          "then": {
+            "properties": {
+              "selection": {
+                "$ref": "#/$defs/Source6PersonalSelectionRecord"
+              },
+              "checkpoint": {
+                "$ref": "#/$defs/Source6PersonalReadCheckpoint"
+              },
+              "context": {
+                "$ref": "#/$defs/ListeningContext2"
+              },
+              "no_candidate_reason": {
+                "type": "null"
+              },
+              "source_status": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/PreparationComponentState"
+                },
+                "minItems": 1,
+                "maxItems": 9
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "state": {
+                "type": "string",
+                "const": "pending"
+              }
+            },
+            "required": [
+              "state"
+            ]
+          },
+          "then": {
+            "properties": {
+              "selection": {
+                "type": "null"
+              },
+              "checkpoint": {
+                "type": "null"
+              },
+              "context": {
+                "type": "null"
+              },
+              "no_candidate_reason": {
+                "type": "null"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "state": {
+                "type": "string",
+                "const": "expired_waiting_explicit"
+              }
+            },
+            "required": [
+              "state"
+            ]
+          },
+          "then": {
+            "properties": {
+              "selection": {
+                "type": "null"
+              },
+              "checkpoint": {
+                "type": "null"
+              },
+              "context": {
+                "type": "null"
+              },
+              "no_candidate_reason": {
+                "type": "null"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "state": {
+                "type": "string",
+                "const": "requires_explicit_replay"
+              }
+            },
+            "required": [
+              "state"
+            ]
+          },
+          "then": {
+            "properties": {
+              "context": {
+                "type": "null"
+              },
+              "no_candidate_reason": {
+                "type": "null"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "state": {
+                "type": "string",
+                "const": "no_candidate"
+              }
+            },
+            "required": [
+              "state"
+            ]
+          },
+          "then": {
+            "properties": {
+              "selection": {
+                "type": "null"
+              },
+              "checkpoint": {
+                "type": "null"
+              },
+              "context": {
+                "type": "null"
+              },
+              "source_status": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/PreparationComponentState"
+                },
+                "minItems": 0,
+                "maxItems": 0
+              },
+              "no_candidate_reason": {
+                "type": "string",
+                "enum": [
+                  "all_listened",
+                  "no_eligible_content",
+                  "visited_in_stream",
+                  "ready_alternative_unavailable"
+                ]
+              }
+            }
+          }
+        }
+      ]
+    },
+    "ReviewNextResponse2": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "type": "string",
+          "const": "6"
+        },
+        "review_contract_version": {
+          "type": "integer",
+          "const": 2
+        },
+        "operation_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "profile_context": {
+          "$ref": "#/$defs/Source6CommonProfileContext"
+        },
+        "stream_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "admission_receipt": {
+          "$ref": "#/$defs/NextAdmissionReceipt2"
+        },
+        "outcome_projection": {
+          "$ref": "#/$defs/NextOutcome2"
+        }
+      },
+      "required": [
+        "schema_version",
+        "review_contract_version",
+        "operation_id",
+        "profile_context",
+        "stream_id",
+        "admission_receipt",
+        "outcome_projection"
+      ]
+    },
+    "Review1ListeningContext": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "selection_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "profile_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "learning_epoch": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "version": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "origin": {
+          "type": "string",
+          "enum": [
+            "regular",
+            "history_replay"
+          ]
+        },
+        "end_policy": {
+          "type": "string",
+          "enum": [
+            "regular_auto",
+            "manual_history",
+            "manual_cancelled"
+          ]
+        },
+        "offer_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "cancelled_offer_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "source_selection_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "previous_resume_ref": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Review1ResumeRef"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "return_snapshot": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Review1ReturnSnapshot"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "practice_entry": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Review1PracticeEntry"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "selection_id",
+        "profile_id",
+        "learning_epoch",
+        "version",
+        "origin",
+        "end_policy",
+        "offer_id",
+        "cancelled_offer_id",
+        "source_selection_id",
+        "previous_resume_ref",
+        "return_snapshot",
+        "practice_entry"
+      ],
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "origin": {
+                "type": "string",
+                "const": "history_replay"
+              }
+            },
+            "required": [
+              "origin"
+            ]
+          },
+          "then": {
+            "properties": {
+              "end_policy": {
+                "type": "string",
+                "const": "manual_history"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "ListeningContextResponse2": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "review_contract_version": {
+          "type": "integer",
+          "const": 2
+        },
+        "profile_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "learning_epoch": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "context": {
+          "$ref": "#/$defs/ListeningContext2"
+        }
+      },
+      "required": [
+        "review_contract_version",
+        "profile_id",
+        "learning_epoch",
+        "context"
+      ]
+    },
+    "Review1CommandArgs": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/Review1EnterSentenceArgs"
+        },
+        {
+          "$ref": "#/$defs/Review1EnterPreviewArgs"
+        },
+        {
+          "$ref": "#/$defs/Review1EmptyArgs"
+        },
+        {
+          "$ref": "#/$defs/Review1SelectRegularArgs"
+        },
+        {
+          "$ref": "#/$defs/Review1EnterPracticeArgs"
+        },
+        {
+          "$ref": "#/$defs/Review1ClosePracticeArgs"
+        }
+      ]
+    },
+    "Review1EnterSentenceArgs": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "manifest_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "sentence_id": {
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "required": [
+        "manifest_id",
+        "sentence_id"
+      ]
+    },
+    "Review1EnterPreviewArgs": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "draft_revision": {
+          "type": "integer",
+          "minimum": 1
+        }
+      },
+      "required": [
+        "draft_revision"
+      ]
+    },
+    "Review1EmptyArgs": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {},
+      "required": []
+    },
+    "Review1SelectRegularArgs": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "trigger": {
+          "type": "string",
+          "enum": [
+            "explicit",
+            "auto_offer"
+          ]
+        }
+      },
+      "required": [
+        "trigger"
+      ]
+    },
+    "Review1EnterPracticeArgs": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "entry_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "lesson_id": {
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "required": [
+        "entry_id",
+        "lesson_id"
+      ]
+    },
+    "Review1ClosePracticeArgs": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "entry_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "reason": {
+          "type": "string",
+          "enum": [
+            "close",
+            "back",
+            "save_exit",
+            "finish",
+            "restricted",
+            "open_settings"
+          ]
+        }
+      },
+      "required": [
+        "entry_id",
+        "reason"
+      ]
+    },
+    "ReviewCommandRequest2": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "review_contract_version": {
+          "type": "integer",
+          "const": 2
+        },
+        "profile_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "learning_epoch": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "operation_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "expected_context_version": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "expected_resume_version": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "offer_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "command": {
+          "type": "string",
+          "enum": [
+            "enter_sentence",
+            "enter_preview",
+            "close_auxiliary",
+            "resume_original",
+            "select_regular",
+            "enter_practice",
+            "close_practice"
+          ]
+        },
+        "command_args": {
+          "$ref": "#/$defs/CommandArgs2"
+        }
+      },
+      "required": [
+        "review_contract_version",
+        "profile_id",
+        "learning_epoch",
+        "operation_id",
+        "expected_context_version",
+        "expected_resume_version",
+        "offer_id",
+        "command",
+        "command_args"
+      ],
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "command": {
+                "type": "string",
+                "const": "enter_sentence"
+              }
+            },
+            "required": [
+              "command"
+            ]
+          },
+          "then": {
+            "properties": {
+              "command_args": {
+                "$ref": "#/$defs/Review1EnterSentenceArgs"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "command": {
+                "type": "string",
+                "const": "enter_preview"
+              }
+            },
+            "required": [
+              "command"
+            ]
+          },
+          "then": {
+            "properties": {
+              "command_args": {
+                "$ref": "#/$defs/Review1EnterPreviewArgs"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "command": {
+                "type": "string",
+                "const": "close_auxiliary"
+              }
+            },
+            "required": [
+              "command"
+            ]
+          },
+          "then": {
+            "properties": {
+              "command_args": {
+                "$ref": "#/$defs/Review1EmptyArgs"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "command": {
+                "type": "string",
+                "const": "resume_original"
+              }
+            },
+            "required": [
+              "command"
+            ]
+          },
+          "then": {
+            "properties": {
+              "command_args": {
+                "$ref": "#/$defs/Review1EmptyArgs"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "command": {
+                "type": "string",
+                "const": "select_regular"
+              }
+            },
+            "required": [
+              "command"
+            ]
+          },
+          "then": {
+            "properties": {
+              "command_args": {
+                "$ref": "#/$defs/SelectRegularArgs2"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "command": {
+                "type": "string",
+                "const": "enter_practice"
+              }
+            },
+            "required": [
+              "command"
+            ]
+          },
+          "then": {
+            "properties": {
+              "command_args": {
+                "$ref": "#/$defs/Review1EnterPracticeArgs"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "command": {
+                "type": "string",
+                "const": "close_practice"
+              }
+            },
+            "required": [
+              "command"
+            ]
+          },
+          "then": {
+            "properties": {
+              "command_args": {
+                "$ref": "#/$defs/Review1ClosePracticeArgs"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "ReviewCommandResponse2": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "review_contract_version": {
+          "type": "integer",
+          "const": 2
+        },
+        "profile_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "learning_epoch": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "operation_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "context": {
+          "$ref": "#/$defs/ListeningContext2"
+        },
+        "checkpoint_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "resume_version": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "next_selection_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "applied",
+            "no_eligible_content"
+          ]
+        }
+      },
+      "required": [
+        "review_contract_version",
+        "profile_id",
+        "learning_epoch",
+        "operation_id",
+        "context",
+        "checkpoint_id",
+        "resume_version",
+        "next_selection_id",
+        "status"
+      ]
+    },
+    "ListeningContextQuery2": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "review_contract_version": {
+          "type": "integer",
+          "const": 2
+        }
+      },
+      "required": [
+        "review_contract_version"
+      ]
+    },
+    "SelectRegularArgs2": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "trigger": {
+          "type": "string",
+          "enum": [
+            "explicit",
+            "auto_offer"
+          ]
+        },
+        "intent_kind": {
+          "type": "string",
+          "enum": [
+            "explicit_start",
+            "explicit_next",
+            "auto_next",
+            "explicit_article",
+            "ready_alternative"
+          ]
+        }
+      },
+      "required": [
+        "trigger",
+        "intent_kind"
+      ]
+    },
+    "CommandArgs2": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/Review1EnterSentenceArgs"
+        },
+        {
+          "$ref": "#/$defs/Review1EnterPreviewArgs"
+        },
+        {
+          "$ref": "#/$defs/Review1EmptyArgs"
+        },
+        {
+          "$ref": "#/$defs/SelectRegularArgs2"
+        },
+        {
+          "$ref": "#/$defs/Review1EnterPracticeArgs"
+        },
+        {
+          "$ref": "#/$defs/Review1ClosePracticeArgs"
+        }
+      ]
+    },
+    "ErrorEnvelope": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "error": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "code": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 80
+            },
+            "retryable": {
+              "type": "boolean"
+            },
+            "current_version": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "code",
+            "retryable",
+            "current_version"
+          ]
+        }
+      },
+      "required": [
+        "error"
+      ]
+    }
+  }
+}

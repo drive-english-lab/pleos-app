@@ -1,0 +1,5 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Only the opt-in instrumentation APK can reach the host test server. -->
+    <application android:usesCleartextTraffic="true" android:allowBackup="false" />
+</manifest>

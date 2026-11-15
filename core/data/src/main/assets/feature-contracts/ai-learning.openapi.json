@@ -1,0 +1,758 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Drive English AI Learning S4",
+    "version": "1.0.0",
+    "description": "Six protected design operations. Actual registration, handler wiring and external availability are tracked per operation in implementation records. JWT/session/installation/owner, epoch for learning objects, CAS/immutable receipts and data lifecycle require server validation. No public model proxy. Same original JSON5 unchanged."
+  },
+  "paths": {
+    "/v1/profile/learning-preference": {
+      "get": {
+        "operationId": "readLearningPreference",
+        "security": [
+          {
+            "UserBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "personal-data.openapi.json#/components/parameters/InstallationId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Validated ai-learning1 response; not presentation/grade evidence.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "ai-learning.schema.json#/$defs/LearningPreferenceView"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Protected error; see ai-learning.md.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "personal-data.openapi.json#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Protected error; see ai-learning.md.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "personal-data.openapi.json#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Protected error; see ai-learning.md.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "personal-data.openapi.json#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Protected error; see ai-learning.md.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "personal-data.openapi.json#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Protected error; see ai-learning.md.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "personal-data.openapi.json#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Protected error; see ai-learning.md.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "personal-data.openapi.json#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Protected error; see ai-learning.md.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "personal-data.openapi.json#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "Protected error; see ai-learning.md.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "personal-data.openapi.json#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/profile/learning-preference/choices": {
+      "post": {
+        "operationId": "setLearningPreference",
+        "security": [
+          {
+            "UserBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "personal-data.openapi.json#/components/parameters/InstallationId"
+          },
+          {
+            "$ref": "personal-data.openapi.json#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Validated ai-learning1 response; not presentation/grade evidence.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "ai-learning.schema.json#/$defs/LearningPreferenceReceipt"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Protected error; see ai-learning.md.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "personal-data.openapi.json#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Protected error; see ai-learning.md.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "personal-data.openapi.json#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Protected error; see ai-learning.md.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "personal-data.openapi.json#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Protected error; see ai-learning.md.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "personal-data.openapi.json#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Protected error; see ai-learning.md.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "personal-data.openapi.json#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Protected error; see ai-learning.md.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "personal-data.openapi.json#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Protected error; see ai-learning.md.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "personal-data.openapi.json#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "Protected error; see ai-learning.md.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "personal-data.openapi.json#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "ai-learning.schema.json#/$defs/LearningPreferenceRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/learning/material-candidates": {
+      "get": {
+        "operationId": "listLearningMaterialCandidates",
+        "security": [
+          {
+            "UserBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "personal-data.openapi.json#/components/parameters/InstallationId"
+          },
+          {
+            "name": "article_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "source_snapshot_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "listening_mode",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "original_full",
+                "briefing"
+              ]
+            }
+          },
+          {
+            "name": "target_band",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "basic",
+                "intermediate",
+                "advanced"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Validated ai-learning1 response; not presentation/grade evidence.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "ai-learning.schema.json#/$defs/LearningMaterialCandidatePage"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Protected error; see ai-learning.md.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "personal-data.openapi.json#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Protected error; see ai-learning.md.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "personal-data.openapi.json#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Protected error; see ai-learning.md.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "personal-data.openapi.json#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Protected error; see ai-learning.md.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "personal-data.openapi.json#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Protected error; see ai-learning.md.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "personal-data.openapi.json#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Protected error; see ai-learning.md.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "personal-data.openapi.json#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Protected error; see ai-learning.md.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "personal-data.openapi.json#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "Protected error; see ai-learning.md.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "personal-data.openapi.json#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/selections/{selection_id}/learning-material": {
+      "get": {
+        "operationId": "readSelectionLearningMaterial",
+        "security": [
+          {
+            "UserBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "personal-data.openapi.json#/components/parameters/InstallationId"
+          },
+          {
+            "name": "client_privacy_epoch",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "selection_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Validated ai-learning1 response; not presentation/grade evidence.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "ai-learning.schema.json#/$defs/SelectionLearningMaterialView"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Protected error; see ai-learning.md.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "personal-data.openapi.json#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Protected error; see ai-learning.md.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "personal-data.openapi.json#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Protected error; see ai-learning.md.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "personal-data.openapi.json#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Protected error; see ai-learning.md.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "personal-data.openapi.json#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Protected error; see ai-learning.md.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "personal-data.openapi.json#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Protected error; see ai-learning.md.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "personal-data.openapi.json#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Protected error; see ai-learning.md.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "personal-data.openapi.json#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "Protected error; see ai-learning.md.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "personal-data.openapi.json#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/profile/learning-recommendation": {
+      "get": {
+        "operationId": "readLearningRecommendation",
+        "security": [
+          {
+            "UserBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "personal-data.openapi.json#/components/parameters/InstallationId"
+          },
+          {
+            "name": "client_privacy_epoch",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Validated ai-learning1 response; not presentation/grade evidence.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "ai-learning.schema.json#/$defs/LearningRecommendationView"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Protected error; see ai-learning.md.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "personal-data.openapi.json#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Protected error; see ai-learning.md.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "personal-data.openapi.json#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Protected error; see ai-learning.md.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "personal-data.openapi.json#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Protected error; see ai-learning.md.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "personal-data.openapi.json#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Protected error; see ai-learning.md.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "personal-data.openapi.json#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Protected error; see ai-learning.md.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "personal-data.openapi.json#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Protected error; see ai-learning.md.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "personal-data.openapi.json#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "Protected error; see ai-learning.md.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "personal-data.openapi.json#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/profile/learning-recommendation/actions": {
+      "post": {
+        "operationId": "actOnLearningRecommendation",
+        "security": [
+          {
+            "UserBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "personal-data.openapi.json#/components/parameters/InstallationId"
+          },
+          {
+            "$ref": "personal-data.openapi.json#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Validated ai-learning1 response; not presentation/grade evidence.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "ai-learning.schema.json#/$defs/LearningRecommendationActionReceipt"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Protected error; see ai-learning.md.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "personal-data.openapi.json#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Protected error; see ai-learning.md.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "personal-data.openapi.json#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Protected error; see ai-learning.md.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "personal-data.openapi.json#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Protected error; see ai-learning.md.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "personal-data.openapi.json#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Protected error; see ai-learning.md.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "personal-data.openapi.json#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Protected error; see ai-learning.md.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "personal-data.openapi.json#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Protected error; see ai-learning.md.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "personal-data.openapi.json#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "Protected error; see ai-learning.md.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "personal-data.openapi.json#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "ai-learning.schema.json#/$defs/LearningRecommendationActionRequest"
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "UserBearer": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "Supabase access JWT",
+        "description": "Verify signature, issuer, audience, expiry, subject and active server session binding. Publishable key is not sufficient; caller metadata cannot authorize owner."
+      }
+    }
+  }
+}

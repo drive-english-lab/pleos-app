@@ -1,0 +1,1667 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Drive English Inference Contract",
+    "version": "5.0.0",
+    "description": "Schema-version5 design contract. Runtime availability is tracked per operation in implementation records; this description is not deployment, handler-wiring or validation evidence. Both anonymous and permanent users send verified access JWTs; active owner/session binding and privacy_epoch are checked before processing and at result commit. Submitted attempts and validated feedback are persistent server-owned profile records, with Room cache/outbox. QA semantic cache alone may use 60-second TTL. Idempotency scopes by canonical profile + endpoint + key; same immutable payload/attempt is one learning event, not a guarantee of one external model call. Request body <=16 KiB; question 1..500 code points, answer 1..1200. Gleo server initial budget 4000 ms, parked 8000 ms; final actual supported deadlines are runtime gates. Reuse only semantic results and echo current client correlation after validation. Previous attempt/feedback is retrieved from authenticated durable history rather than arbitrary client retry_context. No server/model key in Android. S2 draft revision5, schema_version5; packaged schema3 consumers require an explicit coordinated upgrade. Reject missing/old schema versions (422); never default missing exposure to unexposed. Preserve existing histories and initialize unsupported legacy exposure coverage as unknown. Existing /v1 paths denote the initial service surface. This design is not runtime/DB validation. Draft4 was not deployed; new schema5 writes require spoken-language evidence and role/language metadata. Packaged snapshots and manifests must match the canonical contract before adoption; runtime support is tracked separately. No silent English eligibility or clean-exposure defaults."
+  },
+  "servers": [
+    {
+      "url": "http://127.0.0.1:8000",
+      "description": "Local development only. Remote access requires HTTPS."
+    }
+  ],
+  "paths": {
+    "/healthz": {
+      "get": {
+        "operationId": "health",
+        "summary": "Existing process health only",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Process running",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "const": "ok"
+                    }
+                  },
+                  "required": [
+                    "status"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/article-questions": {
+      "post": {
+        "operationId": "answerArticleQuestion",
+        "summary": "Answer from the pinned source snapshot",
+        "security": [
+          {
+            "UserBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Feedback uses attempt_id; article QA uses operation_id. Canonical profile + endpoint + key. A transport retry may use fresh operation/presentation correlation without changing the submitted answer/capture/help."
+          },
+          {
+            "name": "X-Installation-ID",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Random installation context bound to verified session_id. Not identity/authorization on its own."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/QARequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Validated result.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QAResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid/expired JWT, revoked session, or retired source ownership.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Verified owner/session does not match the expected request context or permitted content.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Content ref does not exist.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Stale privacy epoch/record version, pinned ref mismatch, or idempotency payload conflict.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Content/rights withdrawn or submitted history no longer available after deletion.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "JSON body exceeds 16 KiB, including retry context.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Sanitized contract error; no input echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Quota exhausted; no model call is made.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "headers": {
+              "Retry-After": {
+                "description": "Seconds until retry may be attempted.",
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Upstream or validated output unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "Channel-specific processing budget exceeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Invalid upstream or backend result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "description": "Verify JWT and active subject/session owner, compare expected profile/epoch, validate frozen content/script, enforce bounded processing, and recheck owner/epoch/session before committing or returning a personal result."
+      }
+    },
+    "/v1/attempt-feedback": {
+      "post": {
+        "operationId": "evaluateSpeakingAttempt",
+        "summary": "Evaluate a submitted answer with the pinned rubric",
+        "security": [
+          {
+            "UserBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Feedback uses attempt_id; article QA uses operation_id. Canonical profile + endpoint + key. A transport retry may use fresh operation/presentation correlation without changing the submitted answer/capture/help."
+          },
+          {
+            "name": "X-Installation-ID",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Random installation context bound to verified session_id. Not identity/authorization on its own."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FeedbackRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Validated result.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeedbackResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid/expired JWT, revoked session, or retired source ownership.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Verified owner/session does not match the expected request context or permitted content.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Content ref does not exist.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Stale privacy epoch/record version, pinned ref mismatch, or idempotency payload conflict.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Content/rights withdrawn or submitted history no longer available after deletion.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "JSON body exceeds 16 KiB, including retry context.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Sanitized contract error; no input echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Quota exhausted; no model call is made.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "headers": {
+              "Retry-After": {
+                "description": "Seconds until retry may be attempted.",
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Upstream or validated output unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "Channel-specific processing budget exceeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Invalid upstream or backend result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "description": "Verify JWT and active subject/session owner, compare expected profile/epoch, validate frozen content/script, enforce bounded processing, and recheck owner/epoch/session before committing or returning a personal result."
+      }
+    },
+    "/v1/attempts/{attempt_id}": {
+      "get": {
+        "operationId": "readAttemptResult",
+        "description": "Fetch the authenticated owner current-generation attempt/validated feedback for resume. Pending/failure status is preserved; this read does not start another model call. Deleted/stale ownership never recreates a row.",
+        "security": [
+          {
+            "UserBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "attempt_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-Installation-ID",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Random installation context bound to verified session_id. Not identity/authorization on its own."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Validated result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AttemptResult"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Sanitized error; no input, source body, token or provider exception echoed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid request or path/query parameter",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Invalid upstream or backend result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Required runtime or upstream unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "Request processing deadline exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "UserBearer": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "Supabase access JWT",
+        "description": "Verify signature, issuer, audience, expiry, subject and active server session binding. Publishable key is not sufficient; caller metadata cannot authorize owner."
+      }
+    },
+    "schemas": {
+      "ContentRef": {
+        "$ref": "common.schema.json#/$defs/ContentRef"
+      },
+      "PracticeContentRef": {
+        "$ref": "common.schema.json#/$defs/PracticeContentRef"
+      },
+      "ClientContext": {
+        "$ref": "common.schema.json#/$defs/ClientContext"
+      },
+      "Capture": {
+        "$ref": "common.schema.json#/$defs/Capture"
+      },
+      "Generation": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "mode": {
+            "type": "string",
+            "enum": [
+              "fixture",
+              "live"
+            ]
+          },
+          "model_revision": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 160
+          },
+          "prompt_version": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+          },
+          "validator_version": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+          }
+        },
+        "required": [
+          "mode",
+          "model_revision",
+          "prompt_version",
+          "validator_version"
+        ]
+      },
+      "FeedbackGeneration": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "mode": {
+            "type": "string",
+            "enum": [
+              "fixture",
+              "live",
+              "input_gate"
+            ]
+          },
+          "model_revision": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 160
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "prompt_version": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 80
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "validator_version": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+          },
+          "rubric_version": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          }
+        },
+        "required": [
+          "mode",
+          "model_revision",
+          "prompt_version",
+          "validator_version",
+          "rubric_version"
+        ],
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "mode": {
+                  "const": "input_gate"
+                }
+              },
+              "required": [
+                "mode"
+              ]
+            },
+            "then": {
+              "properties": {
+                "model_revision": {
+                  "type": "null"
+                },
+                "prompt_version": {
+                  "type": "null"
+                }
+              }
+            },
+            "else": {
+              "properties": {
+                "model_revision": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 160
+                },
+                "prompt_version": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 80
+                }
+              }
+            }
+          }
+        ],
+        "description": "input_gate is a deterministic held-input response, with no model invocation and null model/prompt revisions; validator/rubric revisions remain actual configured values. fixture/live continue their original provenance meaning."
+      },
+      "QARequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "schema_version": {
+            "type": "string",
+            "const": "5"
+          },
+          "operation_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "interaction_channel": {
+            "type": "string",
+            "enum": [
+              "gleo",
+              "parked"
+            ]
+          },
+          "client_context": {
+            "$ref": "#/components/schemas/ClientContext"
+          },
+          "content_ref": {
+            "$ref": "#/components/schemas/ContentRef"
+          },
+          "question_text": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          },
+          "response_language": {
+            "type": "string",
+            "enum": [
+              "auto",
+              "ko",
+              "en"
+            ]
+          }
+        },
+        "required": [
+          "schema_version",
+          "operation_id",
+          "interaction_channel",
+          "client_context",
+          "content_ref",
+          "question_text",
+          "response_language"
+        ]
+      },
+      "QAResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "schema_version": {
+            "type": "string",
+            "const": "5"
+          },
+          "operation_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "content_ref": {
+            "$ref": "#/components/schemas/ContentRef"
+          },
+          "client_context": {
+            "$ref": "#/components/schemas/ClientContext"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "answered",
+              "not_supported"
+            ]
+          },
+          "answer_text": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1200
+          },
+          "language": {
+            "type": "string",
+            "enum": [
+              "ko",
+              "en"
+            ]
+          },
+          "evidence_refs": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 160
+            },
+            "maxItems": 8,
+            "uniqueItems": true
+          },
+          "generation": {
+            "$ref": "#/components/schemas/Generation"
+          },
+          "outside_listening_script": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "schema_version",
+          "operation_id",
+          "content_ref",
+          "client_context",
+          "status",
+          "answer_text",
+          "language",
+          "evidence_refs",
+          "outside_listening_script",
+          "generation"
+        ],
+        "description": "answered has at most three supported sentences and verified evidence for the frozen source. outside_listening_script identifies original-only information absent from the selected main script and requires that distinction in the answer. not_supported adds no invented fact."
+      },
+      "FeedbackRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "schema_version": {
+            "type": "string",
+            "const": "5"
+          },
+          "operation_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "interaction_channel": {
+            "type": "string",
+            "enum": [
+              "gleo",
+              "parked"
+            ]
+          },
+          "client_context": {
+            "$ref": "#/components/schemas/ClientContext"
+          },
+          "attempt_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "content_ref": {
+            "$ref": "#/components/schemas/PracticeContentRef"
+          },
+          "answer_text": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1200
+          },
+          "capture": {
+            "$ref": "#/components/schemas/Capture"
+          },
+          "help_received": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "fact_explanation",
+                "sentence_starter",
+                "partial_correction",
+                "complete_example"
+              ]
+            },
+            "maxItems": 4,
+            "uniqueItems": true
+          },
+          "support_refs": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 160
+            },
+            "maxItems": 16,
+            "uniqueItems": true
+          },
+          "retry_of_attempt_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "lesson_id": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        "required": [
+          "schema_version",
+          "operation_id",
+          "interaction_channel",
+          "client_context",
+          "attempt_id",
+          "content_ref",
+          "answer_text",
+          "capture",
+          "help_received",
+          "support_refs",
+          "retry_of_attempt_id",
+          "lesson_id"
+        ],
+        "description": "Save/confirm one immutable submission before evaluation. Server validates or conditionally creates the first submission only at current owner/epoch and an existing valid lesson. A late callback may only update an existing valid attempt. For retry, retrieve retry_of_attempt_id and prior focus from same-owner same-task stored feedback. First attempt has null retry_of_attempt_id. Recognition-unassessable does not consume valid turn. Lock lesson when accepting a new submission; at most one pending attempt, one valid first and one valid retry. Unassessable consumes neither. Effective current-lesson help unions only confirmed delivered support with validated request snapshots; generated support_issued is not delivery. Server derives canonical-question exposure separately under a shared exposure/lesson lock before model execution. Prepared/unresolved examples mean unknown; client cannot erase prior exposure or submit a clean-status claim. Before a new valid turn, synchronize acknowledgement of the previous matching presented feedback; pending presentation cannot be silently erased. Reject conflicting lesson/pending state. Validate origin-language evidence before model execution. Non-English/unverified uses deterministic input_gate/unassessable; never infer English from answer_text or silently consume a retry. A held retry has null retry_outcome."
+      },
+      "FeedbackResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "schema_version": {
+            "type": "string",
+            "const": "5"
+          },
+          "operation_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "attempt_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "content_ref": {
+            "$ref": "#/components/schemas/PracticeContentRef"
+          },
+          "client_context": {
+            "$ref": "#/components/schemas/ClientContext"
+          },
+          "judgement": {
+            "type": "string",
+            "enum": [
+              "sufficient",
+              "needs_more",
+              "factually_incorrect",
+              "unassessable"
+            ]
+          },
+          "focus": {
+            "type": "string",
+            "enum": [
+              "none",
+              "fact",
+              "missing_fact",
+              "language_form",
+              "recognition"
+            ]
+          },
+          "feedback_ko": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 600
+          },
+          "evidence_refs": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 160
+            },
+            "maxItems": 8,
+            "uniqueItems": true
+          },
+          "correction": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Correction"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "example_sentence": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 500
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "support_issued": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "fact_explanation",
+                "sentence_starter",
+                "partial_correction",
+                "complete_example"
+              ]
+            },
+            "maxItems": 4,
+            "uniqueItems": true
+          },
+          "retry": {
+            "$ref": "#/components/schemas/Retry"
+          },
+          "generation": {
+            "$ref": "#/components/schemas/FeedbackGeneration"
+          },
+          "focus_fact_refs": {
+            "type": "array",
+            "maxItems": 4,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            }
+          },
+          "retry_outcome": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "improved",
+                  "unchanged",
+                  "unassessable"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "lesson_state": {
+            "$ref": "common.schema.json#/$defs/LessonState",
+            "readOnly": true
+          },
+          "example_exposure": {
+            "allOf": [
+              {
+                "$ref": "common.schema.json#/$defs/ExampleExposureAssessment"
+              },
+              {
+                "properties": {
+                  "boundary_kind": {
+                    "const": "attempt_acceptance"
+                  }
+                }
+              }
+            ]
+          },
+          "prepared_supports": {
+            "type": "array",
+            "items": {
+              "$ref": "common.schema.json#/$defs/SupportArtifact"
+            },
+            "minItems": 0,
+            "maxItems": 4,
+            "uniqueItems": true
+          },
+          "english_attempt_status": {
+            "$ref": "common.schema.json#/$defs/EnglishAttemptStatus"
+          }
+        },
+        "required": [
+          "schema_version",
+          "operation_id",
+          "attempt_id",
+          "content_ref",
+          "client_context",
+          "judgement",
+          "focus",
+          "feedback_ko",
+          "evidence_refs",
+          "correction",
+          "example_sentence",
+          "support_issued",
+          "retry",
+          "generation",
+          "focus_fact_refs",
+          "retry_outcome",
+          "lesson_state",
+          "example_exposure",
+          "prepared_supports",
+          "english_attempt_status"
+        ],
+        "description": "Single focus. Priority: fact error, missing content, confirmed language form. correction is allowed only for language_form with verified fidelity. Server renderer derives support_issued from output, including complete examples; it must not silently put an untracked full example into feedback_ko. Sufficient natural answers finish without an invented correction. Missing-fact feedback uses supplement mode and focus_fact_refs; language/fact correction uses rephrase mode. For recognition/unassessable, no lesson retry is spent and the question is suspended; do not invent a correction or completion. retry_outcome is null for first submissions and is evaluated from authenticated stored previous attempt/feedback for subsequent submissions. support_issued/prepared_supports record prepared output components, not delivered help or prior-example status. Renderer binds every full example to an exact immutable support artifact and question, including examples embedded in feedback. Actual delivery uses the presentation ticket/observation protocol; generic feedback ACK is separate. Server derives English status from evidence, never from normalized text alone. Non-English/unverified is held via unassessable; no valid anchor/English success and a held retry preserves prior first/content_success with retry_outcome null. Verified English with unknown form can content-judge without form correction.",
+        "allOf": [
+          {
+            "if": {
+              "anyOf": [
+                {
+                  "properties": {
+                    "example_sentence": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "example_sentence"
+                  ]
+                },
+                {
+                  "properties": {
+                    "support_issued": {
+                      "contains": {
+                        "const": "complete_example"
+                      }
+                    }
+                  },
+                  "required": [
+                    "support_issued"
+                  ]
+                }
+              ]
+            },
+            "then": {
+              "properties": {
+                "prepared_supports": {
+                  "contains": {
+                    "properties": {
+                      "kind": {
+                        "const": "complete_example"
+                      }
+                    },
+                    "required": [
+                      "kind"
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "english_attempt_status": {
+                  "enum": [
+                    "not_english",
+                    "unverified"
+                  ]
+                }
+              },
+              "required": [
+                "english_attempt_status"
+              ]
+            },
+            "then": {
+              "properties": {
+                "judgement": {
+                  "const": "unassessable"
+                },
+                "focus": {
+                  "const": "recognition"
+                },
+                "correction": {
+                  "type": "null"
+                },
+                "example_sentence": {
+                  "type": "null"
+                },
+                "retry_outcome": {
+                  "type": "null"
+                },
+                "retry": {
+                  "properties": {
+                    "suggested": {
+                      "const": false
+                    },
+                    "mode": {
+                      "const": "none"
+                    },
+                    "prompt_text": {
+                      "type": "null"
+                    }
+                  }
+                },
+                "generation": {
+                  "properties": {
+                    "mode": {
+                      "const": "input_gate"
+                    }
+                  }
+                },
+                "prepared_supports": {
+                  "maxItems": 0
+                },
+                "support_issued": {
+                  "maxItems": 0
+                }
+              }
+            }
+          }
+        ]
+      },
+      "Correction": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "start_cp": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "end_cp": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "source_fragment": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 240
+          },
+          "replacement": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 240
+          }
+        },
+        "required": [
+          "start_cp",
+          "end_cp",
+          "source_fragment",
+          "replacement"
+        ],
+        "description": "Unicode code point offsets, end exclusive. Fragment must equal the submitted answer slice; replacement changes only one confirmed form."
+      },
+      "Retry": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "suggested": {
+            "type": "boolean"
+          },
+          "prompt_text": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 500
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "prompt_language": {
+            "type": "string",
+            "enum": [
+              "ko",
+              "en"
+            ]
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "none",
+              "supplement",
+              "rephrase"
+            ]
+          }
+        },
+        "required": [
+          "suggested",
+          "prompt_text",
+          "prompt_language",
+          "mode"
+        ]
+      },
+      "ErrorEnvelope": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "operation_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "error": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "code": {
+                "type": "string",
+                "enum": [
+                  "UNAUTHORIZED",
+                  "SESSION_REVOKED",
+                  "FORBIDDEN",
+                  "INVALID_REQUEST",
+                  "VERSION_MISMATCH",
+                  "STALE_EPOCH",
+                  "RECORD_CONFLICT",
+                  "IDEMPOTENCY_CONFLICT",
+                  "MERGE_EXPIRED",
+                  "MERGE_PROOF_REQUIRED",
+                  "CONTENT_NOT_FOUND",
+                  "CONTENT_WITHDRAWN",
+                  "RATE_LIMITED",
+                  "UPSTREAM_UNAVAILABLE",
+                  "REQUEST_TOO_LARGE",
+                  "DEADLINE_EXCEEDED"
+                ]
+              },
+              "retryable": {
+                "type": "boolean"
+              },
+              "message_ko": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 300
+              }
+            },
+            "required": [
+              "code",
+              "retryable",
+              "message_ko"
+            ]
+          },
+          "schema_version": {
+            "type": "string",
+            "const": "5"
+          }
+        },
+        "required": [
+          "operation_id",
+          "error",
+          "schema_version"
+        ]
+      },
+      "AttemptResult": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "profile_context": {
+            "$ref": "common.schema.json#/$defs/ProfileContext"
+          },
+          "attempt_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "content_ref": {
+            "$ref": "common.schema.json#/$defs/PracticeContentRef"
+          },
+          "status": {
+            "$ref": "common.schema.json#/$defs/OperationStatus"
+          },
+          "feedback": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/StoredFeedback"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "schema_version": {
+            "type": "string",
+            "const": "5"
+          },
+          "lesson_state": {
+            "$ref": "common.schema.json#/$defs/LessonState"
+          },
+          "example_exposure": {
+            "allOf": [
+              {
+                "$ref": "common.schema.json#/$defs/ExampleExposureAssessment"
+              },
+              {
+                "properties": {
+                  "boundary_kind": {
+                    "const": "attempt_acceptance"
+                  }
+                }
+              }
+            ]
+          },
+          "english_attempt_status": {
+            "$ref": "common.schema.json#/$defs/EnglishAttemptStatus"
+          }
+        },
+        "required": [
+          "profile_context",
+          "attempt_id",
+          "content_ref",
+          "status",
+          "feedback",
+          "schema_version",
+          "lesson_state",
+          "example_exposure",
+          "english_attempt_status"
+        ],
+        "description": "feedback is non-null only for succeeded. Same owner/epoch and original input capture are retained. Includes authoritative attempt_acceptance exposure assessment separately from StoredFeedback and current LessonState. New rounds preserve same-question exposure and may still have content_success=true after an example; exclude exposed/unknown from SC003 numerator without changing its denominator. Server derives English status from evidence, never from normalized text alone. Non-English/unverified is held via unassessable; no valid anchor/English success and a held retry preserves prior first/content_success with retry_outcome null. Verified English with unknown form can content-judge without form correction.",
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "status": {
+                  "const": "succeeded"
+                }
+              },
+              "required": [
+                "status"
+              ]
+            },
+            "then": {
+              "properties": {
+                "feedback": {
+                  "$ref": "#/components/schemas/StoredFeedback"
+                }
+              }
+            },
+            "else": {
+              "properties": {
+                "feedback": {
+                  "type": "null"
+                }
+              }
+            }
+          }
+        ]
+      },
+      "StoredFeedback": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "attempt_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "content_ref": {
+            "$ref": "#/components/schemas/PracticeContentRef"
+          },
+          "judgement": {
+            "type": "string",
+            "enum": [
+              "sufficient",
+              "needs_more",
+              "factually_incorrect",
+              "unassessable"
+            ]
+          },
+          "focus": {
+            "type": "string",
+            "enum": [
+              "none",
+              "fact",
+              "missing_fact",
+              "language_form",
+              "recognition"
+            ]
+          },
+          "feedback_ko": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 600
+          },
+          "evidence_refs": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 160
+            },
+            "maxItems": 8,
+            "uniqueItems": true
+          },
+          "correction": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Correction"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "example_sentence": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 500
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "support_issued": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "fact_explanation",
+                "sentence_starter",
+                "partial_correction",
+                "complete_example"
+              ]
+            },
+            "maxItems": 4,
+            "uniqueItems": true
+          },
+          "retry": {
+            "$ref": "#/components/schemas/Retry"
+          },
+          "generation": {
+            "$ref": "#/components/schemas/FeedbackGeneration"
+          },
+          "focus_fact_refs": {
+            "type": "array",
+            "maxItems": 4,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            }
+          },
+          "retry_outcome": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "improved",
+                  "unchanged",
+                  "unassessable"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "prepared_supports": {
+            "type": "array",
+            "items": {
+              "$ref": "common.schema.json#/$defs/SupportArtifact"
+            },
+            "minItems": 0,
+            "maxItems": 4,
+            "uniqueItems": true
+          },
+          "english_attempt_status": {
+            "$ref": "common.schema.json#/$defs/EnglishAttemptStatus"
+          }
+        },
+        "required": [
+          "attempt_id",
+          "content_ref",
+          "judgement",
+          "focus",
+          "feedback_ko",
+          "evidence_refs",
+          "correction",
+          "example_sentence",
+          "support_issued",
+          "retry",
+          "generation",
+          "focus_fact_refs",
+          "retry_outcome",
+          "prepared_supports",
+          "english_attempt_status"
+        ],
+        "description": "Durable semantic feedback shared by personal history and inference GET; no transient presentation context or stale lesson snapshot. Read current LessonState separately. support_issued/prepared_supports record prepared output components, not delivered help or prior-example status. Renderer binds every full example to an exact immutable support artifact and question, including examples embedded in feedback. Actual delivery uses the presentation ticket/observation protocol; generic feedback ACK is separate. Server derives English status from evidence, never from normalized text alone. Non-English/unverified is held via unassessable; no valid anchor/English success and a held retry preserves prior first/content_success with retry_outcome null. Verified English with unknown form can content-judge without form correction.",
+        "allOf": [
+          {
+            "if": {
+              "anyOf": [
+                {
+                  "properties": {
+                    "example_sentence": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "example_sentence"
+                  ]
+                },
+                {
+                  "properties": {
+                    "support_issued": {
+                      "contains": {
+                        "const": "complete_example"
+                      }
+                    }
+                  },
+                  "required": [
+                    "support_issued"
+                  ]
+                }
+              ]
+            },
+            "then": {
+              "properties": {
+                "prepared_supports": {
+                  "contains": {
+                    "properties": {
+                      "kind": {
+                        "const": "complete_example"
+                      }
+                    },
+                    "required": [
+                      "kind"
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "english_attempt_status": {
+                  "enum": [
+                    "not_english",
+                    "unverified"
+                  ]
+                }
+              },
+              "required": [
+                "english_attempt_status"
+              ]
+            },
+            "then": {
+              "properties": {
+                "judgement": {
+                  "const": "unassessable"
+                },
+                "focus": {
+                  "const": "recognition"
+                },
+                "correction": {
+                  "type": "null"
+                },
+                "example_sentence": {
+                  "type": "null"
+                },
+                "retry_outcome": {
+                  "type": "null"
+                },
+                "retry": {
+                  "properties": {
+                    "suggested": {
+                      "const": false
+                    },
+                    "mode": {
+                      "const": "none"
+                    },
+                    "prompt_text": {
+                      "type": "null"
+                    }
+                  }
+                },
+                "generation": {
+                  "properties": {
+                    "mode": {
+                      "const": "input_gate"
+                    }
+                  }
+                },
+                "prepared_supports": {
+                  "maxItems": 0
+                },
+                "support_issued": {
+                  "maxItems": 0
+                }
+              }
+            }
+          }
+        ]
+      }
+    }
+  },
+  "x-server-validation-rules": [
+    "Reject unknown body fields, invalid ref combinations and tasks belonging to another bundle.",
+    "Authorize scope/bundle and atomically reserve quota before any model call.",
+    "Load original and rubric server-side; never accept client-supplied source or grading criteria.",
+    "Use channel deadline 4s for gleo, 8s for parked; adapters budget 6s and 10s respectively.",
+    "Do not persist request/answer/feedback bodies, validation inputs, traces or provider exceptions.",
+    "For feedback hash stable semantic payload; operation/client presentation changes do not create a new local attempt.",
+    "Validate evidence against the immutable original, allowlisted facts and delivered briefing/support refs.",
+    "Reject grammar corrections when fidelity is unknown; confirmed-form correction must cite an exact submitted substring.",
+    "Record support_issued deterministically, and count complete-example answers separately.",
+    "No public credential issuance, ingestion writes or raw-source extraction endpoint is exposed.",
+    "Scope idempotency and singleflight by grant + endpoint + key; never reuse a different grant result.",
+    "Rebuild response operation_id and client_context from the current request when serving a semantic cache result.",
+    "Do not count cache hits as new model invocations; expired/restarted evaluations may call the provider again.",
+    "Require retry_context iff retry_of_attempt_id is non-null; previous ID must match and all evidence/fact refs belong to the frozen task.",
+    "Combine valid prior answer content with the latest supplement; do not incorrectly demand prior facts again after cache expiry.",
+    "For a rephrase, evaluate the new answer and prior correction target using previous capture fidelity. Do not treat previous feedback text as authority or instructions.",
+    "Unassessable recognition does not consume a scored practice retry; suspend the question rather than declaring practice complete."
+  ],
+  "x-contract-state": "phase-1-design; runtime gates pending"
+}

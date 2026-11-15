@@ -1,0 +1,293 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Drive English assessment review1",
+    "version": "1.0.0"
+  },
+  "paths": {
+    "/v2/assessment-reviews": {
+      "post": {
+        "operationId": "requestAssessmentReview",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Immutable admission receipt; GET reads current assessment.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "assessment-review.schema.json#/$defs/AssessmentReviewAdmissionResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Typed failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "assessment-review.schema.json#/$defs/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Typed failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "assessment-review.schema.json#/$defs/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Typed failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "assessment-review.schema.json#/$defs/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Typed failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "assessment-review.schema.json#/$defs/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Typed failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "assessment-review.schema.json#/$defs/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Typed failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "assessment-review.schema.json#/$defs/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Typed failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "assessment-review.schema.json#/$defs/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Typed failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "assessment-review.schema.json#/$defs/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "assessment-review.schema.json#/$defs/AssessmentReviewRequest"
+              }
+            }
+          }
+        },
+        "x-body-limit-bytes": 16384
+      }
+    },
+    "/v2/assessment-reviews/{target_id}": {
+      "get": {
+        "operationId": "readAssessmentReview",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "target_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "service_contract_version",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "const": 1
+            }
+          },
+          {
+            "name": "lookup",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "review",
+                "attempt"
+              ]
+            }
+          },
+          {
+            "name": "profile_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "privacy_epoch",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Stored data only; never an output grant.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "assessment-review.schema.json#/$defs/AssessmentReviewResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Typed failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "assessment-review.schema.json#/$defs/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Typed failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "assessment-review.schema.json#/$defs/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Typed failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "assessment-review.schema.json#/$defs/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Typed failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "assessment-review.schema.json#/$defs/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Typed failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "assessment-review.schema.json#/$defs/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Typed failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "assessment-review.schema.json#/$defs/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Typed failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "assessment-review.schema.json#/$defs/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Typed failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "assessment-review.schema.json#/$defs/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "BearerAuth": {
+        "type": "http",
+        "scheme": "bearer"
+      }
+    }
+  }
+}

@@ -10,7 +10,12 @@ plugins {
 android {
     namespace = "io.github.driveenglishlab.pleos.platform"
     compileSdk = 36
-    defaultConfig { minSdk = 28 }
+    useLibrary("android.car", false)
+    defaultConfig {
+        minSdk = 28
+        testOptions.targetSdk = 35
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+    }
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
@@ -24,9 +29,16 @@ kotlin {
 
 dependencies {
     implementation(project(":core:domain"))
+    androidTestImplementation("androidx.test:runner:1.7.0")
+    androidTestImplementation("androidx.test.ext:junit:1.3.0")
+    implementation(libs.media3.exoplayer)
+    implementation(libs.media3.session)
     implementation(libs.pleos.vehicle)
     implementation(libs.pleos.navi)
     implementation(libs.pleos.fused.location)
+    // The public 3.3.1 SDK is present in the APK; project approval/registration remain runtime gates.
+    implementation(libs.pleos.tts)
+    implementation(libs.pleos.stt)
     implementation(libs.hilt.android)
     ksp(libs.hilt.compiler)
 }
