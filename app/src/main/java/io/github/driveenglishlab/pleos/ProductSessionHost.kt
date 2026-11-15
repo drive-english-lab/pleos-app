@@ -31,8 +31,10 @@ import kotlin.coroutines.resumeWithException
 @Module
 @InstallIn(SingletonComponent::class)
 object ProductRuntimeModule {
-    @Provides @Singleton fun voiceConfiguration(@ApplicationContext context:Context) = ProductVoiceConfiguration(
-        ttsRuntimeIdentity=TtsRuntimeIdentity1.actual(context,BuildConfig.BUILD_TYPE))
+    @Provides @Singleton fun voiceConfiguration(@ApplicationContext context:Context): ProductVoiceConfiguration {
+        val identity = TtsRuntimeIdentity1.actual(context, BuildConfig.BUILD_TYPE)
+        return ProductVoiceConfiguration(pleosTts = DevelopmentDemoVoiceScope.approval(identity), ttsRuntimeIdentity = identity)
+    }
     @Provides @Singleton fun settingsDemoLoader(@ApplicationContext context: Context) = ReviewedSettingsDemoLoader(context)
     @Provides @Singleton fun coordinator() = SessionCoordinator()
     @Provides @Singleton fun vehicle(@ApplicationContext context: Context): VehicleStateSource =
@@ -371,7 +373,11 @@ class ProductSessionHost @Inject constructor(@param:ApplicationContext private v
         }
         scope.launch {
             vehicle.start()
-            launch { vehicle.state.collect { vehicleSnapshot = it; updateAccess() } }
+            launch { vehicle.state.collect {
+                vehicleSnapshot = it
+                if (BuildConfig.DEBUG) android.util.Log.i("ProductVehicle", "status=${it.status};position=${it.safety.position};ux=${it.safety.uxKnown};details=${it.safety.detailsAllowed};diagnostics=${it.diagnostics}")
+                updateAccess()
+            } }
             launch {
                 while (isActive) {
                     delay(1_000)
@@ -773,7 +779,7 @@ class ProductSessionHost @Inject constructor(@param:ApplicationContext private v
                 is UiIntent.PreviewSettings -> reviewTools.preview()
                 is UiIntent.RetryFollowup -> pendingPreparedPhase?.let { preparedPhaseEnded(it) }
                 is UiIntent.SkipFollowup -> pendingPreparedPhase?.let { preparedPhaseEnded(it, true) }
-                is UiIntent.Refresh -> { if (controller == null) connectMedia(); connectProfile(allowCreation = false) }
+                is UiIntent.Refresh -> { vehicle.retry(); if (controller == null) connectMedia(); connectProfile(allowCreation = false) }
                 is UiIntent.Navigate -> {
                     if (coordinator.state.value.practiceModal?.visible == true) {
                         learning.handle(UiIntent.FinishPractice(intent.origin))

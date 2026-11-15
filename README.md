@@ -241,3 +241,9 @@ T040은 원 SDK DONE의 완료 사실과 cleanup·다음 출력 허용을 분리
 T036은 Pleos SpeechToText3.3.1 ON_DEVICE 입력 port와 기존 generic 입력을 명시 설정으로 분리한다. 입력 처리 안내·review가 없으면 비활성이다. 명시 답변 마치기+final+정상 ended+cleanup+원 lease가 모두 맞을 때만 기존 E1/답변 접수로 이어지고, 정상 마이크 정리는 E1 세대를 유지한다. 미접수 text는 RAM 한정이며 원어/형태는 UNKNOWN을 유지한다. init5초·정리2초·전체60초와 실제 권한/현재성 재검사, process 공유 cleanup hold를 적용했다. 실제 STT/Gleo·외부 처리/보관·영어/원어·실차 승인은 미확인이다.
 
 최종 debug/release·lint(error0/warning37), domain103, data6, platform 고유28(최초27통과/1실패 뒤 관련STT12통과), 화면9를 확인했다. 캡처 저장 경로만 test private files로 보완한 관련 renderer2 재실행은 같은 사례이며 합산하지 않는다. 대상5556/user10 기존32table·17row·보호2파일의 전후 hash는 모두 같다. 실제 뉴스/제품 출력 opt-in은 승인 자료/scope 부재로 미실행이다. [묶음 검증·캡처](../docs/verification/learning-review-20261115/on-device-integration/)에 초기 실패와 수정 결과를 함께 남겼다. Sites는 같은 프로젝트용 정적 합성 캡처만 로컬 추가하며 기존 interactive WIP·공유 범위·배포는 유지한다.
+
+## R8 고정 실기사·제품 UI 합류
+
+사용자의 D32 개발·시연 결정으로 GOV.UK/HM Treasury의 실제 공개 원문1건을 자동 도구 확인·OGLv3 귀속·원시각과 함께 source6에 수동 등록했다. 정기 공급 슬롯/모델/개인 행을 만들지 않고 original_full/후속없음2477codepoints·12구간을 제공한다. debug/API34/현재환경/해당manifest/MAIN영어만 허용하는 한정 기술scope를 연결했고 release와 다른원문은 비활성이다. 기존권한·P/UXR/창·owner·focus·DONE/cleanup gate는 유지한다.
+
+UI0b72a73을216f제품코드와 합류했다. 합류debug빌드와 명시차량재연결 회귀1개를 확인했다. 현재5556의 실제CarService가 ANR/서비스미등록 상태라 정상Main은 준비화면을 표시하며 실제기사낭독 성공은 미확인이다. P/권한/학습결과를 합성하지 않는다. `development/docs/verification/development-demo-20261115/`와 시연 원본의 실제/샘플 범위를 따른다.

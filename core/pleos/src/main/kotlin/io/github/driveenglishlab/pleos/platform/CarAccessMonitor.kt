@@ -76,6 +76,7 @@ class CarAccessMonitor internal constructor(
         var retiring = false
         var disconnectScheduled = false
         var disconnect = Action.NOT_ATTEMPTED
+        var released = false
         val entries = CarIoRuntime.Channel.entries.map(::Entry)
     }
     /** Fixed-key mailbox also bounds callbacks arriving before manager registration returns. */
@@ -113,6 +114,30 @@ class CarAccessMonitor internal constructor(
         checkMain(); check(!started && !closed); started = true
         if (Build.VERSION.SDK_INT < 34 || !io.supported) { invalidate("unsupported"); return }
         connect()
+    }
+    /** One explicit retry intent uses the same process quota and original-resource cleanup.
+     * A queued/in-flight connection retains its original deadline; repeat taps do not extend it.
+     */
+    fun retry(): Boolean {
+        checkMain()
+        if (!started || closed || Build.VERSION.SDK_INT < 34 || !io.supported) return false
+        val current = mutable.value
+        val components = current.components
+        if (current.status == "connected" && current.safety.position != VehiclePosition.UNKNOWN && current.safety.uxKnown &&
+            current.diagnostics.gear == "available" && current.diagnostics.speed == "available" &&
+            listOf(components.audio, components.media, components.microphone).all { it.known && it.sourceGeneration == components.generation }) return true
+        val original = session
+        if (original != null && !original.retiring && !original.released && current.status == "connecting") return false
+        original?.let {
+            it.cancelConnectionDeadline?.invoke()
+            runtime.cancelWaiting(it)
+            if (it.nativeStarted && !it.released && !it.retiring) retire(it)
+            else if (!it.nativeStarted) it.retiring = true
+        }
+        // connect invalidates source/component generations before any new public read. acquire
+        // waits behind the old native session; failed/unknown cleanup never releases its quota.
+        connect()
+        return mutable.value.status == "connecting"
     }
     private fun connect() {
         invalidate("connecting")
@@ -401,9 +426,13 @@ class CarAccessMonitor internal constructor(
     }
     private fun finishRetirement(s: Session) {
         cleanupDiagnostic(s)
+        if (s.released) return
         if (s.disconnect !in setOf(Action.SUCCEEDED, Action.NOT_APPLICABLE)) return
         if (s.entries.any { it.cleanup !in setOf(Action.SUCCEEDED, Action.NOT_APPLICABLE) }) return
-        if (CarIoRuntime.Channel.entries.all(runtime::idle)) runtime.release(s)
+        if (CarIoRuntime.Channel.entries.all(runtime::idle)) {
+            s.released = true
+            runtime.release(s)
+        }
     }
     private fun cleanupDiagnostic(s: Session) {
         if (session !== s && !closed) return

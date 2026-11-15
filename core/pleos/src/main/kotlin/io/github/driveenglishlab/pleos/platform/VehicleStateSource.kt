@@ -38,6 +38,8 @@ data class VehicleSnapshot(
 interface VehicleStateSource : AutoCloseable {
     val state: StateFlow<VehicleSnapshot>
     fun start()
+    /** Explicit retry of the existing public connection, never a vehicle/permission grant. */
+    fun retry(): Boolean = false
 }
 
 /** API34 car reads are isolated; no interactive/window signal masquerades as Suspend. */
@@ -61,6 +63,18 @@ class PublicVehicleStateSource(private val context: Context, private val scope: 
             }
         }
         current.start()
+    }
+
+    override fun retry(): Boolean {
+        check(Looper.myLooper() == Looper.getMainLooper())
+        if (!started || closed || Build.VERSION.SDK_INT < 34) return false
+        val current = monitor ?: return false
+        val accepted = current.retry()
+        val observed = current.state.value
+        // Publish revocation synchronously; do not await the collector after explicit retry.
+        mutable.value = VehicleSnapshot(safety = observed.safety, actualPower = VehiclePowerState.UNKNOWN,
+            status = observed.status, components = observed.components, diagnostics = observed.diagnostics)
+        return accepted
     }
 
     override fun close() {

@@ -9,6 +9,12 @@ import io.github.driveenglishlab.pleos.domain.VehiclePosition
 import io.github.driveenglishlab.pleos.domain.ComponentPolicies
 import io.github.driveenglishlab.pleos.domain.PowerAvailability
 import android.car.hardware.power.PowerComponent
+import android.car.VehicleGear
+import android.car.VehiclePropertyIds
+import android.os.Handler
+import android.os.Looper
+import java.util.ArrayDeque
+import java.util.concurrent.Executor
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
@@ -19,6 +25,87 @@ import org.junit.runner.RunWith
 @SdkSuppress(minSdkVersion = 34)
 @RunWith(AndroidJUnit4::class)
 class CarAccessMonitorTest {
+    @Test fun explicitRetryWaitsForOriginalCleanupAndIgnoresOldConnectionCallbacks() {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        fun main(action: () -> Unit) = instrumentation.runOnMainSync(action)
+        class Queue : Executor {
+            val tasks = ArrayDeque<Runnable>()
+            override fun execute(command: Runnable) { synchronized(tasks) { tasks.addLast(command) } }
+            fun take(): Runnable? = synchronized(tasks) { tasks.pollFirst() }
+        }
+        val queues = List(3) { Queue() }
+        val runtime = CarIoRuntime(Handler(Looper.getMainLooper()), { 0L }, queues)
+        var connects = 0
+        var disconnects = 0
+        val callbacks = mutableListOf<(PublicCarIo.Connection, Boolean) -> Unit>()
+        val connections = mutableListOf<PublicCarIo.Connection>()
+        val io = object : PublicCarIo {
+            override val supported = true
+            override val gearPermission = true
+            override val speedPermission = true
+            override val policyPermission = true
+            override fun connect(lifecycle: (PublicCarIo.Connection, Boolean) -> Unit): PublicCarIo.Connection {
+                val number = ++connects
+                val connection = object : PublicCarIo.Connection {
+                    override fun properties(callback: (PublicCarIo.Property) -> Unit) = object : PublicCarIo.Properties {
+                        override fun register(key: Int) = true
+                        override fun read(key: Int) = PublicCarIo.Property(key, 1, number > 1,
+                            if (key == VehiclePropertyIds.GEAR_SELECTION) VehicleGear.GEAR_PARK as Any else 0f)
+                        override fun unregister() = Unit
+                    }
+                    override fun ux(callback: (PublicCarIo.Ux) -> Unit) = object : PublicCarIo.Restrictions {
+                        override fun register() = Unit
+                        override fun read() = PublicCarIo.Ux(true)
+                        override fun unregister() = Unit
+                    }
+                    override fun policy(callback: (PublicCarIo.Policy) -> Unit) = object : PublicCarIo.Policies {
+                        override fun register() = Unit
+                        override fun read() = PublicCarIo.Policy("synthetic-retry", intArrayOf(PowerComponent.AUDIO, PowerComponent.MEDIA, PowerComponent.MICROPHONE), intArrayOf())
+                        override fun unregister() = Unit
+                    }
+                    override fun disconnect() { disconnects++ }
+                }
+                callbacks += lifecycle; connections += connection
+                lifecycle(connection, true)
+                return connection
+            }
+        }
+        val monitor = CarAccessMonitor(io, runtime, Handler(Looper.getMainLooper()))
+        fun drain() {
+            repeat(100) {
+                var progressed = false
+                queues.forEach { queue ->
+                    val task = queue.take()
+                    if (task != null) { progressed = true; task.run(); main {} }
+                }
+                if (!progressed) return
+            }
+            error("unbounded_retry_work")
+        }
+        main { monitor.start() }; drain()
+        try {
+            assertEquals(VehiclePosition.UNKNOWN, monitor.state.value.safety.position)
+            val generation = monitor.state.value.diagnostics.sourceGeneration
+            main {
+                assertTrue(monitor.retry())
+                assertFalse(monitor.retry()) // Pending retry keeps its admission/deadline.
+                assertEquals(VehiclePosition.UNKNOWN, monitor.state.value.safety.position)
+                assertFalse(monitor.state.value.safety.uxKnown)
+                assertFalse(monitor.state.value.components.audio.known)
+            }
+            assertEquals(1, connects) // A new native connection waits for original cleanup.
+            drain()
+            assertEquals(1, disconnects); assertEquals(2, connects)
+            assertEquals(VehiclePosition.PARKED, monitor.state.value.safety.position)
+            assertTrue(monitor.state.value.diagnostics.sourceGeneration > generation)
+            val healthy = monitor.state.value
+            main { callbacks.first()(connections.first(), false) }; main {}
+            assertEquals(healthy, monitor.state.value)
+            main { assertTrue(monitor.retry()) }; drain()
+            assertEquals(2, connects) // Healthy current data does not reconnect.
+        } finally { main { monitor.close() }; drain() }
+    }
+
     @Test fun readActualCarOrKeepUnavailableWithoutGrantingInput() = runBlocking {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         lateinit var monitor: CarAccessMonitor
