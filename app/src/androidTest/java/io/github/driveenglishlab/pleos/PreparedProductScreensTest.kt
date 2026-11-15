@@ -20,6 +20,7 @@ import io.github.driveenglishlab.pleos.data.wire.*
 import io.github.driveenglishlab.pleos.domain.*
 import io.github.driveenglishlab.pleos.platform.SegmentRuntimeState
 import io.github.driveenglishlab.pleos.platform.SegmentRuntimeStatus
+import io.github.driveenglishlab.pleos.platform.PresentationUiBinding
 import io.github.driveenglishlab.pleos.ui.*
 import io.github.driveenglishlab.pleos.ui.theme.DriveEnglishTheme
 import java.io.File
@@ -182,6 +183,83 @@ class PreparedProductScreensTest {
         rule.onNodeWithText("듣기 설정").assertIsDisplayed()
         shot("settings")
         assertTrue("Renderer capture must not emit a product command", intents.isEmpty())
+    }
+
+    /** After-layout impact fixture only: all content, approval and input states are synthetic. */
+    @Test fun compactAfterModalKeepsLongContentAndTypedActionsReachable() {
+        val longQuestion = ("What will the bridge connect, and how might the planned connection change travel between the two districts? ").repeat(4).trim()
+        val base = modal().let { it.copy(appearance = DeviceAppearance.DARK,
+            learning = it.learning.copy(practice = it.learning.practice!!.copy(questionEn = longQuestion))) }
+        val frame = mutableStateOf(base); val intents = mutableListOf<UiIntent>()
+        render(frame, intents, width = 900, scale = 1.3f)
+        rule.onNode(isDialog()).assertIsDisplayed()
+        rule.onNodeWithText(longQuestion).assertExists()
+        rule.onNodeWithText("기사로 돌아가기").assertIsDisplayed()
+        rule.onNodeWithText("힌트").assertIsDisplayed().performClick()
+        val request = intents.single() as UiIntent.RequestHelp
+        assertEquals(HelpRequest.HINT, request.request); assertEquals(base.origin, request.origin)
+
+        val helpText = ("합성 도움: 두 지역을 연결한다는 사실과 내년 착공 계획을 나누어 생각해 보세요. ").repeat(10).trim()
+        val artifact = SupportArtifact("synthetic-after-long-help", HelpKind.FACT_EXPLANATION, SupportRole.CORE_EXPLANATION,
+            SupportLanguage.KO, helpText, segmentSha256(helpText), SupportOrigin.PUBLISHED_TASK, null)
+        val presentation = PracticePresentationRecord(UUID.randomUUID(), task, lessonId, InteractionChannel.PARKED,
+            listOf(artifact), 1, Instant.parse("2026-11-14T00:00:00Z"), PresentationStatus.PREPARED, null)
+        val ticket = PracticePresentationTicket(UUID.randomUUID(), ProfileContext(owner.profileId, owner.privacyEpoch), owner,
+            presentation, QuestionExampleExposure(task.questionRef, ExposureStatus.UNKNOWN, ExposureBasis.HISTORY_GAP, 0, 1, null))
+        rule.runOnIdle {
+            val current = requireNotNull(base.session.practiceModal)
+            frame.value = base.copy(session = base.session.copy(practiceModal = current.copy(phase = PracticeModalPhase.HELP,
+                parentState = PracticeModalPhase.QUESTION, helpRequestId = UUID.randomUUID())),
+                learning = base.learning.copy(support = PresentationUiBinding(owner, task, lessonId, ticket, UUID.randomUUID(), artifact)))
+        }
+        rule.onNodeWithText(helpText).assertExists()
+        rule.onNodeWithText("질문으로 돌아가기").performScrollTo().assertIsDisplayed().performClick()
+        assertTrue(intents.filterNot { it is UiIntent.SupportWitness }.last() is UiIntent.CloseSupport)
+        capture("prepared-after-long-help-narrow-large", dialog = true)
+
+        val feedbackText = ("합성 피드백: 두 지역의 연결과 착공 계획을 담았어요. 다음 답변에서는 연결이 이동에 주는 변화를 한 문장으로 덧붙여 보세요. ").repeat(5).trim()
+        rule.runOnIdle {
+            val feedback = modal(base, feedback = true)
+            val attempt = requireNotNull(feedback.learning.practice?.feedback?.attemptId)
+            frame.value = feedback.copy(learning = feedback.learning.copy(practice = feedback.learning.practice!!.copy(questionEn = longQuestion)),
+                assessments = syntheticRendererAssessment(rule.activity, owner, lessonId, attempt, task, text = feedbackText))
+        }
+        rule.onNodeWithText(feedbackText).performScrollTo().assertIsDisplayed()
+        rule.onNodeWithText("다시 답하기").assertIsDisplayed()
+        rule.onNodeWithText("기사로 돌아가기").assertIsDisplayed().performClick()
+        assertTrue(intents.filterNot { it is UiIntent.SupportWitness }.last() is UiIntent.FinishPractice)
+        capture("prepared-after-long-feedback-narrow-large", dialog = true)
+
+        rule.runOnIdle { frame.value = base.copy(learning = base.learning.copy(directInputStatus = "CLEANUP_UNKNOWN")) }
+        rule.onNodeWithText("이전 음성 입력의 종료를 확인하고 있어요. 같은 질문을 유지해요").performScrollTo().assertIsDisplayed()
+        rule.onNodeWithText("답변 시작").assertIsNotEnabled()
+        rule.runOnIdle {
+            val captureId = UUID.randomUUID()
+            val current = requireNotNull(base.session.practiceModal)
+            frame.value = base.copy(session = base.session.copy(inputPhase = InputPhase.CAPTURING,
+                captureLease = CaptureLease(captureId, UUID.randomUUID(), owner, task, lessonId, 0, 0),
+                practiceModal = current.copy(phase = PracticeModalPhase.CAPTURING, captureToken = captureId,
+                    captureReturnState = PracticeModalPhase.QUESTION)),
+                learning = base.learning.copy(directInputReady = true, directInputStatus = "INITIALIZING",
+                    directInputNotice = "합성 입력 안내: 실제 마이크나 SDK 요청은 실행하지 않아요"))
+        }
+        val cancel = rule.onNodeWithText("답변 취소").assertIsDisplayed()
+        assertTrue(cancel.fetchSemanticsNode().boundsInRoot.height >= 76f)
+        cancel.performClick()
+        assertTrue(intents.filterNot { it is UiIntent.SupportWitness }.last() is UiIntent.CancelAnswer)
+        assertFalse(intents.any { it is UiIntent.StartAnswer || it is UiIntent.FinishAnswer || it is UiIntent.ReadHistory })
+
+        rule.runOnIdle {
+            val selected = player().copy(appearance = DeviceAppearance.DARK)
+            frame.value = selected.copy(session = selected.session.copy(screen = SessionScreen.SETTINGS), draft = SettingsDraft(settings))
+        }
+        rule.onNode(isDialog()).assertDoesNotExist()
+        for (value in listOf("기술", "영어 원문 전체", "추가 없이 듣기")) {
+            rule.onNode(hasScrollAction()).performScrollToNode(hasText(value))
+            rule.onNodeWithText(value, useUnmergedTree = true).assertIsDisplayed()
+        }
+        rule.onNodeWithText("설정 적용").assertIsDisplayed()
+        capture("prepared-after-settings-current-values-narrow-large")
     }
 
     @Test fun currentSegmentFollowsInCenterButManualScrollWaitsForExplicitReturn() {

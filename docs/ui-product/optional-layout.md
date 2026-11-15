@@ -1,7 +1,7 @@
-# Optional layout refinement
+# Applied After layout refinement
 
 Base / Before: `6d9927f9ee9ed29772a9c015e95661715617c0ec`.
-After: `refactor/6-ui-option`, separate UI worktree. **Not selected or merged into the product/submission baseline.**
+After candidate: `bfb3b12fa4857cfaa6a781248afec805518ed34b` from `refactor/6-ui-option`. **User approved application; merged into the product branch as d0688e1.** Before6d/b34 and its existing release/APK/video remain preserved.
 
 - Expanded player: phase label and article actions share a row; the transcript gains45px in the1600×1100 fixture.
 - Narrow player: segment/status information shares a row under centered playback; the transcript gains51px at900×1100, dark/font1.3.
@@ -14,6 +14,6 @@ Before/After debug and renderer-test APK builds passed. The same `PreparedProduc
 
 Workspace comparison: `docs/product/design/verification/ui-option-20261115/index.html`, with eight original PNGs, exact metrics/SHA and logs. Before/After APKs are separately preserved in `development/.integration-snapshots/ui-option-20261115/`. Existing product APK/video/files are untouched.
 
-Keep the baseline by doing nothing. Review this worktree directly; only after selection should the product owner cherry-pick this independent UI commit onto a review branch and verify the combined app. Do not automatically publish, merge, or replace the existing submission package. The Sites baseline is intentionally unchanged while this option is undecided.
+The earlier unselected comparison is historical. The current authorized step packages this applied After as a separate signed release and actual recording, with focused impact checks. It does not replace the preserved Before release or change product/vehicle/voice policies. Sites impact and actual-versus-fixture evidence are recorded by the integration owner; no automatic deployment is implied.
 
 Impeccable/Unslop refinement reuses the saved design evidence. Unslop by Damir Sokolovsky ([source](https://heydamir.design/unslop)), CC BY4.0.
