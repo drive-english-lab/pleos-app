@@ -2,9 +2,13 @@
 
 ## 뉴디 · 현재 After
 
+[시연영상](https://github.com/drive-english-lab/pleos-app/releases/download/submission-after-9500a81/drive-english-after-ui-captioned.mp4) · 실제 준비화면4초+명시After UI샘플32초,무음. 실제기사/음성/학습성공을뜻하지않는다.
+
+GitHub의Unicode asset이름정규화로공개파일명은 `JoIkseong_Newdi_release.apk`이다. 사용자확정로컬원본 `조익성_뉴디_release.apk`와동일한서명bytes/SHA를유지했다.
+
 관심 뉴스로 영어 듣기·말하기를 연습하는 Pleos Connect 앱입니다. 앱 내부의 기존 표시명은 Drive English입니다.
 
-[조익성_뉴디_release.apk 다운로드](https://github.com/drive-english-lab/pleos-app/releases/download/submission-after-9500a81/%EC%A1%B0%EC%9D%B5%EC%84%B1_%EB%89%B4%EB%94%94_release.apk) · [After Release/실행 안내](https://github.com/drive-english-lab/pleos-app/releases/tag/submission-after-9500a81)
+[조익성_뉴디_release.apk 다운로드](https://github.com/drive-english-lab/pleos-app/releases/download/submission-after-9500a81/JoIkseong_Newdi_release.apk) · [After Release/실행 안내](https://github.com/drive-english-lab/pleos-app/releases/tag/submission-after-9500a81)
 
 - APK 빌드source: `9500a81036c199a2b8def2c1ff64fda810d3f64c`. 이README만추가한최종제출commit과APK빌드source를구분한다. 기존Before release/소스/영상은아래에보존했다.
 - 공식파일명은사용자가확정한APK접두어와앱명을반영한다. 71,559,776bytes, SHA256 `92c69039fa11eefac6dcfd1c5cb42e5cf511c8569b30e47721b12ffaa05616a5`. 실제새After APK이며Before재명명이아니다.
